@@ -2,12 +2,17 @@ import yfinance as yf
 import requests
 import os
 
-# 1. 取得 Webhook 與設定漲幅門檻
+# 1. 設定區：保險箱網址與篩選門檻
 WEBHOOK = os.environ.get('DISCORD_WEBHOOK')
-MIN_GAIN = 10.0  # <--- [您可以在這裡修改] 預期漲幅低於 10% 就不呈現
+MIN_GAIN = 10.0  # 預期漲幅低於 10% 則不顯示在推薦清單中
 
-# (STOCK_POOL 150 檔清單保持不變，此處略過以方便複製)
-# 2. 150 檔掃描清單 (已含分析師邏輯)
+# 2. 客戶持倉清單 (已修正為字典格式，並支援中文顯示)
+MY_PORTFOLIO = {
+    "3023.TW": {"name": "信邦", "cost": 280.5},
+    "2330.TW": {"name": "台積電", "cost": 950.0}
+}
+
+# 3. 150 檔全市場掃描清單
 STOCK_POOL = {
     "半導體與 AI 核心": {
         "2330.TW": "台積電", "2454.TW": "聯發科", "2317.TW": "鴻海", "2308.TW": "台達電", "2382.TW": "廣達",
@@ -45,16 +50,8 @@ STOCK_POOL = {
     }
 }
 
-
-# 將原本的格式升級為：{"代號": {"name": "中文名", "cost": 成本價}}
-MY_PORTFOLIO = {
-    "3023.TW": {"name": "信邦", "cost": 280.5},
-    "2330.TW": {"name": "台積電", "cost": 950.0}
-}
-
-
 def get_analysis(df):
-    """計算技術面分析數據"""
+    """計算技術面深度分析邏輯"""
     close = df['Close'].iloc[-1]
     ma20 = df['Close'].rolling(window=20).mean().iloc[-1]
     ma5 = df['Close'].rolling(window=5).mean().iloc[-1]
@@ -63,32 +60,34 @@ def get_analysis(df):
     macd = exp12 - exp26
     sig = macd.ewm(span=9, adjust=False).mean()
     
-    # 計算預期漲幅
+    # 預期漲幅計算
     expected = round(df['Close'].pct_change().std() * 250, 1)
     
     reason = "日K站穩月線，"
-    if ma5 > ma20: reason += "5日線強勢噴出；"
+    if ma5 > ma20: reason += "5日線噴出強勢；"
     if macd.iloc[-1] > sig.iloc[-1]: reason += "MACD低檔翻揚金叉；"
     reason += "週K趨勢偏多。"
     
     proof = "歷史回測顯示此位階啟動後續航力強。"
-    if close > df['Close'].max() * 0.95: proof = "高檔突破慣性，歷史勝率極高。"
+    if close > df['Close'].max() * 0.95: proof = "高檔突破慣性，歷史追價勝率高。"
     
     return expected, reason, proof
 
 def run():
     p_report = "🏛️ **客戶持倉損益報告**\n"
-    for sym, buy_p in MY_PORTFOLIO.items():
+    # 修正重點：正確讀取 MY_PORTFOLIO 字典中的名稱與成本
+    for sym, info in MY_PORTFOLIO.items():
+        name = info["name"]
+        buy_p = info["cost"]
         ticker = yf.Ticker(sym)
         df = ticker.history(period="1mo")
         if not df.empty:
             curr = df['Close'].iloc[-1]
             diff = (curr - buy_p) / buy_p * 100
-            p_report += f"● {sym}: 成本 {buy_p} → 現價 {round(curr,1)} ({round(diff,2)}%)\n"
+            p_report += f"● {name}({sym}): 成本 {buy_p} → 現價 {round(curr,1)} ({round(diff,2)}%)\n"
 
-    final_report = f"🎯 **全市場高勝率精選 (預期漲幅 > {MIN_GAIN}%)**\n"
+    final_report = f"🎯 **高勝率精選 (預期漲幅 > {MIN_GAIN}%)**\n"
     count = 0
-    
     for cat, stocks in STOCK_POOL.items():
         cat_section = f"\n【{cat}】\n"
         has_bull = False
@@ -98,12 +97,8 @@ def run():
                 if len(df) < 20: continue
                 curr = df['Close'].iloc[-1]
                 ma20 = df['Close'].rolling(window=20).mean().iloc[-1]
-                
-                # 第一關：必須是多頭
                 if curr > ma20:
                     gain, reason, proof = get_analysis(df)
-                    
-                    # 第二關：漲幅必須高於門檻
                     if gain >= MIN_GAIN:
                         has_bull = True
                         cat_section += f"🚀 **{name}({sym})**: 現價 {round(curr,1)}\n"
@@ -115,12 +110,13 @@ def run():
         if has_bull: final_report += cat_section
 
     if count == 0:
-        final_report += "\n(本日市場波動較小，未達篩選門檻。)"
+        final_report += f"\n(本日無預期漲幅大於 {MIN_GAIN}% 之標的)"
 
-    # 發送
+    # 發送邏輯
     full_text = p_report + "\n" + final_report
     for i in range(0, len(full_text), 1900):
         requests.post(WEBHOOK, json={"content": full_text[i:i+1900]})
 
 if __name__ == "__main__":
     run()
+
