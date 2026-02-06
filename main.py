@@ -6,7 +6,7 @@ import os
 
 # 確保從 GitHub Secrets 讀取網址
 WEBHOOK = os.environ.get('DISCORD_WEBHOOK')
-
+DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
 def run():
     # 簡單測試：如果沒網址就報錯提醒
     if not WEBHOOK:
