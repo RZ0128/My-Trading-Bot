@@ -1,8 +1,12 @@
-name: Startup-Fund-Bot
+name: Global-Elite-FullTime-Bot
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 1-5'
+    - cron: '30 22 * * 0-4'  # 台灣 06:30 (週一至週五)
+    - cron: '0 0 * * 1-5'   # 台灣 08:00 (週一至週五)
+    - cron: '15 2 * * 1-5'  # 台灣 10:15 (週一至週五)
+    - cron: '35 5 * * 1-5'  # 台灣 13:35 (週一至週五)
+    - cron: '30 22 * * 5'   # 台灣 06:30 (週六美股總結)
+  workflow_dispatch:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
@@ -11,11 +15,10 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.9'
       - name: Install Libs
-        run: |
-          pip install yfinance requests pandas  # 只安裝必要的穩定套件
-      - name: Run Script
+        run: pip install yfinance requests pandas
+      - name: Run
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: python main.py
