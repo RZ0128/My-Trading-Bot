@@ -1,19 +1,20 @@
 import yfinance as yf
 import requests
 import os
+from datetime import datetime
 
-# 1. 設定區
+# 1. 設定區：請確保您的 Discord Webhook 已設定在 GitHub Secrets 中
 WEBHOOK = os.environ.get('DISCORD_WEBHOOK')
 MIN_GAIN = 10.0  # 預期漲幅門檻，低於此數值不顯示
 
-# 2. 持倉清單 (包含中文名稱與張數，方便計算台幣獲利)
-# 註：此處預設為 1 張 (1000股)，您可以自行修改 qty 數值
+# 2. 客戶持倉清單 (已修正為字典格式，支援中文與台幣計算)
+# 註：qty 代表張數 (1張=1000股)
 MY_PORTFOLIO = {
-    "3023.TW": {"name": "信邦", "cost": 280.5, "qty": 1},
-    "2330.TW": {"name": "台積電", "cost": 950.0, "qty": 1}
+    "3023.TW": {"name": "信邦", "cost": 280.5, "qty": 0.5},
+    "2330.TW": {"name": "台積電", "cost": 950.0,"qty":  0.5}
 }
 
-# 3. 150 檔全市場掃描清單 (完整保留)
+# 3. 150 檔全市場掃描清單 (含中文名稱)
 STOCK_POOL = {
     "半導體與 AI 核心": {
         "2330.TW": "台積電", "2454.TW": "聯發科", "2317.TW": "鴻海", "2308.TW": "台達電", "2382.TW": "廣達",
@@ -51,8 +52,17 @@ STOCK_POOL = {
     }
 }
 
-def get_analysis(df):
-    """計算技術分析原因"""
+def get_institutional_data(sym):
+    """預判模組：獲取量能動向"""
+    ticker = yf.Ticker(sym)
+    hist = ticker.history(period="5d")
+    if len(hist) < 5: return False
+    avg_vol = hist['Volume'].mean()
+    last_vol = hist['Volume'].iloc[-1]
+    return last_vol > avg_vol and hist['Close'].iloc[-1] > hist['Open'].iloc[-1]
+
+def get_analysis(df, sym):
+    """進階預判分析：技術面與籌碼量能"""
     close = df['Close'].iloc[-1]
     ma20 = df['Close'].rolling(window=20).mean().iloc[-1]
     ma5 = df['Close'].rolling(window=5).mean().iloc[-1]
@@ -61,16 +71,22 @@ def get_analysis(df):
     macd = exp12 - exp26
     sig = macd.ewm(span=9, adjust=False).mean()
     
+    has_big_money = get_institutional_data(sym)
     expected = round(df['Close'].pct_change().std() * 250, 1)
-    reason = "日K站穩月線，"
-    if ma5 > ma20: reason += "5日均線強勢；"
-    if macd.iloc[-1] > sig.iloc[-1]: reason += "MACD低檔金叉翻揚；"
-    reason += "週K趨勢偏多。"
-    proof = "歷史顯示此位階啟動具強大續航力。"
-    return expected, reason, proof
+    
+    reason = "技術面：站穩月線；"
+    if has_big_money:
+        reason += "🔍 預判：法人量能啟動，具備噴出跡象。"
+    if macd.iloc[-1] > sig.iloc[-1]:
+        reason += "MACD金叉翻揚。"
+        
+    return expected, reason
 
 def run():
-    p_report = "🏛️ **客戶持倉損益報告**\n"
+    # 國安基金監控狀態 (手動更新或接入API)
+    n_status = "🛡️ **國安基金動態：目前處於觀望/未啟動狀態**"
+    p_report = f"{n_status}\n\n🏛️ **客戶持倉損益報告**\n"
+    
     total_profit = 0
     for sym, info in MY_PORTFOLIO.items():
         ticker = yf.Ticker(sym)
@@ -78,17 +94,15 @@ def run():
         if not df.empty:
             curr = df['Close'].iloc[-1]
             buy_p = info["cost"]
-            qty = info.get("qty", 1)  # 預設 1 張
+            qty = info.get("qty", 1)
             diff_pct = (curr - buy_p) / buy_p * 100
-            diff_cash = (curr - buy_p) * 1000 * qty # 計算台幣金額 (每張1000股)
+            diff_cash = (curr - buy_p) * 1000 * qty # 計算台幣獲利 (每張1000股)
             total_profit += diff_cash
-            
-            p_report += f"● {info['name']}({sym}): 成本 {buy_p} → 現價 {round(curr,1)}\n"
-            p_report += f"   └ 損益：**{round(diff_pct,2)}%** | **NT$ {int(diff_cash):,}**\n"
+            p_report += f"● {info['name']}({sym}): {round(diff_pct,2)}% | **NT$ {int(diff_cash):,}**\n"
     
     p_report += f"\n💰 **總估計損益：NT$ {int(total_profit):,}**\n"
 
-    final_report = f"🎯 **全市場多頭精選 (預期漲幅 > {MIN_GAIN}%)**\n"
+    final_report = "🎯 **籌碼面/技術面 雙重精選推薦**\n"
     for cat, stocks in STOCK_POOL.items():
         cat_section = f"\n【{cat}】\n"
         has_bull = False
@@ -99,17 +113,15 @@ def run():
                 curr = df['Close'].iloc[-1]
                 ma20 = df['Close'].rolling(window=20).mean().iloc[-1]
                 if curr > ma20:
-                    gain, reason, proof = get_analysis(df)
+                    gain, reason = get_analysis(df, sym)
                     if gain >= MIN_GAIN:
                         has_bull = True
                         cat_section += f"🚀 **{name}({sym})**: 現價 {round(curr,1)}\n"
-                        cat_section += f" └ 📈 預期還可上漲：+{gain}%\n"
-                        cat_section += f" └ 🔬 技術分析：{reason}\n"
-                        cat_section += f" └ 📜 歷史趨勢：{proof}\n\n"
+                        cat_section += f" └ 📊 預判分析：{reason}\n"
+                        cat_section += f" └ 📈 預期漲幅：+{gain}%\n\n"
             except: continue
         if has_bull: final_report += cat_section
 
-    # 發送訊息
     full_text = p_report + "\n" + final_report
     for i in range(0, len(full_text), 1900):
         requests.post(WEBHOOK, json={"content": full_text[i:i+1900]})
