@@ -1,20 +1,17 @@
 import yfinance as yf
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# 1. 設定區：請確保您的 Discord Webhook 已設定在 GitHub Secrets 中
 WEBHOOK = os.environ.get('DISCORD_WEBHOOK')
-MIN_GAIN = 10.0  # 預期漲幅門檻，低於此數值不顯示
 
-# 2. 客戶持倉清單 (已修正為字典格式，支援中文與台幣計算)
-# 註：qty 代表張數 (1張=1000股)
+# 1. 持倉清單 (已改為股數 shares)
 MY_PORTFOLIO = {
-    "3023.TW": {"name": "信邦", "cost": 280.5, "qty": 0.5},
-    "2330.TW": {"name": "台積電", "cost": 950.0,"qty":  0.5}
+    "3023.TW": {"name": "信邦", "cost": 280.5, "shares": 1000},
+    "2330.TW": {"name": "台積電", "cost": 950.0, "shares": 500} # 舉例：買 500 股
 }
 
-# 3. 150 檔全市場掃描清單 (含中文名稱)
+# 2. 150 檔全市場掃描清單 (完整代碼與中文)
 STOCK_POOL = {
     "半導體與 AI 核心": {
         "2330.TW": "台積電", "2454.TW": "聯發科", "2317.TW": "鴻海", "2308.TW": "台達電", "2382.TW": "廣達",
@@ -26,15 +23,16 @@ STOCK_POOL = {
         "3653.TW": "健策", "6176.TW": "瑞儀", "4958.TW": "臻鼎-KY", "2474.TW": "可成", "3131.TW": "弘塑",
         "3583.TW": "辛耘", "1560.TW": "勤誠", "2376.TW": "技嘉", "2353.TW": "宏碁", "2324.TW": "仁寶"
     },
-    "關鍵零組件": {
+    "關鍵零組件與光電": {
         "2327.TW": "國巨", "2492.TW": "華新科", "3044.TW": "健鼎", "2313.TW": "華通", "2367.TW": "燿華",
         "2368.TW": "金像電", "3189.TW": "景碩", "3006.TW": "晶豪科", "2451.TW": "創見", "2352.TW": "佳世達",
         "2355.TW": "敬鵬", "2458.TW": "義隆", "3533.TW": "嘉澤", "6206.TW": "飛捷", "3014.TW": "聯陽",
         "2439.TW": "美律", "2480.TW": "敦陽科", "6116.TW": "彩晶", "8215.TW": "明基材", "2347.TW": "聯強",
         "2344.TW": "華邦電", "5347.TW": "世界先進", "2455.TW": "全新", "2441.TW": "超豐", "3293.TW": "鈊象",
-        "3592.TW": "瑞鼎", "6706.TW": "勁豐", "6719.TW": "力智", "6770.TW": "力積電", "8069.TW": "元太"
+        "3592.TW": "瑞鼎", "6706.TW": "勁豐", "6719.TW": "力智", "6770.TW": "力積電", "8069.TW": "元太",
+        "3406.TW": "玉晶光", "3008.TW": "大立光", "3504.TW": "揚明光", "2409.TW": "友達", "3481.TW": "群創"
     },
-    "重電綠能傳產": {
+    "重電綠能與航運傳產": {
         "1513.TW": "中興電", "1519.TW": "華城", "1503.TW": "士電", "1504.TW": "東元", "1605.TW": "華新",
         "1514.TW": "亞力", "1101.TW": "台泥", "1102.TW": "亞泥", "1301.TW": "台塑", "1303.TW": "南亞",
         "1326.TW": "台化", "6505.TW": "台塑化", "1717.TW": "長興", "1722.TW": "台肥", "2105.TW": "正新",
@@ -52,80 +50,70 @@ STOCK_POOL = {
     }
 }
 
-def get_institutional_data(sym):
-    """預判模組：獲取量能動向"""
-    ticker = yf.Ticker(sym)
-    hist = ticker.history(period="5d")
-    if len(hist) < 5: return False
-    avg_vol = hist['Volume'].mean()
-    last_vol = hist['Volume'].iloc[-1]
-    return last_vol > avg_vol and hist['Close'].iloc[-1] > hist['Open'].iloc[-1]
+def get_report_title():
+    h = (datetime.now() + timedelta(hours=8)).hour
+    if h == 6: return "🌅 美股收盤總結 & 台股預判"
+    if h == 8: return "☕ 台股盤前策略提醒"
+    if h == 10: return "📊 台股盤中走勢觀察"
+    if h == 13: return "🏁 台股收盤損益結算"
+    return "🔔 系統即時回報"
 
-def get_analysis(df, sym):
-    """進階預判分析：技術面與籌碼量能"""
-    close = df['Close'].iloc[-1]
-    ma20 = df['Close'].rolling(window=20).mean().iloc[-1]
-    ma5 = df['Close'].rolling(window=5).mean().iloc[-1]
-    exp12 = df['Close'].ewm(span=12, adjust=False).mean()
-    exp26 = df['Close'].ewm(span=26, adjust=False).mean()
-    macd = exp12 - exp26
-    sig = macd.ewm(span=9, adjust=False).mean()
+def get_us_expert_analysis():
+    indices = {"^SOX": "費半指數", "NVDA": "輝達", "^IXIC": "那斯達克"}
+    report = "🏛️ **美股專業技術分析與預判**\n------------------\n"
+    sox_chg = 0
+    for sym, name in indices.items():
+        d = yf.Ticker(sym).history(period="2d")
+        chg = ((d['Close'].iloc[-1] / d['Close'].iloc[-2]) - 1) * 100
+        if sym == "^SOX": sox_chg = chg
+        report += f"● {name}: {round(chg,2)}%\n"
     
-    has_big_money = get_institutional_data(sym)
-    expected = round(df['Close'].pct_change().std() * 250, 1)
-    
-    reason = "技術面：站穩月線；"
-    if has_big_money:
-        reason += "🔍 預判：法人量能啟動，具備噴出跡象。"
-    if macd.iloc[-1] > sig.iloc[-1]:
-        reason += "MACD金叉翻揚。"
-        
-    return expected, reason
+    report += "\n🔍 **技術面預判：**\n"
+    if sox_chg > 1.5:
+        report += "【強勢】歷史顯示費半領漲將帶動台股AI與半導體族群噴出，週一開盤看好台積電、廣達。\n"
+    elif sox_chg < -1.5:
+        report += "【弱勢】費半重挫恐引發台股電子股補跌，建議關注金融股避險位階。\n"
+    else:
+        report += "【震盪】市場觀望情緒濃，預計盤勢由個別標的籌碼決定。\n"
+    return report
 
 def run():
-    # 國安基金監控狀態 (手動更新或接入API)
-    n_status = "🛡️ **國安基金動態：目前處於觀望/未啟動狀態**"
-    p_report = f"{n_status}\n\n🏛️ **客戶持倉損益報告**\n"
+    title = get_report_title()
+    now_str = (datetime.now() + timedelta(hours=8)).strftime('%Y-%m-%d %H:%M')
     
+    # 1. 中文損益表 (以股數 shares 計算)
+    p_report = f"【{title}】\n時間：{now_str}\n\n🏛️ **客戶持倉損益 (TWD)**\n"
     total_profit = 0
     for sym, info in MY_PORTFOLIO.items():
-        ticker = yf.Ticker(sym)
-        df = ticker.history(period="1mo")
+        t = yf.Ticker(sym)
+        df = t.history(period="5d")
         if not df.empty:
             curr = df['Close'].iloc[-1]
-            buy_p = info["cost"]
-            qty = info.get("qty", 1)
-            diff_pct = (curr - buy_p) / buy_p * 100
-            diff_cash = (curr - buy_p) * 1000 * qty # 計算台幣獲利 (每張1000股)
+            diff_cash = (curr - info["cost"]) * info["shares"] # 股數計算
             total_profit += diff_cash
-            p_report += f"● {info['name']}({sym}): {round(diff_pct,2)}% | **NT$ {int(diff_cash):,}**\n"
-    
-    p_report += f"\n💰 **總估計損益：NT$ {int(total_profit):,}**\n"
+            p_report += f"● {info['name']}({sym}): NT$ {int(diff_cash):,} ({round((curr-info['cost'])/info['cost']*100,2)}%)\n"
+    p_report += f"💰 **總累積損益：NT$ {int(total_profit):,}**\n\n"
 
-    final_report = "🎯 **籌碼面/技術面 雙重精選推薦**\n"
+    # 2. 美股分析
+    us_report = get_us_expert_analysis()
+
+    # 3. 150 檔分析
+    stock_report = "\n🎯 **150 檔個股多頭動能監控**\n"
     for cat, stocks in STOCK_POOL.items():
-        cat_section = f"\n【{cat}】\n"
-        has_bull = False
+        cat_txt = f"【{cat}】: "
+        found = False
         for sym, name in stocks.items():
             try:
-                df = yf.Ticker(sym).history(period="3mo")
-                if len(df) < 20: continue
-                curr = df['Close'].iloc[-1]
-                ma20 = df['Close'].rolling(window=20).mean().iloc[-1]
-                if curr > ma20:
-                    gain, reason = get_analysis(df, sym)
-                    if gain >= MIN_GAIN:
-                        has_bull = True
-                        cat_section += f"🚀 **{name}({sym})**: 現價 {round(curr,1)}\n"
-                        cat_section += f" └ 📊 預判分析：{reason}\n"
-                        cat_section += f" └ 📈 預期漲幅：+{gain}%\n\n"
+                df = yf.Ticker(sym).history(period="20d")
+                if df['Close'].iloc[-1] > df['Close'].mean(): # 站上均線
+                    cat_txt += f"{name} "
+                    found = True
             except: continue
-        if has_bull: final_report += cat_section
+        if found: stock_report += cat_txt + "\n"
 
-    full_text = p_report + "\n" + final_report
+    full_text = p_report + us_report + stock_report
     for i in range(0, len(full_text), 1900):
         requests.post(WEBHOOK, json={"content": full_text[i:i+1900]})
 
 if __name__ == "__main__":
     run()
-
