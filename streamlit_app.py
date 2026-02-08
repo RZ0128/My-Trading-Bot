@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-st.set_page_config(page_title="專業交易管理系統-黃金比例版", layout="wide")
+st.set_page_config(page_title="專業交易管理系統-修復穩定版", layout="wide")
 
 # --- 1. 客戶管理系統 (維持好評版本) ---
 if 'clients' not in st.session_state:
@@ -46,7 +46,6 @@ col_t, col_p = st.columns([1, 2])
 with col_t:
     target_stock = st.text_input("股票查詢", "2330.TW")
 with col_p:
-    # 加回週期切換按鈕，並置於上方
     k_period = st.radio("週期調整", ["60分", "日線", "周線"], horizontal=True, index=1)
 
 if k_period == "60分":
@@ -71,12 +70,12 @@ def fetch_data(symbol, inv, rng):
 try:
     df = fetch_data(target_stock, interval, data_range)
     
-    # --- 3. 繪製 2:1:1 比例圖表 ---
+    # --- 3. 繪製圖表：比例 2:1:1 ---
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
-                        vertical_spacing=0.04, 
-                        row_heights=[0.5, 0.25, 0.25]) # 核心比例修改: 2:1:1
+                        vertical_spacing=0.03, 
+                        row_heights=[0.5, 0.25, 0.25]) # 2:1:1 比例
 
-    # K線 (三竹紅綠配色)
+    # K線
     fig.add_trace(go.Candlestick(
         x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
         increasing_line_color='#FF0000', decreasing_line_color='#00AA00',
@@ -100,30 +99,30 @@ try:
     fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='#0072BD', width=1), name="DIF"), row=3, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], line=dict(color='#D95319', width=1), name="DEA"), row=3, col=1)
 
-    # --- 4. 佈局設定 ---
+    # --- 4. 佈局設定 (移除報錯參數) ---
     fig.update_layout(
-        height=750, # 總高度適中，確保 iPad 一眼全覽
+        height=720,
         template="plotly_white", xaxis_rangeslider_visible=False,
         margin=dict(l=10, r=60, t=10, b=10),
         hovermode='x unified', dragmode='pan'
     )
     
-    # 主圖 Y 軸：維持 100 點級距，並修正 Bar 比例
+    # 這裡手動計算 Y 軸範圍來達成「縮小 K 線高度」的目的
+    y_min, y_max = df['Low'].min(), df['High'].max()
+    y_range_buffer = (y_max - y_min) * 0.4 # 增加 40% 的邊距來壓縮 Bar 的視覺高度
+    
     fig.update_yaxes(
         side="right", 
         dtick=100, 
         gridcolor='#F0F0F0',
-        autorange=True,
-        # padding 調整回 0.2，讓 K 線在 2:1:1 比例中看起來飽滿不扁塌
-        autorangeoptions=dict(paddingmin=0.2, paddingmax=0.2), 
+        range=[y_min - y_range_buffer, y_max + y_range_buffer], # 手動控制縮減感
         row=1, col=1
     )
     
-    # 副圖 Y 軸
     fig.update_yaxes(side="right", fixedrange=True, row=2, col=1)
     fig.update_yaxes(side="right", fixedrange=True, row=3, col=1)
 
     st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True})
 
 except Exception as e:
-    st.error(f"連線中...請稍候: {e}")
+    st.error(f"請輸入正確股票代碼: {e}")
