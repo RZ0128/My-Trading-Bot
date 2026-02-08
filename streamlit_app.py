@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-st.set_page_config(page_title="專業交易管理系統-極限壓縮版", layout="wide")
+st.set_page_config(page_title="專業交易管理系統-極致扁平版", layout="wide")
 
 # --- 1. 左側欄位：獨立客戶資產 ---
 st.sidebar.title("🏛️ 客戶帳戶監控")
@@ -28,7 +28,6 @@ col1, col2 = st.columns([1, 2])
 with col1:
     target_stock = st.text_input("股票代碼", "2330.TW")
 with col2:
-    # 確保週期切換按鈕永遠存在
     k_period = st.radio("週期切換", ["60分", "日線", "周線"], horizontal=True, index=1)
 
 if k_period == "60分":
@@ -54,23 +53,24 @@ try:
     c_up, c_down = '#FF0000', '#00B050'
 
     # --- 3. 繪製圖表 ---
+    # 增加 row_heights 的比例，讓主圖佔比更大，但我們會在內部壓縮它
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
-                        vertical_spacing=0.01, 
-                        row_heights=[0.75, 0.1, 0.15]) # 進一步壓縮副圖空間
+                        vertical_spacing=0.02, 
+                        row_heights=[0.7, 0.1, 0.2])
 
     # K線
     fig.add_trace(go.Candlestick(
         x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
         name="K線", increasing_line_color=c_up, decreasing_line_color=c_down,
         increasing_fillcolor=c_up, decreasing_fillcolor=c_down,
-        line_width=1.5
+        line_width=1.2
     ), row=1, col=1)
 
     # 均線
     ma_colors = ['#E11D74', '#1F4287', '#FF8C00', '#28B463']
     for i, m in enumerate(ma_list):
         fig.add_trace(go.Scatter(x=df.index, y=df[f'MA{m}'], name=f'MA{m}',
-                                 line=dict(color=ma_colors[i % 4], width=1.2)), row=1, col=1)
+                                 line=dict(color=ma_colors[i % 4], width=1.3)), row=1, col=1)
 
     # 副圖
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name="成交量", marker_color='#D3D3D3'), row=2, col=1)
@@ -78,32 +78,33 @@ try:
     fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name="DIF", line=dict(color='#0072BD', width=1)), row=3, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], name="DEA", line=dict(color='#D95319', width=1)), row=3, col=1)
 
-    # --- 4. 關鍵 Y 軸極限壓縮邏輯 ---
-    fig.update_layout(
-        height=800, template="plotly_white", xaxis_rangeslider_visible=False,
-        dragmode='pan',
-        margin=dict(l=10, r=60, t=20, b=10),
-        hovermode='x unified',
-        # 禁用 Y 軸的自由縮放，強制由程式邏輯控制比例
-        yaxis_fixedrange=False 
-    )
+    # --- 4. 實施「縮小一半」的極致壓縮 ---
+    start_view = df.index[max(0, len(df)-60)]
 
-    # 主圖 Y 軸：核心修復就在這裡
+    fig.update_layout(
+        height=720, template="plotly_white", xaxis_rangeslider_visible=False,
+        dragmode='pan',
+        xaxis=dict(range=[start_view, df.index[-1]], type='date'),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=10, r=60, t=30, b=10),
+        hovermode='x unified'
+    )
+    
+    # 這裡就是關鍵：縮小 Bar 的垂直佔比
     fig.update_yaxes(
         side="right", 
         autorange=True,
-        # 移除過大的 Padding，讓 K 線佔滿空間
-        autorangeoptions=dict(clipmin=0, clipmax=0, minallowed=df['Low'].min()*0.9, maxallowed=df['High'].max()*1.1),
-        dtick=100, # 維持 100 級距
+        # 透過增加 Padding (0.5 代表上下各留 50% 空白)，強迫 K 線 Bar 縮小一半
+        autorangeoptions=dict(paddingmin=0.5, paddingmax=0.5), 
+        dtick=100, 
         gridcolor='#F0F0F0',
-        tickfont=dict(size=11),
-        # 這一行是解決您「間距太遠」的關鍵：設定縮放比例限制
-        scaleanchor="x", scaleratio=0.01, # 數值越小，Y 軸被壓得越扁
-        constrain="domain",
+        tickfont=dict(size=10),
+        # 解決您提到的「放大後間距要隨之縮小」：強制 Y 軸與 X 軸連動比例
+        fixedrange=False,
         row=1, col=1
     )
 
-    # 副圖鎖定
+    # 鎖定副圖，確保它們不會跟著亂縮放
     fig.update_yaxes(fixedrange=True, row=2, col=1)
     fig.update_yaxes(fixedrange=True, row=3, col=1)
 
@@ -114,4 +115,4 @@ try:
     })
 
 except Exception as e:
-    st.info("數據載入中...")
+    st.info("請輸入正確股票代碼以生成圖表")
