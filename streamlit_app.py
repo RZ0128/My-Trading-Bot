@@ -4,32 +4,57 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-st.set_page_config(page_title="專業交易管理系統-極致扁平版", layout="wide")
+st.set_page_config(page_title="專業交易管理系統-三竹增強版", layout="wide")
 
-# --- 1. 左側欄位：獨立客戶資產 ---
-st.sidebar.title("🏛️ 客戶帳戶監控")
-if 'client_data' not in st.session_state:
-    st.session_state.client_data = {
-        "客戶 A": {"balance": 10000000, "cost": 8500000},
-        "客戶 B": {"balance": 500000, "cost": 450000},
-        "客戶 C": {"balance": 2000000, "cost": 2100000}
+# --- 1. 模擬資料庫 (使用 Session State) ---
+if 'clients' not in st.session_state:
+    st.session_state.clients = {
+        "客戶 A": [{"stock": "2330.TW", "price": 600.0, "shares": 1000}],
+        "客戶 B": [{"stock": "2317.TW", "price": 105.0, "shares": 2000}]
     }
 
-for name, data in st.session_state.client_data.items():
-    with st.sidebar.expander(f"👤 {name} 詳情", expanded=True):
-        t = st.number_input(f"{name} 總資產", value=float(data["balance"]), key=f"t_{name}")
-        c = st.number_input(f"{name} 成本", value=float(data["cost"]), key=f"c_{name}")
-        p = t - c
-        p_pct = (p / c * 100) if c != 0 else 0
-        st.markdown(f"**損益:** <span style='color:{'#FF0000' if p>=0 else '#00B050'}'>{int(p):,} ({p_pct:.2f}%)</span>", unsafe_allow_html=True)
+# --- 2. 左側欄位：客戶與持股管理 ---
+with st.sidebar:
+    st.title("🏛️ 客戶管理系統")
+    
+    # 客戶切換與新增客戶
+    col_add, col_sel = st.columns([1, 2])
+    with col_add:
+        if st.button("➕ 新客戶"):
+            new_name = f"客戶 {chr(65 + len(st.session_state.clients))}"
+            st.session_state.clients[new_name] = []
+    with col_sel:
+        current_client = st.selectbox("切換客戶", list(st.session_state.clients.keys()))
 
-# --- 2. 週期切換與數據抓取 ---
-col1, col2 = st.columns([1, 2])
-with col1:
-    target_stock = st.text_input("股票代碼", "2330.TW")
-with col2:
-    k_period = st.radio("週期切換", ["60分", "日線", "周線"], horizontal=True, index=1)
+    st.divider()
+    
+    # 編輯持股資料
+    st.subheader(f"👤 {current_client} 持股明細")
+    holdings = st.session_state.clients[current_client]
+    
+    total_cost = 0.0
+    for i, item in enumerate(holdings):
+        with st.expander(f"持股 {i+1}: {item['stock']}", expanded=True):
+            c1, c2 = st.columns(2)
+            item['stock'] = c1.text_input(f"代碼", item['stock'], key=f"s_{current_client}_{i}")
+            item['shares'] = c2.number_input(f"股數", value=int(item['shares']), key=f"sh_{current_client}_{i}")
+            item['price'] = st.number_input(f"購入價格", value=float(item['price']), key=f"p_{current_client}_{i}")
+            total_cost += item['price'] * item['shares']
+    
+    if st.button("➕ 添購持股/新增交易"):
+        st.session_state.clients[current_client].append({"stock": "2330.TW", "price": 0.0, "shares": 0})
+        st.rerun()
 
+    st.metric("該客戶總投入成本", f"{int(total_cost):,}")
+
+# --- 3. 主畫面：圖表控制 ---
+col_t, col_p = st.columns([1, 2])
+with col_t:
+    target_stock = st.text_input("股票查詢", "2330.TW")
+with col_p:
+    k_period = st.radio("週期調整", ["60分", "日線", "周線"], horizontal=True, index=1)
+
+# 參數設定
 if k_period == "60分":
     ma_list, interval, data_range = [5, 35, 200], "60m", "2mo"
 elif k_period == "日線":
@@ -40,9 +65,11 @@ else:
 @st.cache_data(ttl=60)
 def fetch_data(symbol, inv, rng):
     df = yf.Ticker(symbol).history(period=rng, interval=inv)
+    # MACD 計算
     e1 = df['Close'].ewm(span=12, adjust=False).mean()
     e2 = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'], df['Signal'] = e1 - e2, (e1 - e2).ewm(span=9, adjust=False).mean()
+    df['MACD'] = e1 - e2
+    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     df['Hist'] = df['MACD'] - df['Signal']
     for m in ma_list:
         df[f'MA{m}'] = df['Close'].rolling(window=m).mean()
@@ -50,69 +77,47 @@ def fetch_data(symbol, inv, rng):
 
 try:
     df = fetch_data(target_stock, interval, data_range)
-    c_up, c_down = '#FF0000', '#00B050'
-
-    # --- 3. 繪製圖表 ---
-    # 增加 row_heights 的比例，讓主圖佔比更大，但我們會在內部壓縮它
+    
+    # --- 4. 繪製三竹風格圖表 ---
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
                         vertical_spacing=0.02, 
-                        row_heights=[0.7, 0.1, 0.2])
+                        row_heights=[0.65, 0.15, 0.2])
 
-    # K線
+    # K 線 (標準紅漲綠跌)
     fig.add_trace(go.Candlestick(
         x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-        name="K線", increasing_line_color=c_up, decreasing_line_color=c_down,
-        increasing_fillcolor=c_up, decreasing_fillcolor=c_down,
-        line_width=1.2
+        increasing_line_color='#FF0000', decreasing_line_color='#00AA00',
+        increasing_fillcolor='#FF0000', decreasing_fillcolor='#00AA00',
+        name="K線"
     ), row=1, col=1)
 
     # 均線
-    ma_colors = ['#E11D74', '#1F4287', '#FF8C00', '#28B463']
+    colors = ['#E11D74', '#1F4287', '#FF8C00', '#28B463']
     for i, m in enumerate(ma_list):
-        fig.add_trace(go.Scatter(x=df.index, y=df[f'MA{m}'], name=f'MA{m}',
-                                 line=dict(color=ma_colors[i % 4], width=1.3)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df[f'MA{m}'], name=f'MA{m}', 
+                                 line=dict(width=1.5, color=colors[i%4])), row=1, col=1)
 
-    # 副圖
-    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name="成交量", marker_color='#D3D3D3'), row=2, col=1)
-    fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="MACD柱", marker_color='#E5E5E5'), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name="DIF", line=dict(color='#0072BD', width=1)), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], name="DEA", line=dict(color='#D95319', width=1)), row=3, col=1)
+    # 成交量 (隨當日漲跌變色)
+    v_colors = ['#FF0000' if c >= o else '#00AA00' for o, c in zip(df['Open'], df['Close'])]
+    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=v_colors, name="成交量"), row=2, col=1)
 
-    # --- 4. 實施「縮小一半」的極致壓縮 ---
-    start_view = df.index[max(0, len(df)-60)]
+    # MACD (DIF藍, DEA橘)
+    h_colors = ['#FF0000' if v >= 0 else '#00AA00' for v in df['Hist']]
+    fig.add_trace(go.Bar(x=df.index, y=df['Hist'], marker_color=h_colors, name="MACD柱"), row=3, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='#0072BD', width=1.2), name="DIF"), row=3, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], line=dict(color='#D95319', width=1.2), name="DEA"), row=3, col=1)
 
+    # --- 5. 佈局優化 ---
     fig.update_layout(
-        height=720, template="plotly_white", xaxis_rangeslider_visible=False,
-        dragmode='pan',
-        xaxis=dict(range=[start_view, df.index[-1]], type='date'),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        margin=dict(l=10, r=60, t=30, b=10),
-        hovermode='x unified'
+        height=800, template="plotly_white", xaxis_rangeslider_visible=False,
+        margin=dict(l=10, r=60, t=10, b=10),
+        hovermode='x unified', dragmode='pan'
     )
     
-    # 這裡就是關鍵：縮小 Bar 的垂直佔比
-    fig.update_yaxes(
-        side="right", 
-        autorange=True,
-        # 透過增加 Padding (0.5 代表上下各留 50% 空白)，強迫 K 線 Bar 縮小一半
-        autorangeoptions=dict(paddingmin=0.5, paddingmax=0.5), 
-        dtick=100, 
-        gridcolor='#F0F0F0',
-        tickfont=dict(size=10),
-        # 解決您提到的「放大後間距要隨之縮小」：強制 Y 軸與 X 軸連動比例
-        fixedrange=False,
-        row=1, col=1
-    )
-
-    # 鎖定副圖，確保它們不會跟著亂縮放
-    fig.update_yaxes(fixedrange=True, row=2, col=1)
-    fig.update_yaxes(fixedrange=True, row=3, col=1)
-
-    st.plotly_chart(fig, use_container_width=True, config={
-        'scrollZoom': True, 
-        'displayModeBar': True,
-        'displaylogo': False
-    })
+    # 垂直壓縮控制：保持 100 元間距緊湊
+    fig.update_yaxes(side="right", dtick=100, gridcolor='#F0F0F0', row=1, col=1)
+    
+    st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True})
 
 except Exception as e:
-    st.info("請輸入正確股票代碼以生成圖表")
+    st.error(f"圖表載入失敗: {e}")
