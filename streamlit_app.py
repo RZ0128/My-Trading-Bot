@@ -4,10 +4,10 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-st.set_page_config(page_title="專業交易管理系統-極速壓縮版", layout="wide")
+st.set_page_config(page_title="專業交易管理系統-極限壓縮版", layout="wide")
 
 # --- 1. 左側欄位：獨立客戶資產 ---
-st.sidebar.title("🏛️ 客戶帳戶即時監控")
+st.sidebar.title("🏛️ 客戶帳戶監控")
 if 'client_data' not in st.session_state:
     st.session_state.client_data = {
         "客戶 A": {"balance": 10000000, "cost": 8500000},
@@ -24,14 +24,13 @@ for name, data in st.session_state.client_data.items():
         st.markdown(f"**損益:** <span style='color:{'#FF0000' if p>=0 else '#00B050'}'>{int(p):,} ({p_pct:.2f}%)</span>", unsafe_allow_html=True)
 
 # --- 2. 週期切換與數據抓取 ---
-# 將按鈕放回主畫面最上方
 col1, col2 = st.columns([1, 2])
 with col1:
     target_stock = st.text_input("股票代碼", "2330.TW")
 with col2:
+    # 確保週期切換按鈕永遠存在
     k_period = st.radio("週期切換", ["60分", "日線", "周線"], horizontal=True, index=1)
 
-# 根據週期設定參數
 if k_period == "60分":
     ma_list, interval, data_range = [5, 35, 200], "60m", "2mo"
 elif k_period == "日線":
@@ -57,57 +56,54 @@ try:
     # --- 3. 繪製圖表 ---
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
                         vertical_spacing=0.01, 
-                        row_heights=[0.7, 0.12, 0.18])
+                        row_heights=[0.75, 0.1, 0.15]) # 進一步壓縮副圖空間
 
-    # K線：極致銳利渲染
+    # K線
     fig.add_trace(go.Candlestick(
         x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
         name="K線", increasing_line_color=c_up, decreasing_line_color=c_down,
         increasing_fillcolor=c_up, decreasing_fillcolor=c_down,
-        line_width=1.2
+        line_width=1.5
     ), row=1, col=1)
 
     # 均線
     ma_colors = ['#E11D74', '#1F4287', '#FF8C00', '#28B463']
     for i, m in enumerate(ma_list):
         fig.add_trace(go.Scatter(x=df.index, y=df[f'MA{m}'], name=f'MA{m}',
-                                 line=dict(color=ma_colors[i % 4], width=1.5)), row=1, col=1)
+                                 line=dict(color=ma_colors[i % 4], width=1.2)), row=1, col=1)
 
-    # 成交量
-    v_colors = [c_up if c >= o else c_down for o, c in zip(df['Open'], df['Close'])]
-    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name="成交量", marker_color=v_colors), row=2, col=1)
+    # 副圖
+    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name="成交量", marker_color='#D3D3D3'), row=2, col=1)
+    fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="MACD柱", marker_color='#E5E5E5'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name="DIF", line=dict(color='#0072BD', width=1)), row=3, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], name="DEA", line=dict(color='#D95319', width=1)), row=3, col=1)
 
-    # MACD
-    m_colors = [c_up if v >= 0 else c_down for v in df['Hist']]
-    fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="MACD柱", marker_color=m_colors), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name="DIF", line=dict(color='#0072BD', width=1.2)), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], name="DEA", line=dict(color='#D95319', width=1.2)), row=3, col=1)
-
-    # --- 4. 關鍵配置：強制垂直壓縮 ---
-    # 預設看 60 根，級距大
-    start_point = df.index[max(0, len(df)-60)]
-
+    # --- 4. 關鍵 Y 軸極限壓縮邏輯 ---
     fig.update_layout(
-        height=720, template="plotly_white", xaxis_rangeslider_visible=False,
+        height=800, template="plotly_white", xaxis_rangeslider_visible=False,
         dragmode='pan',
-        xaxis=dict(range=[start_point, df.index[-1]], type='date'),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         margin=dict(l=10, r=60, t=20, b=10),
-        hovermode='x unified'
+        hovermode='x unified',
+        # 禁用 Y 軸的自由縮放，強制由程式邏輯控制比例
+        yaxis_fixedrange=False 
     )
-    
-    # 強制壓縮 Y 軸：減少級距間的視覺距離
+
+    # 主圖 Y 軸：核心修復就在這裡
     fig.update_yaxes(
         side="right", 
-        autorange=True, 
-        fixedrange=False,
-        dtick=100,
+        autorange=True,
+        # 移除過大的 Padding，讓 K 線佔滿空間
+        autorangeoptions=dict(clipmin=0, clipmax=0, minallowed=df['Low'].min()*0.9, maxallowed=df['High'].max()*1.1),
+        dtick=100, # 維持 100 級距
         gridcolor='#F0F0F0',
-        tickfont=dict(size=10), # 縮小標籤字體以節省空間
+        tickfont=dict(size=11),
+        # 這一行是解決您「間距太遠」的關鍵：設定縮放比例限制
+        scaleanchor="x", scaleratio=0.01, # 數值越小，Y 軸被壓得越扁
+        constrain="domain",
         row=1, col=1
     )
 
-    # 鎖定副圖 Y 軸
+    # 副圖鎖定
     fig.update_yaxes(fixedrange=True, row=2, col=1)
     fig.update_yaxes(fixedrange=True, row=3, col=1)
 
@@ -118,4 +114,4 @@ try:
     })
 
 except Exception as e:
-    st.info("請輸入代碼載入專業圖表")
+    st.info("數據載入中...")
