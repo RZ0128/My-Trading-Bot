@@ -6,7 +6,7 @@ import ssl
 
 st.set_page_config(page_title="專業級資產監控系統", layout="wide")
 
-# --- 1. 客戶資產區塊 (嚴格復原至您最滿意的版本) ---
+# --- 1. 客戶資產區塊 (嚴格維持，僅在姓名旁增加總損益) ---
 if 'clients' not in st.session_state:
     st.session_state.clients = {}
 
@@ -25,7 +25,7 @@ def get_portfolio_report(transactions):
                 report[s]["total_cost"] -= tx['shares'] * avg
     return report
 
-# 側邊欄：管理與交易紀錄
+# 側邊欄：管理與交易紀錄 (維持原樣)
 with st.sidebar:
     st.header("👤 客戶管理中心")
     new_c = st.text_input("輸入新客戶姓名")
@@ -44,15 +44,16 @@ with st.sidebar:
             st.session_state.clients[active_c].append({"stock": stock_id.upper(), "price": price_in, "shares": shares_in, "type": type_radio})
             st.rerun()
 
-# 主介面：資產顯示區 (照截圖樣式復原)
+# 主介面：資產顯示區
 st.title("💼 客戶資產監控中心")
 if st.session_state.clients:
     selected_name = st.selectbox("📂 選取查看帳戶", list(st.session_state.clients.keys()))
     my_assets = get_portfolio_report(st.session_state.clients[selected_name])
     
-    st.subheader(f"📊 {selected_name} 持股明細")
+    # --- 計算總損益以便放在名字旁邊 ---
+    total_pnl_sum = 0.0
+    asset_data_for_table = []
     
-    asset_list = []
     for s, d in my_assets.items():
         if d['shares'] > 0:
             avg_cost = d['total_cost'] / d['shares']
@@ -62,12 +63,11 @@ if st.session_state.clients:
                 curr_price = avg_cost
             
             pnl = (curr_price - avg_cost) * d['shares']
+            total_pnl_sum += pnl
             pnl_pct = ((curr_price / avg_cost) - 1) * 100
-            
-            # 根據損益決定顏色
             color = "red" if pnl >= 0 else "green"
             
-            asset_list.append({
+            asset_data_for_table.append({
                 "代碼": s,
                 "持股數": f"{d['shares']:,} 股",
                 "每股損益": f":{color}[{ (curr_price - avg_cost):+,.2f} ]",
@@ -75,14 +75,18 @@ if st.session_state.clients:
                 "損益%": f":{color}[{pnl_pct:+,.2f}% ]",
                 "帳務摘要": f"平均成本: {avg_cost:.2f} | 即時市值: {curr_price:.2f}"
             })
+
+    # --- 唯一更動處：在名字旁邊顯示總損益 ---
+    summary_color = "#ff4b4b" if total_pnl_sum >= 0 else "#00ff00"
+    st.markdown(f"### 👤 客戶：{selected_name} <span style='margin-left:20px; color:{summary_color}; font-size:0.8em;'>[ 帳戶總損益和：{total_pnl_sum:+,.0f} ]</span>", unsafe_allow_html=True)
     
-    if asset_list:
-        st.table(pd.DataFrame(asset_list))
+    if asset_data_for_table:
+        st.table(pd.DataFrame(asset_data_for_table))
     
     with st.expander("📝 原始交易歷史 (右側可進行刪除)"):
         st.write(st.session_state.clients[selected_name])
 
-# --- 2. 新聞區塊 (保留您滿意的即時對接版) ---
+# --- 2. 新聞區塊 (維持原樣，不作任何更動) ---
 st.divider()
 st.subheader("🌎 全球地緣政治 & 財經監控 (權威媒體即時對接)")
 
