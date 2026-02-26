@@ -5,13 +5,78 @@ import feedparser
 import ssl
 from datetime import datetime
 
-st.set_page_config(page_title="經理人級 AI 3.0 終極預測系統", layout="wide")
+# 設定網頁標題與寬版顯示
+st.set_page_config(page_title="經理人級 AI 終極預測系統 V3", layout="wide")
 
-# --- 1. 客戶資產管理 (維持地基) ---
+# --- 1. 第一區：客戶資產管理區塊 (地基) ---
 if 'clients' not in st.session_state:
     st.session_state.clients = {}
 
-# [此處省略 get_portfolio_report 與 sidebar 代碼，請保留您原本的 1-60 行]
+def get_portfolio_report(transactions):
+    report = {}
+    for tx in transactions:
+        s = tx['stock']
+        if s not in report: report[s] = {"shares": 0, "total_cost": 0.0}
+        if tx['type'] == "買入":
+            report[s]["shares"] += tx['shares']
+            report[s]["total_cost"] += tx['shares'] * tx['price']
+        elif tx['type'] == "賣出":
+            if report[s]["shares"] > 0:
+                avg = report[s]["total_cost"] / report[s]["shares"]
+                report[s]["shares"] -= tx['shares']
+                report[s]["total_cost"] -= tx['shares'] * avg
+    return report
+
+with st.sidebar:
+    st.header("👤 客戶管理中心")
+    new_c = st.text_input("輸入新客戶姓名")
+    if st.button("➕ 新增帳戶") and new_c:
+        if new_c not in st.session_state.clients:
+            st.session_state.clients[new_c] = []; st.rerun()
+    st.divider()
+    st.header("📥 紀錄交易")
+    with st.form("tx_input"):
+        active_c = st.selectbox("選擇操作帳戶", list(st.session_state.clients.keys()) if st.session_state.clients else ["無"])
+        stock_id = st.text_input("股票代碼 (如: 2330.TW)", "2330.TW")
+        type_radio = st.radio("交易類型", ["買入", "賣出"], horizontal=True)
+        price_in = st.number_input("成交單價", min_value=0.0)
+        shares_in = st.number_input("成交股數", min_value=1)
+        if st.form_submit_button("確認提交紀錄") and st.session_state.clients:
+            st.session_state.clients[active_c].append({
+                "stock": stock_id.upper(), "price": price_in, 
+                "shares": shares_in, "type": type_radio
+            })
+            st.rerun()
+
+# 主介面：資產顯示
+st.title("💼 客戶資產監控中心")
+if st.session_state.clients:
+    selected_name = st.selectbox("📂 選取查看帳戶", list(st.session_state.clients.keys()))
+    my_assets = get_portfolio_report(st.session_state.clients[selected_name])
+    total_pnl_sum = 0.0
+    asset_data_for_table = []
+    for s, d in my_assets.items():
+        if d['shares'] > 0:
+            avg_cost = d['total_cost'] / d['shares']
+            try:
+                curr_price = yf.Ticker(s).history(period="1d")['Close'].iloc[-1]
+            except:
+                curr_price = avg_cost
+            pnl = (curr_price - avg_cost) * d['shares']
+            total_pnl_sum += pnl
+            pnl_pct = ((curr_price / avg_cost) - 1) * 100
+            color = "red" if pnl >= 0 else "green"
+            asset_data_for_table.append({
+                "代碼": s, "持股數": f"{d['shares']:,} 股",
+                "每股損益": f":{color}[{ (curr_price - avg_cost):+,.2f} ]",
+                "累積損益": f":{color}[{pnl:+,.0f} ]",
+                "損益%": f":{color}[{pnl_pct:+,.2f}% ]",
+                "帳務摘要": f"平均成本: {avg_cost:.2f} | 即時市值: {curr_price:.2f}"
+            })
+    summary_color = "#ff4b4b" if total_pnl_sum >= 0 else "#00ff00"
+    st.markdown(f"### 👤 客戶：{selected_name} <span style='margin-left:20px; color:{summary_color}; font-size:0.8em;'>[ 帳戶總損益和：{total_pnl_sum:+,.0f} ]</span>", unsafe_allow_html=True)
+    if asset_data_for_table: st.table(pd.DataFrame(asset_data_for_table))
+
 
 # --- 2. 核心進化：齒輪模組 3.0 選股與預測策略 ---
 st.title("🤖 AI 經理人 3.0：台股 350 檔「全自動共振」掃描報告")
