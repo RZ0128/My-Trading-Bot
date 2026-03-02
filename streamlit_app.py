@@ -173,7 +173,7 @@ with col_l:
                 st.success(f"🎯 目標: {item['target']}")
                 st.error(f"🛑 止損: {item['stop']}")
 
-# --- [7. 右側監控區：實戰持股、分批減持與總帳明細 - 優化美化版] ---
+# --- [7. 右側監控區：實戰持股與精確減持系統 - V11.4 直觀優化版] ---
 with col_r:
     st.subheader(f"💼 [{st.session_state['cur_c']}] 實戰持股明細")
     
@@ -199,48 +199,76 @@ with col_r:
                 stock_pnl = (cp - row['buy_price']) * row['shares'] * multiplier
                 total_unrealized_pnl += stock_pnl
                 
-                # 顏色設定：獲利用溫和紅，虧損用溫和綠
+                # 配色：獲利用溫和紅 (#e04e4e)，虧損用溫和綠 (#4ea04e)
                 pnl_color = "#e04e4e" if stock_pnl >= 0 else "#4ea04e"
                 
-                # 移除沉重底色，改用類似第六區的簡單 Container
                 with st.container(border=True):
-                    # 標題列
+                    # 標題與損益列
                     t_col1, t_col2 = st.columns([1.5, 1])
                     t_col1.markdown(f"**{row['name']}** <small>{row['id']}</small>", unsafe_allow_html=True)
                     t_col2.markdown(f"<div style='text-align:right; color:{pnl_color}; font-weight:bold;'>NT$ {stock_pnl:,.0f}</div>", unsafe_allow_html=True)
                     
-                    # 數據列
+                    # 數據詳情列
                     d_col1, d_col2, d_col3 = st.columns(3)
                     d_col1.caption(f"現價: {cp}")
                     d_col2.caption(f"成本: {row['buy_price']}")
-                    d_col3.caption(f"持股: {row['shares']}{row['unit']}")
+                    d_col3.markdown(f"<small>持股: <b>{row['shares']}</b> {row['unit']}</small>", unsafe_allow_html=True)
                     
-                    # 分批減持按鈕區 (收納在 expander)
-                    with st.expander("⚙️ 減持/平倉設定"):
-                        sell_col1, sell_col2 = st.columns([2, 1])
-                        s_qty = sell_col1.number_input("數量", min_value=1, max_value=int(row['shares']), value=1, key=f"sq_{idx}")
-                        if sell_col2.button("執行", key=f"sbtn_{idx}", use_container_width=True):
+                    # --- 精確減持/平倉區 (自動帶入正確單位) ---
+                    with st.expander(f"⚙️ 減持 / 平倉 ({row['unit']})"):
+                        # 自動顯示該筆持股的單位，讓操作者明確知道正在減持的是「張」還是「股」
+                        st.write(f"當前單位：{row['unit']}")
+                        sell_col1, sell_col2 = st.columns([1.5, 1])
+                        
+                        s_qty = sell_col1.number_input(
+                            f"減持{row['unit']}數", 
+                            min_value=1, 
+                            max_value=int(row['shares']), 
+                            value=1, 
+                            key=f"sq_{idx}"
+                        )
+                        
+                        if sell_col2.button("確認執行", key=f"sbtn_{idx}", use_container_width=True):
                             if s_qty >= row['shares']:
                                 st.session_state.local_db = st.session_state.local_db.drop(idx)
+                                st.toast(f"✅ {row['name']} 已全數平倉")
                             else:
                                 st.session_state.local_db.at[idx, 'shares'] -= s_qty
+                                st.toast(f"✅ {row['name']} 已減持 {s_qty} {row['unit']}")
                             st.rerun()
                     
-                    # AI 警示提醒
+                    # AI 風控警示
                     if cp < res['stop']:
-                        st.markdown(f"<small style='color:#4ea04e;'>🛑 跌破止損 {res['stop']}</small>", unsafe_allow_html=True)
+                        st.markdown(f"<small style='color:#4ea04e;'>🛑 警報：跌破止損 {res['stop']}</small>", unsafe_allow_html=True)
                     elif cp >= res['target']:
-                        st.markdown(f"<small style='color:#e04e4e;'>🎯 達標預警 {res['target']}</small>", unsafe_allow_html=True)
+                        st.markdown(f"<small style='color:#e04e4e;'>🎯 獲利：達標預警 {res['target']}</small>", unsafe_allow_html=True)
 
-        # --- 客戶總帳總結 (移除黑底，改用簡潔樣式) ---
+        # --- 客戶總帳總結 ---
         st.markdown("---")
         total_color = "#e04e4e" if total_unrealized_pnl >= 0 else "#4ea04e"
         st.markdown(f"""
-            <div style='padding:10px; border:1px solid #ddd; border-radius:5px; text-align:center;'>
-                <div style='font-size:12px; color:#666;'>當前帳戶總未實現損益</div>
-                <div style='font-size:20px; font-weight:bold; color:{total_color};'>NT$ {total_unrealized_pnl:,.0f}</div>
+            <div style='padding:12px; border:1px solid #ddd; border-radius:8px; text-align:center;'>
+                <div style='font-size:13px; color:#666; margin-bottom:5px;'>[{st.session_state['cur_c']}] 客戶帳戶總未實現損益</div>
+                <div style='font-size:22px; font-weight:bold; color:{total_color};'>NT$ {total_unrealized_pnl:,.0f}</div>
             </div>
         """, unsafe_allow_html=True)
+
+# --- [8. 全球情報區] ---
+st.divider()
+st.header("🌎 全球戰略情報中樞")
+intel_map = {
+    "🇺🇸 美國戰略": ["川普+馬斯克+華爾街", "輝達+聯準會+降息"],
+    "🇮🇱 中東衝突": ["中東戰爭+以色列+伊朗", "紅海+航運+石油價格"],
+    "🇯🇵 亞洲科技": ["台積電+半導體+CoWoS", "日本+日經+科技股"]
+}
+tabs = st.tabs(list(intel_map.keys()))
+for tab, (region, q_list) in zip(tabs, intel_map.items()):
+    with tab:
+        for q in q_list:
+            u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+            feed = feedparser.parse(u)
+            for n in feed.entries[:3]:
+                st.markdown(f"<div class='news-card'>🕒 {n.published[5:16]} | <a href='{n.link}' target='_blank'>{n.title}</a></div>", unsafe_allow_html=True)
 
 # --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
 st.divider()
