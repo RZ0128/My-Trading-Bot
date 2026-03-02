@@ -77,27 +77,45 @@ def get_cloud_data():
         except: return pd.DataFrame()
     return pd.DataFrame()
 
-# --- [4. 側邊欄：帳戶管理] ---
+# --- [4. 側邊欄：帳戶管理 - 完整同步版] ---
 with st.sidebar:
     st.header("👤 客戶帳戶管理")
-    new_c = st.text_input("新增客戶姓名")
-    if st.button("➕ 建立帳戶") and new_c:
-        st.success(f"已準備同步 {new_c}")
     
-    st.divider()
-    df_sync = get_cloud_data()
-    existing_clients = df_sync['client'].unique().tolist() if not df_sync.empty else []
-    # 預設維持周靖傑，或是選單第一個客戶
-    cur_c = st.selectbox("🎯 當前操作客戶", existing_clients if existing_clients else ["周靖傑"])
+    # 新增客戶輸入區
+    new_client_input = st.text_input("📝 輸入新客戶全名", key="sidebar_new_client")
+    if st.button("➕ 建立並同步帳戶"):
+        if new_client_input and db:
+            # 寫入初始化標記，確保雲端能即時抓到這個新客戶
+            db.append_row([new_client_input, "INIT", "初始化", 0, 0])
+            st.success(f"帳戶 {new_client_input} 已同步至雲端")
+            st.rerun()
+        elif not new_client_input:
+            st.warning("請先輸入姓名")
 
-# --- [5. 主畫面：15 檔推薦 (完全展開)] ---
-st.title(f"🛡️ AI 經理人 9.1：[{cur_c}] 全功能戰略版")
-st.caption(f"完整功能：評分、紅綠點數、預警燈、台幣損益、雲端同步 | 更新時間: {datetime.now().strftime('%H:%M:%S')}")
+    st.divider()
+    
+    # 讀取雲端最新客戶清單
+    df_sync = get_cloud_data()
+    if not df_sync.empty:
+        # 過濾掉 INIT 標記，提取唯一客戶名稱
+        real_clients = df_sync[df_sync['id'] != "INIT"]['client'].unique().tolist()
+        if real_clients:
+            existing_clients = real_clients
+        else:
+            existing_clients = ["尚未有持股客戶"]
+    else:
+        existing_clients = ["連線中..."]
+        
+    cur_c = st.selectbox("🎯 當前操作客戶", existing_clients)
+
+# --- [5. 主畫面：完整 15 檔推薦與投資組合 - 零精簡版] ---
+st.title(f"🛡️ AI 經理人 9.2：[{cur_c}] 全功能戰略版")
 
 col_l, col_r = st.columns([1.6, 1.4])
 
 with col_l:
     st.subheader("🔥 每日 15 檔推薦 (含預警機制)")
+    # 完整 15 檔清單，絕不精簡
     scan_list = [
         {"id": "2402.TW", "name": "毅嘉", "score": 93, "detail": "站穩 42.5 元支撐。MACD 二次金叉。"},
         {"id": "6531.TW", "name": "愛普*", "score": 95, "detail": "月日 MACD 共振。起漲第一點。"},
@@ -117,64 +135,85 @@ with col_l:
     ]
 
     for idx, s in enumerate(scan_list):
+        # 獲取即時數據 (包含預警燈)
         price, diff, color, final_score, alert_info = get_stock_perf(s['id'], s['score'])
-        # 標題含預警燈標籤
-        header_text = f"📊 {s['id']} {s['name']} | 評分: {final_score}"
-        with st.expander(f"{header_text} (現價: {price})"):
+        
+        # 展開摺疊面板：標題含現價與評分
+        with st.expander(f"📊 {s['id']} {s['name']} | 評分: {final_score} | 現價: {price}"):
             st.markdown(f"**狀態預警：** <span class='{alert_info[1]}'>{alert_info[0]}</span>", unsafe_allow_html=True)
             st.markdown(f"**今日表現：** <span class='{color}' style='font-size:18px;'>{diff}</span>", unsafe_allow_html=True)
             st.write(f"**戰略分析：** {s['detail']}")
             st.markdown("---")
-            st.write("🛒 **買入指令**")
+            
+            # 買入指令
             o_c1, o_c2, o_c3 = st.columns([1, 1, 1])
-            unit = o_c1.radio("選擇單位", ["張 (1000股)", "股 (零股)"], key=f"u_{idx}")
-            qty = o_c2.number_input("輸入數量", min_value=1, value=1, key=f"q_{idx}")
+            unit = o_c1.radio("選擇單位", ["張 (1000股)", "股 (零股)"], key=f"unit_{idx}")
+            qty = o_c2.number_input("輸入數量", min_value=1, value=1, key=f"qty_{idx}")
             actual_shares = qty * 1000 if "張" in unit else qty
-            if o_c3.button("執行買入", key=f"b_{idx}"):
-                if db:
+            
+            if o_c3.button("執行買入", key=f"buy_btn_{idx}"):
+                if db and cur_c != "連線中..." and cur_c != "尚未有持股客戶":
+                    # 直接寫入雲端
                     db.append_row([cur_c, s['id'], s['name'], price, actual_shares])
-                    st.success(f"已同步雲端: {s['name']} {actual_shares}股")
+                    st.toast(f"✅ {s['name']} 已加入 {cur_c} 持股")
                     st.rerun()
 
-# --- [右側：投資組合 & 台幣損益 (完全展開)] ---
 with col_r:
     st.subheader(f"💼 {cur_c} 投資組合 (台幣損益)")
     total_twd_pnl = 0
     df_current = get_cloud_data()
     
     if not df_current.empty and cur_c in df_current['client'].values:
-        my_stocks = df_current[df_current['client'] == cur_c]
-        for i, row in my_stocks.iterrows():
-            cp, _, cc, _, _ = get_stock_perf(row['id'], 0)
-            twd_pnl = (cp - row['buy_price']) * row['shares']
-            total_twd_pnl += twd_pnl
-            pnl_pct = (cp / row['buy_price'] - 1) * 100 if row['buy_price'] > 0 else 0
-            
-            # 單一標的顯示區
-            c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.8, 0.8])
-            c1.write(f"**{row['name']}**\n{row['shares']} 股")
-            c2.write(f"現價: {cp}\n(成本: {row['buy_price']})")
-            
-            pnl_color = "red" if twd_pnl >= 0 else "green"
-            c3.markdown(f"損益: <span style='color:{pnl_color}; font-weight:bold;'>NT$ {twd_pnl:,.0f}</span><br><span class='{cc}'>({pnl_pct:+.2f}%)</span>", unsafe_allow_html=True)
-            
-            with c4:
-                del_mode = st.popover("⚙️")
-                del_qty = del_mode.number_input("減持", min_value=1, max_value=int(row['shares']), value=int(row['shares']), key=f"dq_{i}")
-                if del_mode.button("執行", key=f"dbtn_{i}"):
-                    actual_row_index = i + 2
-                    if del_qty >= row['shares']:
-                        db.delete_rows(int(actual_row_index))
-                    else:
-                        db.update_cell(actual_row_index, 5, int(row['shares'] - del_qty))
-                    st.rerun()
-            st.divider()
+        # 過濾該客戶持股，排除 INIT 標記
+        my_stocks = df_current[(df_current['client'] == cur_c) & (df_current['id'] != "INIT")]
         
-        # 帳戶總結
-        total_color = "red" if total_twd_pnl >= 0 else "green"
-        st.markdown(f"### 帳戶總損益估值: <span style='color:{total_color};'>NT$ {total_twd_pnl:,.0f}</span>", unsafe_allow_html=True)
+        if my_stocks.empty:
+            st.info("目前尚無持股部位")
+        else:
+            for i, row in my_stocks.iterrows():
+                # 獲取即時行情 (用於損益計算)
+                cp, _, cc, _, a_info = get_stock_perf(row['id'], 0)
+                twd_pnl = (cp - row['buy_price']) * row['shares']
+                total_twd_pnl += twd_pnl
+                pnl_pct = (cp / row['buy_price'] - 1) * 100 if row['buy_price'] > 0 else 0
+                
+                # 顯示持股明細
+                c1, c2, c3 = st.columns([2, 2, 1])
+                with c1:
+                    st.markdown(f"**{row['name']}** <span class='{a_info[1]}'>{a_info[0]}</span>", unsafe_allow_html=True)
+                    st.write(f"{row['shares']} 股")
+                
+                with c2:
+                    p_color = "red" if twd_pnl >= 0 else "green"
+                    st.markdown(f"損益: <span style='color:{p_color}; font-weight:bold;'>NT$ {twd_pnl:,.0f}</span>", unsafe_allow_html=True)
+                    st.write(f"現價: {cp} ({pnl_pct:+.2f}%)")
+                
+                # 個別刪除/減倉按鍵
+                with c3:
+                    del_pop = st.popover("⚙️")
+                    d_qty = del_pop.number_input("減持股數", min_value=1, max_value=int(row['shares']), value=int(row['shares']), key=f"dq_r_{i}")
+                    if del_pop.button("確認執行", key=f"db_r_{i}"):
+                        # 換算回雲端表單行號 (索引 i 從 0 開始，+2 補償標題與位移)
+                        # 注意：此處需根據 row 原有的資料庫 index 處理更精確
+                        target_row = i + 2
+                        if d_qty >= row['shares']:
+                            db.delete_rows(int(target_row))
+                        else:
+                            new_shares = int(row['shares'] - d_qty)
+                            db.update_cell(target_row, 5, new_shares)
+                        st.rerun()
+                st.divider()
+            
+            # 總損益統計
+            total_color = "red" if total_twd_pnl >= 0 else "green"
+            st.markdown(f"### 帳戶總損益: <span style='color:{total_color};'>NT$ {total_twd_pnl:,.0f}</span>", unsafe_allow_html=True)
+            if st.button("🚨 清空該客戶所有持股"):
+                # 倒序刪除避免行號跑掉
+                for idx in reversed(my_stocks.index.tolist()):
+                    db.delete_rows(idx + 2)
+                st.rerun()
     else:
-        st.info("尚無雲端持股部位")
+        st.info("請先在左側建立帳戶並執行買入")
 
 # --- 6. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
 st.divider()
