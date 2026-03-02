@@ -77,27 +77,61 @@ def get_cloud_data():
         except: return pd.DataFrame()
     return pd.DataFrame()
 
-# --- [4. 側邊欄：內存客戶管理系統 (iPad 專用版)] ---
+# --- [4. 側邊欄：內存客戶管理系統 (含修改/刪除功能)] ---
 with st.sidebar:
     st.header("👤 帳戶控制台 (iPad 專用)")
     
-    # 初始化內存資料庫 (Session State)
+    # 初始化內存資料庫
     if 'local_db' not in st.session_state:
         st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares'])
     
     if 'client_list' not in st.session_state:
-        st.session_state.client_list = ["周靖傑"]
+        st.session_state.client_list = ["周靖傑", "測試客戶"]
 
-    new_c_name = st.text_input("📝 輸入新客戶全名", key="ipad_new_c")
-    if st.button("➕ 建立客戶帳戶"):
-        if new_c_name and new_c_name not in st.session_state.client_list:
-            st.session_state.client_list.append(new_c_name)
-            st.success(f"客戶 {new_c_name} 已建立")
-            st.rerun()
+    # --- 新增區塊 ---
+    with st.expander("➕ 新增新客戶"):
+        new_c_name = st.text_input("輸入客戶全名", key="ipad_new_c")
+        if st.button("確認建立"):
+            if new_c_name and new_c_name not in st.session_state.client_list:
+                st.session_state.client_list.append(new_c_name)
+                st.success(f"客戶 {new_c_name} 已建立")
+                st.rerun()
 
     st.divider()
+
+    # --- 選擇與管理區塊 ---
     cur_c = st.selectbox("🎯 當前操作客戶", st.session_state.client_list)
-    st.info("💡 目前運作於 iPad 本地高速模式，操作將即時反應。")
+    
+    # --- 修改與刪除工具 (長官要求優化處) ---
+    with st.expander("⚙️ 帳戶更名/移除"):
+        # 修改名稱
+        new_edit_name = st.text_input("將此客戶更名為:", value=cur_c)
+        if st.button("💾 確認修改名稱"):
+            if new_edit_name != cur_c:
+                # 1. 更新名單
+                idx = st.session_state.client_list.index(cur_c)
+                st.session_state.client_list[idx] = new_edit_name
+                # 2. 更新持股資料庫中的客戶名稱
+                st.session_state.local_db.loc[st.session_state.local_db['client'] == cur_c, 'client'] = new_edit_name
+                st.success("名稱已同步更新")
+                st.rerun()
+        
+        st.write("---")
+        
+        # 刪除客戶
+        if st.button("⚠️ 徹底刪除此帳戶", help="這將連同所有持股一併刪除"):
+            if len(st.session_state.client_list) > 1:
+                # 1. 從名單移除
+                st.session_state.client_list.remove(cur_c)
+                # 2. 從持股資料庫移除該客戶所有資料
+                st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != cur_c]
+                st.warning(f"帳戶 {cur_c} 已銷毀")
+                st.rerun()
+            else:
+                st.error("至少需保留一名客戶")
+
+    st.divider()
+    st.info("💡 目前為 iPad 本地高速模式，操作將即時反應。")
 
 # --- [5. 主畫面：AI 動態偵測掃描引擎 (前 200 檔精選池)] ---
 st.title(f"🛡️ AI 經理人 9.9：[{cur_c}] 全方位掃描中心")
