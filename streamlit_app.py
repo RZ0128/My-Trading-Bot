@@ -176,37 +176,28 @@ with col_r:
     else:
         st.info("尚無雲端持股部位")
 
-# --- [6. 全球情報 (完全展開，不省略任何細節)] ---
+# --- 6. 全球情報 (完全保留 8.5) ---
 st.divider()
 st.header("🌎 全球 24H 戰略情報中樞")
-
 def fetch_massive_intel(query_list):
     ssl._create_default_https_context = ssl._create_unverified_context
     all_entries = []
     for q in query_list:
-        try:
-            u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
-            feed = feedparser.parse(u)
-            all_entries.extend(feed.entries)
-        except: continue
-    # 去重
+        u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+        all_entries.extend(feedparser.parse(u).entries)
     unique_news = {n.link: n for n in all_entries}.values()
     return sorted(list(unique_news), key=lambda x: x.published, reverse=True)[:18]
 
-# 這裡完全展開所有搜尋關鍵字
 intel_map = {
-    "🇺🇸 美國戰略": ["Trump+Elon+Musk+Wall+Street", "Nvidia+Fed+US+Stock"],
-    "🇪🇺 歐洲動態": ["Europe+Economy+Ukraine+ECB", "Germany+France+Energy"],
-    "🇯🇵 亞洲科技": ["Taiwan+Semiconductor+TSMC", "Japan+Nikkei+Tech"],
-    "🇨🇳 中國觀點": ["中國+經濟+財經+政策 -新華網 -人民網"]
+    "🇺🇸 美國戰略": ["Trump+Elon+Musk+Wall+Street", "Nvidia+Fed"],
+    "🇪🇺 歐洲動態": ["Europe+Economy+Ukraine+ECB"],
+    "🇯🇵 亞洲科技": ["Taiwan+Semiconductor+TSMC", "Japan+Nikkei"],
+    "🇨🇳 中國觀點": ["中國+經濟+財經+政策 -新華網"]
 }
 
 tabs = st.tabs(list(intel_map.keys()))
 for tab, (region, q_list) in zip(tabs, intel_map.items()):
     with tab:
         items = fetch_massive_intel(q_list)
-        if not items:
-            st.warning("暫無最新情報")
-        else:
-            for n in items:
-                st.markdown(f"<div class='news-card'>🕒 {n.published[5:16]} | <a href='{n.link}' target='_blank'>{n.title}</a></div>", unsafe_allow_html=True)
+        for n in items:
+            st.markdown(f"<div class='news-card'>🕒 {n.published[5:16]} | <a href='{n.link}' target='_blank'>{n.title}</a></div>", unsafe_allow_html=True)
