@@ -173,23 +173,20 @@ with col_l:
                 st.success(f"🎯 目標: {item['target']}")
                 st.error(f"🛑 止損: {item['stop']}")
 
-# --- [7. 右側監控區：實戰持股、分批減持與總帳明細] ---
+# --- [7. 右側監控區：實戰持股、分批減持與總帳明細 - 優化美化版] ---
 with col_r:
     st.subheader(f"💼 [{st.session_state['cur_c']}] 實戰持股明細")
     
-    # 過濾出當前客戶的持股
+    # 過濾當前客戶持股
     my_holdings = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
     
     if my_holdings.empty:
-        st.info("目前尚無持股數據，請從左側挑選精銳標的佈局。")
+        st.info("目前尚無持股數據。")
     else:
-        total_unrealized_pnl = 0  # 累計該客戶總損益
+        total_unrealized_pnl = 0 
         
         for idx, row in my_holdings.iterrows():
-            # 獲取即時現價
             cp, cd, cc = get_stock_perf(row['id'], 0)
-            
-            # 獲取 AI 分析參數（用於止損目標價顯示）
             try:
                 d_val = float(cd.replace('%','').replace('+',''))
             except:
@@ -197,64 +194,53 @@ with col_r:
             res = generate_ai_tech_analysis(row['id'], cp, d_val)
             
             if res:
-                # 計算個股新台幣損益 (張=1000股)
+                # 計算個股新台幣損益
                 multiplier = 1000 if row['unit'] == "張" else 1
-                current_value = cp * row['shares'] * multiplier
-                cost_value = row['buy_price'] * row['shares'] * multiplier
-                stock_pnl = current_value - cost_value
+                stock_pnl = (cp - row['buy_price']) * row['shares'] * multiplier
                 total_unrealized_pnl += stock_pnl
                 
-                # 判斷是否觸及預警（底色變更）
-                bg_color = "#441111" if cp < res['stop'] else "#1E1E1E"
+                # 顏色設定：獲利用溫和紅，虧損用溫和綠
+                pnl_color = "#e04e4e" if stock_pnl >= 0 else "#4ea04e"
                 
+                # 移除沉重底色，改用類似第六區的簡單 Container
                 with st.container(border=True):
-                    st.markdown(f"""
-                        <div style='background:{bg_color}; padding:10px; border-radius:10px; border:1px solid #333;'>
-                            <span style='font-size:16px; font-weight:bold;'>{row['name']} ({row['id']})</span> 
-                            <span style='float:right; color:{"#ff4b4b" if stock_pnl < 0 else "#00f000"}'>
-                                盈虧：NT$ {stock_pnl:,.0f}
-                            </span>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    # 標題列
+                    t_col1, t_col2 = st.columns([1.5, 1])
+                    t_col1.markdown(f"**{row['name']}** <small>{row['id']}</small>", unsafe_allow_html=True)
+                    t_col2.markdown(f"<div style='text-align:right; color:{pnl_color}; font-weight:bold;'>NT$ {stock_pnl:,.0f}</div>", unsafe_allow_html=True)
                     
-                    c1, c2, c3 = st.columns([1,1,1])
-                    c1.write(f"現價：{cp}")
-                    c2.write(f"成本：{row['buy_price']}")
-                    c3.write(f"持股：{row['shares']} {row['unit']}")
+                    # 數據列
+                    d_col1, d_col2, d_col3 = st.columns(3)
+                    d_col1.caption(f"現價: {cp}")
+                    d_col2.caption(f"成本: {row['buy_price']}")
+                    d_col3.caption(f"持股: {row['shares']}{row['unit']}")
                     
-                    # --- 分批減持功能 ---
-                    with st.expander("✂️ 分批減持 / 平倉設定"):
-                        sell_col1, sell_col2 = st.columns(2)
-                        sell_qty = sell_col1.number_input("減持數量", min_value=1, max_value=int(row['shares']), value=1, key=f"sq_{idx}")
-                        
-                        if sell_col2.button(f"確認減持 {row['name']}", key=f"sbtn_{idx}"):
-                            if sell_qty >= row['shares']:
-                                # 全數平倉
+                    # 分批減持按鈕區 (收納在 expander)
+                    with st.expander("⚙️ 減持/平倉設定"):
+                        sell_col1, sell_col2 = st.columns([2, 1])
+                        s_qty = sell_col1.number_input("數量", min_value=1, max_value=int(row['shares']), value=1, key=f"sq_{idx}")
+                        if sell_col2.button("執行", key=f"sbtn_{idx}", use_container_width=True):
+                            if s_qty >= row['shares']:
                                 st.session_state.local_db = st.session_state.local_db.drop(idx)
-                                st.toast(f"✅ {row['name']} 已全數平倉")
                             else:
-                                # 部分減持
-                                st.session_state.local_db.at[idx, 'shares'] -= sell_qty
-                                st.toast(f"✅ {row['name']} 已減持 {sell_qty} {row['unit']}")
+                                st.session_state.local_db.at[idx, 'shares'] -= s_qty
                             st.rerun()
-
-                    # 顯示 AI 提示
+                    
+                    # AI 警示提醒
                     if cp < res['stop']:
-                        st.error(f"🚨 警報：已跌破止損價 {res['stop']}")
+                        st.markdown(f"<small style='color:#4ea04e;'>🛑 跌破止損 {res['stop']}</small>", unsafe_allow_html=True)
                     elif cp >= res['target']:
-                        st.success(f"💰 達標：建議於 {res['target']} 附近分批獲利")
+                        st.markdown(f"<small style='color:#e04e4e;'>🎯 達標預警 {res['target']}</small>", unsafe_allow_html=True)
 
-        # --- 客戶總帳總結 ---
-        st.divider()
+        # --- 客戶總帳總結 (移除黑底，改用簡潔樣式) ---
+        st.markdown("---")
+        total_color = "#e04e4e" if total_unrealized_pnl >= 0 else "#4ea04e"
         st.markdown(f"""
-            <div style='background:#111; padding:15px; border-radius:10px; border:2px solid #FFD700; text-align:center;'>
-                <div style='font-size:14px; color:#aaa;'>[{st.session_state['cur_c']}] 客戶總帳未實現損益</div>
-                <div style='font-size:24px; font-weight:bold; color:{"#ff4b4b" if total_unrealized_pnl < 0 else "#00f000"}'>
-                    NT$ {total_unrealized_pnl:,.0f}
-                </div>
+            <div style='padding:10px; border:1px solid #ddd; border-radius:5px; text-align:center;'>
+                <div style='font-size:12px; color:#666;'>當前帳戶總未實現損益</div>
+                <div style='font-size:20px; font-weight:bold; color:{total_color};'>NT$ {total_unrealized_pnl:,.0f}</div>
             </div>
         """, unsafe_allow_html=True)
-
 
 # --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
 st.divider()
