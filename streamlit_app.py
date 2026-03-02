@@ -231,37 +231,54 @@ with col_l:
                 st.toast(f"✅ {item['tname']} 已加入實戰組合"); st.rerun()
 
 # (右側監控區代碼保持原本優良架構，並加入退場警告...)
+# --- 修正後的右側監控區 (請替換原代碼 with col_r: 之後的部分) ---
 with col_r:
     st.subheader("💼 實戰持股與風險管控")
+    # 確保當前客戶有資料
     my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
     
     if my_h.empty:
         st.info("尚無持股，請從左側精選 10 檔中挑選。")
     else:
         for i, row in my_h.iterrows():
+            # 1. 獲取現價
             cp, cd, cc, _, _ = get_stock_perf(row['id'], 0)
-            try: d_val = float(cd.replace('%','').replace('+',''))
-            except: d_val = 0
+            try: 
+                d_val = float(cd.replace('%','').replace('+',''))
+            except: 
+                d_val = 0
             
-            msg, sent, s_color, entry, target, stop, score = generate_ai_tech_analysis(row['id'], cp, d_val)
-            pnl = (cp - row['buy_price']) * row['shares']
+            # 2. 獲取 AI 分析 (注意：這裡改用字典接收)
+            res = generate_ai_tech_analysis(row['id'], cp, d_val)
             
-            # 警示背景
-            bg = "#551111" if cp < stop else ("#1E1E1E")
-            
-            with st.container(border=True):
-                st.markdown(f"<div style='background:{bg}; padding:10px; border-radius:10px;'>", unsafe_allow_html=True)
-                st.markdown(f"**{row['name']}** ({row['id']}) | 盈虧: {pnl:,.0f}")
-                if cp < stop:
-                    st.error(f"🛑 觸及退場價 {stop}！請執行賣出。")
-                elif cp >= target:
-                    st.success(f"🎊 觸及目標價 {target}！建議分批獲利。")
-                else:
-                    st.write(f"現價 {cp} | 距離目標還有 {round(target-cp,1)} 元")
+            if res:
+                pnl = (cp - row['buy_price']) * row['shares']
+                stop_price = res['stop']
+                target_price = res['target']
                 
-                if st.button("執行平倉", key=f"sell{i}"):
-                    st.session_state.local_db = st.session_state.local_db.drop(i); st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
+                # 警示背景：若現價低於止損價，背景變紅
+                bg = "#551111" if cp < stop_price else "#1E1E1E"
+                
+                with st.container(border=True):
+                    st.markdown(f"<div style='background:{bg}; padding:10px; border-radius:10px; color:white;'>", unsafe_allow_html=True)
+                    st.markdown(f"**{row['name']}** ({row['id']}) | 買入價: {row['buy_price']} | **盈虧: {pnl:,.0f}**")
+                    
+                    if cp < stop_price:
+                        st.error(f"🛑 警報：已跌破退場價 {stop_price}！")
+                    elif cp >= target_price:
+                        st.success(f"🎊 達標：已觸及目標價 {target_price}！")
+                    else:
+                        st.write(f"📈 現價 {cp} | 離目標還差 {round(target_price-cp,1)} 元")
+                    
+                    st.write(f"📝 診斷: {res['msg']}")
+                    st.write(f"信號: {res['sent']}")
+                    
+                    if st.button("執行平倉", key=f"sell{i}"):
+                        st.session_state.local_db = st.session_state.local_db.drop(i)
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.warning(f"無法取得 {row['name']} 的分析數據")
 
 # --- 6. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
 st.divider()
