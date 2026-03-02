@@ -5,28 +5,27 @@ import feedparser
 import ssl
 from datetime import datetime
 import urllib.parse
-import gspread  # 新增：雲端同步庫
+import gspread  # 雲端同步核心
 from google.oauth2.service_account import Credentials
 
 # --- 核心配置 ---
-st.set_page_config(page_title="AI Manager 9.0 - Cloud Sync", layout="wide")
+st.set_page_config(page_title="AI Manager 9.0 - Full Sync", layout="wide")
 
-# --- 雲端資料庫初始化 (解決手機同步問題) ---
+# --- 雲端資料庫初始化 (解決同步問題) ---
 def init_connection():
-    # 請確保在 Streamlit 管理後台的 Secrets 填入憑證
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-    client = gspread.authorize(creds)
-    # 打開名為 "AI_Manager_DB" 的試算表 (需手動建立)
-    return client.open("AI_Manager_DB").sheet1
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        # 從 Secrets 讀取憑證
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        # 打開雲端表單
+        return client.open("AI_Manager_DB").sheet1
+    except Exception as e:
+        return None
 
-try:
-    db = init_connection()
-except Exception as e:
-    st.error("⚠️ 雲端資料庫尚未連接。請先完成 Google Sheets 設定。")
-    db = None
+db = init_connection()
 
-# --- 樣式設定 (與 8.5 完全相同) ---
+# --- 1. 樣式設定 (完全保留 8.5) ---
 st.markdown("""
     <style>
     html, body, [class*="css"] { font-size: 13px !important; color: #1e1e1e; }
@@ -38,7 +37,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 數據引擎 (與 8.5 完全相同) ---
+# --- 2. 數據引擎 (完全保留 8.5) ---
 def get_stock_perf(ticker, base_score):
     search_list = [ticker, ticker.replace(".TW", ".TWO")] if ".TW" in ticker else [ticker]
     for t in search_list:
@@ -54,25 +53,31 @@ def get_stock_perf(ticker, base_score):
         except: continue
     return 0.0, "0.0", "price-even", base_score
 
-# --- 狀態管理與同步功能 ---
+# --- 3. 雲端同步邏輯 ---
 def get_cloud_data():
     if db:
-        data = db.get_all_records()
-        return pd.DataFrame(data)
+        try:
+            records = db.get_all_records()
+            return pd.DataFrame(records)
+        except: return pd.DataFrame()
     return pd.DataFrame()
 
+# --- 4. 側邊欄：帳戶管理 ---
 with st.sidebar:
     st.header("👤 客戶帳戶管理")
     new_c = st.text_input("新增客戶姓名")
     if st.button("➕ 建立帳戶") and new_c:
-        st.success(f"帳戶 {new_c} 已準備就緒")
+        st.success(f"已預備同步 {new_c}")
     
-    df_all = get_cloud_data()
-    all_c = df_all['client'].unique().tolist() if not df_all.empty else []
-    cur_c = st.selectbox("🎯 當前操作客戶", all_c if all_c else ["周靖傑"])
+    st.divider()
+    df_sync = get_cloud_data()
+    # 自動抓取雲端已有的客戶名單
+    existing_clients = df_sync['client'].unique().tolist() if not df_sync.empty else []
+    cur_c = st.selectbox("🎯 當前操作客戶", existing_clients if existing_clients else ["周靖傑"])
 
-# --- 主畫面佈局 (15 檔推薦) ---
+# --- 5. 主畫面：15 檔推薦 (內容完全保留，絕不精簡) ---
 st.title(f"🛡️ AI 經理人 9.0：[{cur_c}] 雲端同步戰情室")
+st.caption(f"完整版：評分、下單、減倉、台幣損益、雲端同步 | 當前時間: {datetime.now().strftime('%H:%M:%S')}")
 
 col_l, col_r = st.columns([1.6, 1.4])
 
@@ -98,44 +103,86 @@ with col_l:
 
     for idx, s in enumerate(scan_list):
         price, diff, color, final_score = get_stock_perf(s['id'], s['score'])
-        header = f"📊 {s['id']} {s['name']} | 評分: {final_score} | 現價: {price}"
+        header = f"📊 {s['id']} {s['name']} | 評分: {final_score} | 現價: {price} | 漲跌: {diff}"
         with st.expander(header):
-            st.markdown(f"**今日表現：** <span class='{color}'>{diff}</span>", unsafe_allow_html=True)
-            st.write(f"**分析：** {s['detail']}")
+            st.markdown(f"**今日表現：** <span class='{color}' style='font-size:18px;'>{diff}</span>", unsafe_allow_html=True)
+            st.write(f"**戰略分析：** {s['detail']}")
+            st.markdown("---")
+            st.write("🛒 **買入指令**")
             o_c1, o_c2, o_c3 = st.columns([1, 1, 1])
-            unit = o_c1.radio("單位", ["張", "股"], key=f"u_{idx}")
-            qty = o_c2.number_input("數量", min_value=1, value=1, key=f"q_{idx}")
+            unit = o_c1.radio("選擇單位", ["張 (1000股)", "股 (零股)"], key=f"u_{idx}")
+            qty = o_c2.number_input("輸入數量", min_value=1, value=1, key=f"q_{idx}")
             actual_shares = qty * 1000 if "張" in unit else qty
-            if o_c3.button("雲端買入", key=f"b_{idx}"):
+            if o_c3.button("執行買入", key=f"b_{idx}"):
                 if db:
+                    # 同步到雲端：客戶, 代碼, 名稱, 買價, 股數
                     db.append_row([cur_c, s['id'], s['name'], price, actual_shares])
+                    st.success("已同步至雲端")
                     st.rerun()
 
 with col_r:
-    st.subheader(f"💼 {cur_c} 投資組合 (雲端同步)")
+    st.subheader(f"💼 {cur_c} 投資組合 (台幣損益)")
     total_twd_pnl = 0
-    df_client = get_cloud_data()
-    if not df_client.empty:
-        df_mine = df_client[df_client['client'] == cur_c]
-        for i, row in df_mine.iterrows():
+    df_current = get_cloud_data()
+    
+    if not df_current.empty and cur_c in df_current['client'].values:
+        my_stocks = df_current[df_current['client'] == cur_c]
+        
+        # 這裡的 index 是 dataframe 的索引
+        for i, row in my_stocks.iterrows():
             cp, _, cc, _ = get_stock_perf(row['id'], 0)
             twd_pnl = (cp - row['buy_price']) * row['shares']
             total_twd_pnl += twd_pnl
+            pnl_pct = (cp / row['buy_price'] - 1) * 100 if row['buy_price'] > 0 else 0
             
             c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.8, 0.8])
             c1.write(f"**{row['name']}**\n{row['shares']} 股")
             c2.write(f"現價: {cp}\n(成本: {row['buy_price']})")
-            p_color = "red" if twd_pnl >= 0 else "green"
-            c3.markdown(f"損益: <span style='color:{p_color}; font-weight:bold;'>NT$ {twd_pnl:,.0f}</span>", unsafe_allow_html=True)
+            
+            pnl_color = "red" if twd_pnl >= 0 else "green"
+            c3.markdown(f"損益: <span style='color:{pnl_color}; font-weight:bold;'>NT$ {twd_pnl:,.0f}</span><br><span class='{cc}'>({pnl_pct:+.2f}%)</span>", unsafe_allow_html=True)
             
             with c4:
-                if st.button("🗑️", key=f"del_{i}"):
-                    db.delete_rows(int(i) + 2) # +2 補償標題列
+                del_mode = st.popover("⚙️")
+                del_qty = del_mode.number_input("減持股數", min_value=1, max_value=int(row['shares']), value=int(row['shares']), key=f"dq_{i}")
+                if del_mode.button("執行", key=f"dbtn_{i}"):
+                    # 雲端處理：全刪或修改
+                    actual_row_index = i + 2 # gspread 行號從 1 開始，且有標題列
+                    if del_qty >= row['shares']:
+                        db.delete_rows(int(actual_row_index))
+                    else:
+                        new_shares = int(row['shares'] - del_qty)
+                        db.update_cell(actual_row_index, 5, new_shares) # 第 5 欄是 shares
                     st.rerun()
             st.divider()
-        st.markdown(f"### 總台幣損益: <span style='color:red;'>NT$ {total_twd_pnl:,.0f}</span>", unsafe_allow_html=True)
+        
+        total_color = "red" if total_twd_pnl >= 0 else "green"
+        st.markdown(f"### 帳戶總損益估值: <span style='color:{total_color};'>NT$ {total_twd_pnl:,.0f}</span>", unsafe_allow_html=True)
+    else:
+        st.info("尚無雲端持股部位")
 
-# --- 情報引擎 (維持 8.5 強度) ---
+# --- 6. 全球情報 (完全保留 8.5) ---
 st.divider()
-st.header("🌎 全球 24H 戰略情報")
-# (fetch_massive_intel 與 8.5 版一致，此處省略以保持精簡，實際貼上時請包含 8.5 的 news 函數)
+st.header("🌎 全球 24H 戰略情報中樞")
+def fetch_massive_intel(query_list):
+    ssl._create_default_https_context = ssl._create_unverified_context
+    all_entries = []
+    for q in query_list:
+        u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+        all_entries.extend(feedparser.parse(u).entries)
+    unique_news = {n.link: n for n in all_entries}.values()
+    return sorted(list(unique_news), key=lambda x: x.published, reverse=True)[:18]
+
+intel_map = {
+    "🇺🇸 美國戰略": ["Trump+Elon+Musk+Wall+Street", "Nvidia+Fed"],
+    "🇪🇺 歐洲動態": ["Europe+Economy+Ukraine+ECB"],
+    "🇯🇵 亞洲科技": ["Taiwan+Semiconductor+TSMC", "Japan+Nikkei"],
+    "🇨🇳 中國觀點": ["中國+經濟+財經+政策 -新華網"]
+}
+
+tabs = st.tabs(list(intel_map.keys()))
+for tab, (region, q_list) in zip(tabs, intel_map.items()):
+    with tab:
+        items = fetch_massive_intel(q_list)
+        for n in items:
+            st.markdown(f"<div class='news-card'>🕒 {n.published[5:16]} | <a href='{n.link}' target='_blank'>{n.title}</a></div>", unsafe_allow_html=True)
