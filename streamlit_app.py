@@ -115,16 +115,20 @@ with st.sidebar:
         
     cur_c = st.selectbox("🎯 當前操作客戶", final_list)
 
-# --- [5. 主畫面：15 檔 AI 偵測與投資組合 - 全量完整版] ---
-st.title(f"🛡️ AI 經理人 9.5：[{cur_c}] 深度控盤中心")
+# --- [5. 主畫面：15 檔 AI 偵測與投資組合 - 同步強化版] ---
+st.title(f"🛡️ AI 經理人 9.6：[{cur_c}] 深度控盤中心")
+
+# 新增一個手動刷新按鈕，確保萬一自動刷新失效時可手動同步
+if st.button("🔄 手動同步雲端數據"):
+    st.cache_data.clear()
+    st.rerun()
 
 col_l, col_r = st.columns([1.6, 1.4])
 
-# --- 左側：15 檔 AI 實時偵測 ---
+# --- 左側：15 檔 AI 實時偵測 (含買入邏輯) ---
 with col_l:
     st.subheader("🔥 AI 全方位技術偵測 (Top 15)")
     
-    # 這裡承載長官要求的「全方位偵測分析內容」
     scan_list = [
         {"id": "2402.TW", "name": "毅嘉", "score": 93, "tech": "MACD 二次金叉，K線站穩42.5元支撐，籌碼高度集中。"},
         {"id": "6531.TW", "name": "愛普*", "score": 95, "tech": "月日 MACD 多頭共振，起漲第一點，爆量突破壓力。"},
@@ -144,7 +148,7 @@ with col_l:
     ]
 
     for idx, s in enumerate(scan_list):
-        # 獲取實時數據與預警燈
+        # 獲取實時數據
         p, d, c, fs, alert_info = get_stock_perf(s['id'], s['score'])
         
         with st.expander(f"📊 {s['id']} {s['name']} | 評分: {fs} | 現價: {p}"):
@@ -153,27 +157,33 @@ with col_l:
             st.write(f"**深度分析：** {s['tech']}")
             st.markdown("---")
             
-            # 交易指令
+            # 交易區塊
             o1, o2, o3 = st.columns([1, 1, 1])
-            u = o1.radio("單位", ["張", "股"], key=f"unit_v95_{idx}")
-            q = o2.number_input("數量", min_value=1, value=1, key=f"qty_v95_{idx}")
+            u = o1.radio("單位", ["張", "股"], key=f"unit_v96_{idx}")
+            q = o2.number_input("數量", min_value=1, value=1, key=f"qty_v96_{idx}")
             real_shares = q * 1000 if u == "張" else q
             
-            if o3.button("執行買入", key=f"buy_v95_{idx}"):
-                if db and cur_c != "連線中...":
-                    db.append_row([cur_c, s['id'], s['name'], p, real_shares])
-                    st.toast(f"✅ {s['name']} 已加入 {cur_c} 帳戶")
-                    st.rerun()
+            if o3.button("執行買入", key=f"buy_v96_{idx}"):
+                if db and cur_c not in ["尚未建立客戶", "連線中..."]:
+                    try:
+                        # 核心修復：寫入後立刻清除快取，確保重新讀取
+                        db.append_row([cur_c, s['id'], s['name'], p, real_shares])
+                        st.cache_data.clear() 
+                        st.toast(f"✅ {s['name']} 已加入 {cur_c} 帳戶")
+                        st.rerun() # 強制介面重新渲染，讓資料立刻出現在右側
+                    except Exception as e:
+                        st.error(f"寫入失敗: {e}")
 
-# --- 右側：投資組合實戰清單 (含精密減倉與預警) ---
+# --- 右側：投資組合實戰清單 (含精密減倉與預警燈) ---
 with col_r:
     st.subheader(f"💼 {cur_c} 投資組合 (實時更新)")
     total_pnl = 0
-    # 重新讀取雲端資料以確保同步
+    
+    # 強制獲取最新資料，不使用過期快取
     df_port = get_cloud_data()
     
     if df_port is not None and not df_port.empty and cur_c in df_port['client'].values:
-        # 過濾特定客戶持股且排除 INIT
+        # 過濾特定客戶持股且排除初始化標記 (INIT)
         my_holdings = df_port[(df_port['client'] == cur_c) & (df_port['id'] != "INIT")]
         
         if my_holdings.empty:
@@ -182,33 +192,42 @@ with col_r:
             for i, row in my_holdings.iterrows():
                 # 取得該持股的即時行情與預警燈
                 curr_p, _, _, _, a_info = get_stock_perf(row['id'], 0)
-                item_pnl = (curr_p - row['buy_price']) * row['shares']
-                total_pnl += item_pnl
+                # 確保數值型態正確
+                try:
+                    buy_price = float(row['buy_price'])
+                    shares = int(row['shares'])
+                    item_pnl = (curr_p - buy_price) * shares
+                    total_pnl += item_pnl
+                    pnl_pct = (curr_p / buy_price - 1) * 100 if buy_price > 0 else 0
+                except:
+                    item_pnl = 0
+                    pnl_pct = 0
                 
                 # 顯示持股卡片
                 with st.container():
                     c1, c2, c3 = st.columns([1.8, 1.8, 0.8])
                     with c1:
                         st.markdown(f"**{row['name']}** <span class='{a_info[1]}'>{a_info[0]}</span>", unsafe_allow_html=True)
-                        st.write(f"{row['shares']} 股")
+                        st.write(f"{shares} 股")
                     
                     with c2:
                         p_color = "red" if item_pnl >= 0 else "green"
                         st.markdown(f"損益: <span style='color:{p_color}; font-weight:bold;'>NT$ {item_pnl:,.0f}</span>", unsafe_allow_html=True)
-                        st.caption(f"成本: {row['buy_price']} | 現價: {curr_p}")
+                        st.caption(f"成本: {buy_price} | 現價: {curr_p} ({pnl_pct:+.2f}%)")
                     
-                    # 精密減倉齒輪 (長官要求：每股都要有)
+                    # 精密減倉齒輪
                     with c3:
                         gear = st.popover("⚙️")
-                        dq = gear.number_input("減持股數", min_value=1, max_value=int(row['shares']), value=int(row['shares']), key=f"dq_v95_{i}")
+                        dq = gear.number_input("減持股數", min_value=1, max_value=shares, value=shares, key=f"dq_v96_{i}")
                         if gear.button("確認執行", key=f"dbtn_v95_{i}"):
-                            # 換算回雲端表單行號 (i 是索引，+2 補償標題與位移)
+                            # 換算回雲端表單行號 (i 是索引，+2 補償標題)
                             target_row = i + 2
-                            if dq >= row['shares']:
+                            if dq >= shares:
                                 db.delete_rows(int(target_row))
                             else:
-                                new_s = int(row['shares'] - dq)
-                                db.update_cell(target_row, 5, new_s) # 第 5 欄是股數
+                                new_s = int(shares - dq)
+                                db.update_cell(target_row, 5, new_s)
+                            st.cache_data.clear() # 刪除後也要清除快取
                             st.rerun()
                 st.divider()
             
@@ -217,8 +236,11 @@ with col_r:
             st.markdown(f"### 帳戶總損益估值: <span style='color:{total_color};'>NT$ {total_pnl:,.0f}</span>", unsafe_allow_html=True)
             
             if st.button("🚨 清空該帳戶所有部位"):
-                for idx in reversed(my_holdings.index.tolist()):
+                # 倒序刪除避免行號位移
+                indices = my_holdings.index.tolist()
+                for idx in reversed(indices):
                     db.delete_rows(idx + 2)
+                st.cache_data.clear()
                 st.rerun()
     else:
         st.info("等待帳戶資料同步中...")
