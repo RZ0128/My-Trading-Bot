@@ -1,5 +1,6 @@
 streamlit
+pandas
 yfinance
 feedparser
-pandas
-lxml
+gspread
+google-auth
