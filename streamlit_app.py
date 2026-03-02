@@ -176,28 +176,54 @@ with col_r:
     else:
         st.info("尚無雲端持股部位")
 
-# --- 6. 全球情報 (完全保留 8.5) ---
+# --- 6. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
 st.divider()
 st.header("🌎 全球 24H 戰略情報中樞")
+
 def fetch_massive_intel(query_list):
+    # 確保連線安全繞過，這是在 8.5 版本中表現最穩定的方式
     ssl._create_default_https_context = ssl._create_unverified_context
     all_entries = []
+    
     for q in query_list:
+        # 強制指定 hl=zh-TW (繁體中文) 與 gl=TW (台灣區域)，確保直觀觀看
         u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
-        all_entries.extend(feedparser.parse(u).entries)
+        try:
+            feed = feedparser.parse(u)
+            all_entries.extend(feed.entries)
+        except:
+            continue
+            
+    # 去重處理：避免不同關鍵字抓到重複新聞
     unique_news = {n.link: n for n in all_entries}.values()
+    
+    # 排序並取前 18 則 (維持 8.5 版的高密度)
     return sorted(list(unique_news), key=lambda x: x.published, reverse=True)[:18]
 
+# --- 精準戰略關鍵字地圖 (全繁體中文優化) ---
 intel_map = {
-    "🇺🇸 美國戰略": ["Trump+Elon+Musk+Wall+Street", "Nvidia+Fed"],
-    "🇪🇺 歐洲動態": ["Europe+Economy+Ukraine+ECB"],
-    "🇯🇵 亞洲科技": ["Taiwan+Semiconductor+TSMC", "Japan+Nikkei"],
-    "🇨🇳 中國觀點": ["中國+經濟+財經+政策 -新華網"]
+    "🇺🇸 美國戰略": ["川普+馬斯克+華爾街", "輝達+聯準會+降息"],
+    "🇪🇺 歐洲動態": ["歐洲+經濟+烏克蘭局勢", "歐元區+歐洲央行+能源"],
+    "🇮🇱 中東衝突": ["中東戰爭+以色列+伊朗", "紅海+航運+石油價格"],
+    "🇯🇵 亞洲科技": ["台積電+半導體+CoWoS", "日本+日經+科技股"],
+    "🇨🇳 中國觀點": ["中國+經濟+政策+財經 -新華網 -人民網"]
 }
 
 tabs = st.tabs(list(intel_map.keys()))
+
 for tab, (region, q_list) in zip(tabs, intel_map.items()):
     with tab:
         items = fetch_massive_intel(q_list)
-        for n in items:
-            st.markdown(f"<div class='news-card'>🕒 {n.published[5:16]} | <a href='{n.link}' target='_blank'>{n.title}</a></div>", unsafe_allow_html=True)
+        if not items:
+            st.warning(f"目前 {region} 暫無最新中文情報，系統持續監控中...")
+        else:
+            for n in items:
+                # 樣式採用 8.5 版本的 news-card 結構
+                st.markdown(f"""
+                    <div class='news-card'>
+                        🕒 {n.published[5:16]} | 
+                        <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e;'>
+                            {n.title}
+                        </a>
+                    </div>
+                """, unsafe_allow_html=True)
