@@ -173,41 +173,87 @@ with col_l:
                 st.success(f"🎯 目標: {item['target']}")
                 st.error(f"🛑 止損: {item['stop']}")
 
-# --- [7. 右側監控區 (完全修正解構錯誤)] ---
+# --- [7. 右側監控區：實戰持股、分批減持與總帳明細] ---
 with col_r:
-    st.subheader(f"💼 [{st.session_state['cur_c']}] 實戰持股")
+    st.subheader(f"💼 [{st.session_state['cur_c']}] 實戰持股明細")
+    
+    # 過濾出當前客戶的持股
     my_holdings = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
     
     if my_holdings.empty:
-        st.info("尚無持股數據。")
+        st.info("目前尚無持股數據，請從左側挑選精銳標的佈局。")
     else:
+        total_unrealized_pnl = 0  # 累計該客戶總損益
+        
         for idx, row in my_holdings.iterrows():
+            # 獲取即時現價
             cp, cd, cc = get_stock_perf(row['id'], 0)
-            try: d_val = float(cd.replace('%','').replace('+',''))
-            except: d_val = 0
             
-            # 重要：使用字典接收回傳
+            # 獲取 AI 分析參數（用於止損目標價顯示）
+            try:
+                d_val = float(cd.replace('%','').replace('+',''))
+            except:
+                d_val = 0
             res = generate_ai_tech_analysis(row['id'], cp, d_val)
             
             if res:
-                pnl = (cp - row['buy_price']) * row['shares'] * (1000 if row['unit']=="張" else 1)
-                bg = "#441111" if cp < res['stop'] else "#1E1E1E"
+                # 計算個股新台幣損益 (張=1000股)
+                multiplier = 1000 if row['unit'] == "張" else 1
+                current_value = cp * row['shares'] * multiplier
+                cost_value = row['buy_price'] * row['shares'] * multiplier
+                stock_pnl = current_value - cost_value
+                total_unrealized_pnl += stock_pnl
+                
+                # 判斷是否觸及預警（底色變更）
+                bg_color = "#441111" if cp < res['stop'] else "#1E1E1E"
                 
                 with st.container(border=True):
-                    st.markdown(f"<div style='background:{bg}; padding:8px; border-radius:5px;'>", unsafe_allow_html=True)
-                    st.write(f"**{row['name']}** ({row['id']}) | {row['shares']}{row['unit']}")
-                    st.write(f"現價: {cp} ({cd}) | 買入: {row['buy_price']}")
-                    st.write(f"預估盈虧: {pnl:,.0f}")
+                    st.markdown(f"""
+                        <div style='background:{bg_color}; padding:10px; border-radius:10px; border:1px solid #333;'>
+                            <span style='font-size:16px; font-weight:bold;'>{row['name']} ({row['id']})</span> 
+                            <span style='float:right; color:{"#ff4b4b" if stock_pnl < 0 else "#00f000"}'>
+                                盈虧：NT$ {stock_pnl:,.0f}
+                            </span>
+                        </div>
+                    """, unsafe_allow_html=True)
                     
-                    if cp < res['stop']:
-                        st.error(f"⚠️ 跌破止損價 {res['stop']}！")
-                    elif cp >= res['target']:
-                        st.success(f"💰 達標！建議獲利。")
+                    c1, c2, c3 = st.columns([1,1,1])
+                    c1.write(f"現價：{cp}")
+                    c2.write(f"成本：{row['buy_price']}")
+                    c3.write(f"持股：{row['shares']} {row['unit']}")
+                    
+                    # --- 分批減持功能 ---
+                    with st.expander("✂️ 分批減持 / 平倉設定"):
+                        sell_col1, sell_col2 = st.columns(2)
+                        sell_qty = sell_col1.number_input("減持數量", min_value=1, max_value=int(row['shares']), value=1, key=f"sq_{idx}")
                         
-                    if st.button(f"平倉", key=f"sell_{idx}"):
-                        st.session_state.local_db = st.session_state.local_db.drop(idx)
-                        st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
+                        if sell_col2.button(f"確認減持 {row['name']}", key=f"sbtn_{idx}"):
+                            if sell_qty >= row['shares']:
+                                # 全數平倉
+                                st.session_state.local_db = st.session_state.local_db.drop(idx)
+                                st.toast(f"✅ {row['name']} 已全數平倉")
+                            else:
+                                # 部分減持
+                                st.session_state.local_db.at[idx, 'shares'] -= sell_qty
+                                st.toast(f"✅ {row['name']} 已減持 {sell_qty} {row['unit']}")
+                            st.rerun()
+
+                    # 顯示 AI 提示
+                    if cp < res['stop']:
+                        st.error(f"🚨 警報：已跌破止損價 {res['stop']}")
+                    elif cp >= res['target']:
+                        st.success(f"💰 達標：建議於 {res['target']} 附近分批獲利")
+
+        # --- 客戶總帳總結 ---
+        st.divider()
+        st.markdown(f"""
+            <div style='background:#111; padding:15px; border-radius:10px; border:2px solid #FFD700; text-align:center;'>
+                <div style='font-size:14px; color:#aaa;'>[{st.session_state['cur_c']}] 客戶總帳未實現損益</div>
+                <div style='font-size:24px; font-weight:bold; color:{"#ff4b4b" if total_unrealized_pnl < 0 else "#00f000"}'>
+                    NT$ {total_unrealized_pnl:,.0f}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
 
 # --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
