@@ -39,68 +39,103 @@ def load_data():
         st.session_state.local_db = pd.read_csv(DB_FILE)
     if os.path.exists(CLIENT_FILE):
         st.session_state.client_list = pd.read_csv(CLIENT_FILE)['name'].tolist()
-
-# --- [3. 數據與 AI 引擎] ---
-@st.cache_data(ttl=300)
-def get_stock_perf(ticker, base_score):
-    try:
-        stock = yf.Ticker(ticker)
-        df = stock.history(period="2d")
-        if len(df) >= 2:
-            curr_p = df['Close'].iloc[-1]
-            prev_p = df['Close'].iloc[-2]
-            diff = curr_p - prev_p
-            pct = (diff / prev_p) * 100
-            color = "price-up" if diff > 0 else "price-down"
-            return round(curr_p, 1), f"{pct:+.2f}%", color
-    except: pass
-    return 0.0, "0.00%", "price-even"
-
+        
+# --- [3. 終極 AI 戰略引擎 V12.1 (高階預判版)] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     try:
         stock = yf.Ticker(ticker)
-        # 為了偵測年線洗盤，獲取更長的歷史數據
+        # 抓取足以計算年線、季線與指標的長度 (300d)
         hist = stock.history(period="300d")
         if len(hist) < 240: return None
         
+        # --- [A. 基礎數據計算] ---
         c = hist['Close']
         v = hist['Volume']
         ma20 = c.rolling(20).mean().iloc[-1]
         ma60 = c.rolling(60).mean().iloc[-1]
-        ma240 = c.rolling(240).mean().iloc[-1] # 年線
+        ma60_prev = c.rolling(60).mean().iloc[-5] # 五天前季線，判斷斜率
+        ma240 = c.rolling(240).mean().iloc[-1]
         v_ma5 = v.rolling(5).mean().iloc[-1]
-        
-        # 強化邏輯：洗盤偵測與大戶收貨
-        # 1. 股價回檔至年線(正負5%)且成交量縮(低於5日均量70%)
-        is_wash_out = (price <= ma240 * 1.05 and price >= ma240 * 0.95) and (v.iloc[-1] < v_ma5 * 0.7)
-        # 2. 底部穩定度
-        is_stable_3m = (c.tail(60).max() - c.tail(60).min()) / c.tail(60).mean() < 0.15 
         
         score = 0
         diag = []
+        risk_msg = []
         sentiment = "籌碼中性"
 
+        # --- [B. 專業指標計算：MACD] ---
+        exp1 = c.ewm(span=12, adjust=False).mean()
+        exp2 = c.ewm(span=26, adjust=False).mean()
+        macd = exp1 - exp2
+        signal = macd.ewm(span=9, adjust=False).mean()
+        
+        # --- [C. 核心邏輯判斷] ---
+
+        # 1. 洗盤與大戶收貨邏輯 (您的核心要求)
+        is_wash_out = (price <= ma240 * 1.05 and price >= ma240 * 0.95) and (v.iloc[-1] < v_ma5 * 0.7)
         if is_wash_out:
-            score += 50
+            score += 45
             diag.append("🔥 偵測到洗盤完成，準備破新高")
             sentiment = "🔥 大戶收貨 (融資減)"
-        
-        # 針對資深經理人邏輯補強 (低位階、PB低、法人進貨)
-        if price < ma240 and diff_pct > 0:
-            score += 20
-            diag.append("🛡️ 價值窪地：低位階反轉")
-            
-        if is_stable_3m: score += 15; diag.append("🛡️ 底部整理逾3個月")
-        if price > ma20: score += 5
 
+        # 2. 葛蘭碧八大法則 (季線應用)
+        if ma60 > ma60_prev: # 季線向上
+            if price > ma60 and c.iloc[-2] <= ma60: # 破底翻或回測不破
+                score += 25
+                diag.append("🎯 葛蘭碧準則：季線支撐買點")
+        elif price < ma60 and (ma60 - price)/ma60 > 0.15: # 負乖離過大
+            score += 15
+            diag.append("🛡️ 葛蘭碧準則：乖離過大準備反彈")
+
+        # 3. MACD 動能翻揚
+        if macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] <= signal.iloc[-2]:
+            score += 20
+            diag.append("📈 MACD 趨勢翻揚")
+
+        # 4. 淨值比價值偵測 (Book Value)
+        try:
+            pbr = stock.info.get('priceToBook', 2)
+            if pbr < 1:
+                score += 15
+                diag.append(f"💎 價值防禦：股價低於淨值 (PBR:{round(pbr,2)})")
+        except: pass
+
+        # 5. 均線糾結預判 (模擬分時糾結)
+        std_ma = pd.Series([ma20, ma60, ma240]).std() / price
+        if std_ma < 0.03: # 均線距離極近
+            score += 10
+            diag.append("🌀 均線糾結：即將選擇方向")
+
+        # --- [D. 預期下跌與風險偵測 (警示部分)] ---
+        # 1. 高檔乖離風險
+        if price > ma60 * 1.25:
+            score -= 30
+            risk_msg.append("⚠️ 警示：短線乖離過大，防回檔")
+        
+        # 2. 趨勢轉弱
+        if price < ma20 and macd.iloc[-1] < signal.iloc[-1]:
+            score -= 10
+            risk_msg.append("📉 趨勢轉弱警訊")
+
+        # 整合訊息
+        final_msg = " | ".join(diag) if diag else "觀察等待中"
+        if risk_msg:
+            final_msg += " | " + " | ".join(risk_msg)
+
+        # 價格預判 (根據分數與均線)
+        entry_p = round(ma20 if price > ma20 else price * 0.98, 1)
+        target_p = round(price * 1.15, 1)
+        stop_p = round(min(ma20, ma240) * 0.94, 1)
+        
         return {
-            "msg": " | ".join(diag) if diag else "趨勢觀察中",
-            "sent": sentiment, "score": score,
-            "entry": round(ma20 if price > ma20 else price * 0.98, 1),
-            "target": round(price * 1.15, 1),
-            "stop": round(min(ma20, ma240) * 0.95, 1)
+            "msg": final_msg,
+            "sent": sentiment,
+            "score": score,
+            "entry": entry_p,
+            "target": target_p,
+            "stop": stop_p
         }
     except: return None
+
 
 # --- [4. 初始化數據庫] ---
 if 'local_db' not in st.session_state:
