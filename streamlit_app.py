@@ -132,8 +132,16 @@ with st.sidebar:
             st.rerun()
 
     st.divider()
-    target_client = st.selectbox("🎯 當前控盤對象", st.session_state.client_list)
-    st.session_state['cur_c'] = target_client
+    # 先確認目前選取的客戶是否還在清單中，不在的話預設選第一個
+current_list = st.session_state.client_list
+try:
+    default_idx = current_list.index(st.session_state.get('cur_c', current_list[0]))
+except ValueError:
+    default_idx = 0
+
+target_client = st.selectbox("🎯 當前控盤對象", current_list, index=default_idx)
+st.session_state['cur_c'] = target_client
+
 
 # --- [6. 主畫面邏輯：5大類別 + 2新增類別] ---
 st.title(f"🛡️ 大基石 AI 精銳控盤：[{st.session_state['cur_c']}]")
