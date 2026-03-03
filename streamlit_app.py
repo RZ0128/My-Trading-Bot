@@ -190,49 +190,67 @@ target_client = st.selectbox("🎯 當前控盤對象", current_list, index=defa
 st.session_state['cur_c'] = target_client
 
 
-# --- [6. 主畫面邏輯：12.1 終極版 390 檔全軍備戰 (390 檔完整版)] ---
+# --- [6. 主畫面邏輯：12.1 終極版 390 檔全軍備戰] ---
 st.title(f"🛡️ 12.1 終極版 390 檔全軍備戰：[{st.session_state['cur_c']}]")
 
-# --- [A. 全球個股戰略搜索區] ---
+# --- [A. 全能戰略搜索區：支援中文模糊匹配] ---
 with st.container(border=True):
     st.subheader("🔍 全球個股戰略搜索 (V12.1 引擎)")
     s_col1, s_col2 = st.columns([3, 1])
-    s_input = s_col1.text_input("輸入股票代號或名稱 (如: 2330 或 台積電)", placeholder="搜尋全台股標的...")
+    s_input = s_col1.text_input("輸入股票名稱或代號 (如: 長榮、2603、TSM)", placeholder="搜尋全台股標的...")
     
     if s_input:
-        t_search = s_input.upper()
-        if t_search.isdigit(): t_search += ".TW"
+        target_tid = ""
+        # 1. 建立 390 檔名單的反向索引 (中文轉代號)
+        all_stocks = []
+        for cat_list in pool_350.values():
+            all_stocks.extend(cat_list)
         
-        with st.spinner(f"正在對 {t_search} 進行 V12.1 深度診斷..."):
-            p, d, c = get_stock_perf(t_search, 0)
+        # 2. 模糊比對中文名稱
+        match = [tid for tid, name in all_stocks if s_input in name]
+        
+        if match:
+            target_tid = match[0] # 優先取第一個匹配到的
+        else:
+            # 3. 如果不是中文名，檢查是否為代號
+            target_tid = s_input.upper()
+            if target_tid.isdigit(): target_tid += ".TW"
+        
+        # 4. 執行診斷
+        with st.spinner(f"正在對 {target_tid} 進行深度診斷..."):
+            p, d, c = get_stock_perf(target_tid, 0)
             if p > 0:
                 try: d_val = float(d.replace('%','').replace('+',''))
                 except: d_val = 0
-                res = generate_ai_tech_analysis(t_search, p, d_val)
+                res = generate_ai_tech_analysis(target_tid, p, d_val)
                 
                 if res:
-                    st.markdown(f"### 🎯 搜索診斷: {t_search}")
+                    st.markdown(f"### 🎯 戰略診斷結果: {target_tid}")
                     sc1, sc2 = st.columns([1.5, 1])
                     with sc1:
                         st.info(f"**實戰診斷:** {res['msg']}")
+                        # 加入我們自定義的 Sentiment 欄位
                         st.markdown(f"**Sentiment:** <span style='color:#00D1FF;'>{res['sent']}</span>", unsafe_allow_html=True)
                         st.markdown(f"**🔥 建議買入:** <span style='color:red;'>{res['entry']}</span>", unsafe_allow_html=True)
+                        
+                        # 交易介面整合
                         su_col, sq_col = st.columns(2)
                         s_unit = su_col.radio("單位", ["張", "股"], key="s_unit", horizontal=True)
                         s_qty = sq_col.number_input("數量", min_value=1, value=1, key="s_qty")
-                        if st.button(f"確認佈局 {t_search}", use_container_width=True):
-                            new_trade = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': t_search, 'name': t_search, 'buy_price': p, 'shares': s_qty, 'unit': s_unit, 'entry_reason': res['msg']}])
+                        
+                        if st.button(f"確認佈局 {target_tid}", use_container_width=True):
+                            new_trade = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': target_tid, 'name': target_tid, 'buy_price': p, 'shares': s_qty, 'unit': s_unit, 'entry_reason': res['msg']}])
                             st.session_state.local_db = pd.concat([st.session_state.local_db, new_trade], ignore_index=True)
                             save_data()
-                            st.success(f"✅ {t_search} 已存入 [{st.session_state['cur_c']}] 持股")
+                            st.success(f"✅ {target_tid} 已存入持股明細")
                             st.rerun()
                     with sc2:
-                        st.metric("即時股價", p, d)
+                        st.metric("即時報價", p, d)
                         st.success(f"🎯 目標: {res['target']}")
                         st.error(f"🛑 止損: {res['stop']}")
                         st.write(f"**AI 戰略評分: {res['score']}**")
             else:
-                st.error("找不到該股票數據，請確保代號正確 (如: 2330.TW)")
+                st.error(f"❌ 找不到 '{s_input}'。如果是 390 檔外個股，請輸入完整代號（如：2603.TW）")
 
 st.divider()
 
