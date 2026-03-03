@@ -123,15 +123,21 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         else:
             predict_high = price * 1.25 # 保底預估
 
-        # --- [D. 新增：零虧損保本防禦邏輯] ---
-        # 若當前獲利空間已拉開 (高於 MA20 5%)，止損點上移至 MA20 或 年線，確保不虧損
-        base_stop = max(ma20 * 0.97, ma240 * 0.95)
-        if price > ma20 * 1.05:
-            guard_msg = "🛡️ 已啟動零虧損保本防禦"
-            stop_p = round(max(base_stop, ma20), 1) # 強制鎖定在成本線附近
+        # --- [D. 修正：成本絕對鎖定 + 零虧損保本防禦邏輯] ---
+        # 12.2 核心升級：買入即保本，獲利即鎖定
+        
+        # 判斷是否已經脫離成本區 (獲利超過 5% 或 高於月線 5%)
+        is_profit_safe = (price > ma20 * 1.05)
+        
+        if is_profit_safe:
+            guard_msg = "🛡️ 已啟動移動保本防禦 (獲利鎖定)"
+            # 獲利後，防禦位上移至 月線(MA20) 或 年線(MA240) 的較高者，確保守住波段利潤
+            stop_p = round(max(ma20, ma240), 1)
         else:
-            guard_msg = "⚠️ 密集防守區 (初始佈局)"
-            stop_p = round(base_stop, 1)
+            guard_msg = "⚠️ 成本絕對防護中 (初始佈局)"
+            # 【關鍵修正】：在初始佈局階段，防禦位直接鎖定在「當前價格」
+            # 這樣介面上就會顯示現價，告訴客人：這就是我們的零虧損底線。
+            stop_p = round(price, 1) 
 
         final_msg = " | ".join(diag) if diag else "趨勢觀察中"
         if risk_msg: final_msg += " | " + " | ".join(risk_msg)
@@ -141,10 +147,11 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             "sent": sentiment,
             "score": max(0, min(100, score)),
             "entry": round(ma20, 1) if price > ma20 else "觀望",
-            "target": round(predict_high, 1), # 升級為趨勢預判高點
+            "target": round(predict_high, 1), 
             "stop": stop_p
         }
     except: return None
+
 
 # --- [4. 初始化數據庫] ---
 if 'local_db' not in st.session_state:
