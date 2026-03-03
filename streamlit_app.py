@@ -40,113 +40,100 @@ def load_data():
     if os.path.exists(CLIENT_FILE):
         st.session_state.client_list = pd.read_csv(CLIENT_FILE)['name'].tolist()
         
-# --- [3. 數據與 AI 引擎 V12.1 終極版] ---
-
-@st.cache_data(ttl=300)
-def get_stock_perf(ticker, base_score):
-    """獲取即時股價與漲跌幅，確保第 199 行不會報錯"""
-    try:
-        stock = yf.Ticker(ticker)
-        df = stock.history(period="2d")
-        if len(df) >= 2:
-            curr_p = df['Close'].iloc[-1]
-            prev_p = df['Close'].iloc[-2]
-            diff = curr_p - prev_p
-            pct = (diff / prev_p) * 100
-            color = "price-up" if diff > 0 else "price-down"
-            return round(curr_p, 1), f"{pct:+.2f}%", color
-    except: pass
-    return 0.0, "0.00%", "price-even"
-
+# --- [3. 終極 AI 戰略引擎 V12.2 (開業級合體版)] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
-    """資深經理人 V12.1 核心邏輯引擎"""
     try:
         stock = yf.Ticker(ticker)
-        # 獲取 300 天數據，以計算年線、季線、MACD
+        # 抓取 300 天數據，確保年線(240)、季線(60)與指標精確
         hist = stock.history(period="300d")
         if len(hist) < 240: return None
         
-        # --- A. 基礎指標計算 ---
+        # --- [A. 基礎數據與指標計算] ---
         c = hist['Close']
         v = hist['Volume']
         ma20 = c.rolling(20).mean().iloc[-1]
         ma60 = c.rolling(60).mean().iloc[-1]
-        ma60_prev = c.rolling(60).mean().iloc[-5] # 五天前季線判斷斜率
+        ma60_prev = c.rolling(60).mean().iloc[-5] # 五天前季線斜率
         ma240 = c.rolling(240).mean().iloc[-1]
         v_ma5 = v.rolling(5).mean().iloc[-1]
         
-        # --- B. MACD 計算 ---
+        # MACD 計算
         exp1 = c.ewm(span=12, adjust=False).mean()
         exp2 = c.ewm(span=26, adjust=False).mean()
-        macd_line = exp1 - exp2
-        signal_line = macd_line.ewm(span=9, adjust=False).mean()
+        macd = exp1 - exp2
+        signal = macd.ewm(span=9, adjust=False).mean()
         
         score = 0
         diag = []
         risk_msg = []
         sentiment = "籌碼中性"
 
-        # --- C. 五大戰略邏輯 ---
+        # --- [B. 12.1 核心邏輯：洗盤、葛蘭碧、糾結偵測] ---
 
-        # 1. 核心：洗盤偵測 (融資/籌碼洗盤偵測邏輯)
+        # 1. 洗盤偵測 (長官核心要求)
         is_wash_out = (price <= ma240 * 1.05 and price >= ma240 * 0.95) and (v.iloc[-1] < v_ma5 * 0.7)
         if is_wash_out:
             score += 45
             diag.append("🔥 偵測到洗盤完成，準備破新高")
             sentiment = "🔥 大戶收貨 (融資減)"
 
-        # 2. 葛蘭碧八大法則 (季線應用)
+        # 2. 葛蘭碧法則 (季線)
         if ma60 > ma60_prev: # 季線向上
-            if price > ma60 and c.iloc[-2] <= ma60: # 回測不破季線
+            if price > ma60 and c.iloc[-2] <= ma60:
                 score += 25
-                diag.append("🎯 葛蘭碧準則：季線支撐買點")
-        elif price < ma60 and (ma60 - price)/ma60 > 0.15: # 負乖離過大
+                diag.append("🎯 葛蘭碧：季線支撐買點")
+        elif price < ma60 and (ma60 - price)/ma60 > 0.15:
             score += 15
-            diag.append("🛡️ 葛蘭碧準則：乖離過大準備反彈")
+            diag.append("🛡️ 葛蘭碧：負乖離反彈預備")
 
-        # 3. MACD 動能共振
-        if macd_line.iloc[-1] > signal_line.iloc[-1] and macd_line.iloc[-2] <= signal_line.iloc[-2]:
-            score += 20
-            diag.append("📈 MACD 趨勢翻揚")
+        # 3. 均線糾結預判 (12.1 特色)
+        std_ma = pd.Series([ma20, ma60, ma240]).std() / price
+        if std_ma < 0.03:
+            score += 10
+            diag.append("🌀 均線糾結：即將噴發")
 
-        # 4. 淨值比偵測 (解決聯成、晟德低分問題)
+        # 4. PBR 價值防禦 (公司背景評估)
         try:
             pbr = stock.info.get('priceToBook', 2)
             if pbr < 1:
                 score += 15
-                diag.append(f"💎 價值防禦：股價低於淨值 (PBR:{round(pbr,2)})")
+                diag.append(f"💎 股價低於淨值 (PBR:{round(pbr,2)})")
         except: pass
 
-        # 5. 均線糾結偵測 (模擬 60分K 5/35/200)
-        std_ma = pd.Series([ma20, ma60, ma240]).std() / price
-        if std_ma < 0.03:
-            score += 10
-            diag.append("🌀 均線糾結：即將選擇方向")
+        # --- [C. 12.2 開業級：逃頂與防禦賣出法則] ---
 
-        # --- D. 下跌風險警示 ---
-        if price > ma60 * 1.25:
+        # 1. 強化版高檔逃頂 (60分K級別背離偵測)
+        if price > ma60 * 1.3: # 乖離率 > 30%
             score -= 30
-            risk_msg.append("⚠️ 警示：短線乖離過大")
-        
-        if price < ma20 and macd_line.iloc[-1] < signal_line.iloc[-1]:
-            score -= 10
-            risk_msg.append("📉 趨勢轉弱警訊")
+            risk_msg.append("🚨 高檔乖離過大：強制獲利了結")
+            sentiment = "散戶進場 (融資增)"
 
-        # --- E. 訊息整合 ---
+        # 2. 確定跌勢賣出 (跌破生命線 MA20)
+        if price < ma20:
+            score -= 20
+            if macd.iloc[-1] < signal.iloc[-1]: # 趨勢與動能雙殺
+                risk_msg.append("💀 趨勢轉空確認：全撤訊號")
+                score -= 20
+
+        # --- [D. 整合訊息與動態止損] ---
         final_msg = " | ".join(diag) if diag else "趨勢觀察中"
         if risk_msg:
             final_msg += " | " + " | ".join(risk_msg)
 
+        # 營業級動態價格預判
+        # 止損點優化：取 MA20 * 0.97 (跌破月線 3% 即視為無條件止損)
+        stop_p = round(max(ma20 * 0.97, ma240 * 0.95), 1)
+        target_p = round(price * 1.25, 1) # 目標設定為 25% 波段利潤
+        
         return {
             "msg": final_msg,
             "sent": sentiment,
-            "score": score,
-            "entry": round(ma20 if price > ma20 else price * 0.98, 1),
-            "target": round(price * 1.15, 1),
-            "stop": round(min(ma20, ma240) * 0.94, 1)
+            "score": max(0, min(100, score)),
+            "entry": round(ma20, 1) if price > ma20 else "觀望",
+            "target": target_p,
+            "stop": stop_p
         }
     except: return None
-
 
 
 # --- [4. 初始化數據庫] ---
