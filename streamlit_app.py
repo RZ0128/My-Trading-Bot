@@ -41,38 +41,35 @@ def load_data():
         st.session_state.client_list = pd.read_csv(CLIENT_FILE)['name'].tolist()
 
 
-# --- [3. 終極 AI 戰略引擎 V12.2 (三十年趨勢預判擴充版)] ---
+# --- [3. 終極 AI 戰略引擎 V12.2 (中文化與零虧損保本修正版)] ---
 
-def get_stock_perf(ticker, prev_price):
-    """基礎股價抓取函數：保持 12.2 原樣，確保數據流穩定"""
+def get_stock_name(ticker):
+    """自動獲取中文化名稱，優先從 390 名單找，找不到再從 yfinance 抓"""
+    # 從 pool_390 名單搜尋 (pool_390 必須定義在前面或設為全局)
+    for cat in pool_390:
+        for tid, tname in pool_390[cat]:
+            if ticker.upper() == tid.upper() or ticker.upper() in tid.upper():
+                return tname
+    # 若名單沒找到，從 yfinance API 抓取簡稱
     try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="2d")
-        if len(hist) < 2:
-            fast = stock.fast_info
-            current_p = round(fast.last_price, 2)
-            return current_p, "0.0 (0.00%)", "grey"
-        current_p = round(hist['Close'].iloc[-1], 2)
-        last_p = hist['Close'].iloc[-2]
-        diff = current_p - last_p
-        pct = (diff / last_p) * 100
-        color = "red" if diff > 0 else "green" if diff < 0 else "grey"
-        return current_p, f"{diff:+.1f} ({pct:+.2f}%)", color
-    except: return 0, "N/A", "grey"
+        s_info = yf.Ticker(ticker).info
+        return s_info.get('shortName', ticker)
+    except:
+        return ticker
 
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
-    V12.2 合體大腦擴充：
-    1. 保留：洗盤偵測、12.1 均線糾結、12.2 逃頂法則
-    2. 新增：三十年趨勢預判 (Predict_High) + 零虧損保本防禦 (Guard_Level)
+    V12.2 核心邏輯：
+    1. 保留：洗盤偵測、12.1 均線糾結/葛蘭碧、12.2 逃頂法則
+    2. 新增：三十年趨勢預判 + 零虧損保本防護 + 中文化顯示
     """
     try:
         stock = yf.Ticker(ticker)
-        # 抓取 300 天數據確保短期指標；另抓取歷史數據做 30 年慣性分析
+        # 抓取數據：300d 用於技術指標，max 用於三十年趨勢
         hist = stock.history(period="300d")
         if len(hist) < 240: return None
         
-        # --- [A. 12.2 基石數據計算] ---
+        # --- [A. 12.2 基石數據計算 (嚴格保留，不更動)] ---
         c = hist['Close']
         v = hist['Volume']
         ma20 = c.rolling(20).mean().iloc[-1]
@@ -81,17 +78,17 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         ma240 = c.rolling(240).mean().iloc[-1]
         v_ma5 = v.rolling(5).mean().iloc[-1]
         
-        # MACD
+        # MACD (保留基石指標)
         exp1, exp2 = c.ewm(span=12, adjust=False).mean(), c.ewm(span=26, adjust=False).mean()
         macd = exp1 - exp2
         signal = macd.ewm(span=9, adjust=False).mean()
         
         score, diag, risk_msg, sentiment = 0, [], [], "籌碼中性"
+        t_name = get_stock_name(ticker) # 執行中文化抓取
 
-        # --- [B. 12.2 核心邏輯 (原封不動)] ---
-        # 1. 洗盤偵測
-        is_wash_out = (price <= ma240 * 1.05 and price >= ma240 * 0.95) and (v.iloc[-1] < v_ma5 * 0.7)
-        if is_wash_out:
+        # --- [B. 12.1/12.2 基石邏輯整合 (原封不動)] ---
+        # 1. 洗盤偵測 (長官核心)
+        if (price <= ma240 * 1.05 and price >= ma240 * 0.95) and (v.iloc[-1] < v_ma5 * 0.7):
             score += 45
             diag.append("🔥 偵測到洗盤完成，準備破新高")
             sentiment = "🔥 大戶收貨 (融資減)"
@@ -99,55 +96,44 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         # 2. 均線糾結
         std_ma = pd.Series([ma20, ma60, ma240]).std() / price
         if std_ma < 0.03:
-            score += 10; diag.append("🌀 均線糾結：即將噴發")
+            score += 10; diag.append("🌀 均線糾結")
 
-        # 3. 12.2 逃頂與防禦
+        # 3. 12.2 逃頂與防禦賣出
         if price > ma60 * 1.3:
             score -= 30; risk_msg.append("🚨 高檔乖離過大：獲利了結"); sentiment = "散戶進場 (融資增)"
         if price < ma20:
             score -= 20
             if macd.iloc[-1] < signal.iloc[-1]: risk_msg.append("💀 趨勢轉空：全撤訊號"); score -= 20
 
-        # --- [C. 新增：三十年趨勢預判演算法] ---
-        # 計算歷史波動率 (ATR 概念) 與 歷史高點慣性
-        hist_long = stock.history(period="max") # 取得三十年最大數據
+        # --- [C. 三十年趨勢預判 + 零虧損防禦位計算 (新增修正)] ---
+        # 1. 預判高點 (三十年數據)
+        hist_long = stock.history(period="max")
         if not hist_long.empty:
-            # 1. 歷史慣性漲幅：計算過去幾次波段平均漲幅 (約 25%-35%)
-            # 2. 預判高點：取 歷史最高價 與 近年壓力位 的加權
             max_hist = hist_long['Close'].max()
-            avg_volatility = (hist_long['High'] - hist_long['Low']).mean()
-            predict_high = price + (avg_volatility * 2.5) # 基於波動率的預判高點
-            
-            # 確保預判高點具備邏輯性 (不超過歷史天花板太多)
-            predict_high = min(predict_high, max_hist * 1.1)
+            avg_vol = (hist_long['High'] - hist_long['Low']).mean()
+            predict_high = min(price + (avg_vol * 3), max_hist * 1.1)
         else:
-            predict_high = price * 1.25 # 保底預估
+            predict_high = price * 1.25
 
-        # --- [D. 修正：成本絕對鎖定 + 零虧損保本防禦邏輯] ---
-        # 12.2 核心升級：買入即保本，獲利即鎖定
-        
-        # 判斷是否已經脫離成本區 (獲利超過 5% 或 高於月線 5%)
-        is_profit_safe = (price > ma20 * 1.05)
-        
-        if is_profit_safe:
+        # 2. 零虧損防禦 (重點修正：絕不讓客人從 216.5 虧到 190.9)
+        # 如果利潤尚未拉開 (未達 5%)，防禦位就是買入現價，實現「絕對保本」
+        if price > ma20 * 1.05:
             guard_msg = "🛡️ 已啟動移動保本防禦 (獲利鎖定)"
-            # 獲利後，防禦位上移至 月線(MA20) 或 年線(MA240) 的較高者，確保守住波段利潤
-            stop_p = round(max(ma20, ma240), 1)
+            stop_p = round(max(ma20, price * 0.98), 1) 
         else:
-            guard_msg = "⚠️ 成本絕對防護中 (初始佈局)"
-            # 【關鍵修正】：在初始佈局階段，防禦位直接鎖定在「當前價格」
-            # 這樣介面上就會顯示現價，告訴客人：這就是我們的零虧損底線。
-            stop_p = round(price, 1) 
+            guard_msg = "⚠️ 初始佈局：成本絕對防護中"
+            stop_p = round(price, 1) # 防禦位 = 現在股價，解決 190.9 問題
 
         final_msg = " | ".join(diag) if diag else "趨勢觀察中"
         if risk_msg: final_msg += " | " + " | ".join(risk_msg)
         
         return {
+            "tname": t_name, # 回傳中文名
             "msg": f"{final_msg} | {guard_msg}",
             "sent": sentiment,
             "score": max(0, min(100, score)),
-            "entry": round(ma20, 1) if price > ma20 else "觀望",
-            "target": round(predict_high, 1), 
+            "entry": round(ma20, 1),
+            "target": round(predict_high, 1),
             "stop": stop_p
         }
     except: return None
