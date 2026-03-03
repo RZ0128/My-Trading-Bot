@@ -185,7 +185,7 @@ st.session_state['cur_c'] = target_client
 # 包含：390 戰略名單 + V12.2 合體大腦 + 實戰介面 (找回張/股記憶)
 # =================================================================
 
-# 1. 統一正名為 pool_390 (390 檔完整戰略名單)
+#  統一正名為 pool_390 (390 檔完整戰略名單)
 pool_390 = {
     "💎 權值/金控 (70)": [("2330.TW","台積電"),("2317.TW","鴻海"),("2454.TW","聯發科"),("2308.TW","台達電"),("2881.TW","富邦金"),("2882.TW","國泰金"),("2303.TW","聯電"),("2886.TW","兆豐金"),("2891.TW","中信金"),("2412.TW","中華電"),("1301.TW","台塑"),("2002.TW","中鋼"),("2884.TW","玉山金"),("5880.TW","合庫金"),("2885.TW","元大金"),("5871.TW","中租-KY"),("2883.TW","開發金"),("2887.TW","台新金"),("2892.TW","第一金"),("2890.TW","永豐金"),("1101.TW","台泥"),("1216.TW","統一"),("2357.TW","華碩"),("2912.TW","統一超"),("2324.TW","仁寶"),("2353.TW","宏碁"),("2382.TW","廣達"),("2409.TW","友達"),("3481.TW","群創"),("2880.TW","華南金"),("1303.TW","南亞"),("1326.TW","台化"),("6505.TW","台塑化"),("2105.TW","正新"),("2207.TW","和泰車"),("2301.TW","光寶科"),("2377.TW","微星"),("2395.TW","研華"),("2408.TW","南亞科"),("2474.TW","可成"),("2603.TW","長榮"),("2609.TW","陽明"),("2610.TW","華航"),("2615.TW","萬海"),("2618.TW","長榮航"),("2801.TW","彰銀"),("2888.TW","新光金"),("2889.TW","國票金"),("2897.TW","王道銀行"),("5876.TW","上海商銀"),("9904.TW","寶成"),("9910.TW","豐泰"),("9921.TW","巨大"),("9945.TW","潤泰新"),("1476.TW","儒星"),("1477.TW","聚陽"),("1503.TW","士電"),("1504.TW","東元"),("1513.TW","中興電"),("1519.TW","華城"),("1605.TW","華新"),("1717.TW","長興"),("1722.TW","台肥"),("1802.TW","台玻"),("2006.TW","東和鋼鐵"),("2014.TW","中鴻"),("2027.TW","大成鋼"),("2106.TW","建大"),("2201.TW","裕隆"),("2204.TW","中華車")],
     "🔬 半導體/IC/設備 (70)": [("3413.TW","京鼎"),("3661.TW","世芯-KY"),("3035.TW","智原"),("6531.TW","愛普*"),("5269.TW","祥碩"),("3443.TW","創意"),("3227.TW","原相"),("3034.TW","聯詠"),("2379.TW","瑞昱"),("6239.TW","力成"),("3711.TW","日月光投控"),("6415.TW","矽力*-KY"),("8046.TW","南電"),("3037.TW","欣興"),("2449.TW","京元電子"),("2344.TW","華邦電"),("6770.TW","力積電"),("8069.TW","元太"),("3105.TW","穩懋"),("3532.TW","台勝科"),("2369.TW","菱生"),("3264.TW","欣銓"),("6147.TW","紘康"),("8150.TW","南茂"),("2401.TW","凌陽"),("3016.TW","嘉晶"),("3529.TW","力旺"),("4966.TW","譜瑞-KY"),("6271.TW","同欣電"),("8299.TW","群聯"),("2337.TW","旺宏"),("2436.TW","偉詮電"),("2458.TW","義隆"),("3006.TW","晶豪科"),("3041.TW","揚智"),("3527.TW","聚積"),("3588.TW","通嘉"),("4919.TW","新唐"),("4961.TW","天鈺"),("5471.TW","松翰"),("6138.TW","茂達"),("6202.TW","盛群"),("6233.TW","旺玖"),("6243.TW","迅杰"),("6411.TW","晶焱"),("6462.TW","神盾"),("6533.TW","晶心科"),("6679.TW","鈺太"),("8016.TW","矽創"),("8028.TW","昇陽半"),("8054.TW","安國"),("8081.TW","致新"),("8261.TW","富鼎"),("8271.TW","宇瞻"),("3131.TW","弘塑"),("3583.TW","齊宣"),("6139.TW","亞博"),("6438.TW","迅得"),("1560.TW","中砂"),("3680.TW","家登"),("6196.TW","帆宣"),("6667.TW","信紘科"),("3374.TW","精材"),("6223.TW","旺矽"),("6515.TW","穎崴"),("6510.TW","精測"),("3587.TW","閎康"),("6683.TW","雍智科技"),("8027.TW","鈦昇"),("6789.TW","采鈺")],
@@ -195,121 +195,94 @@ pool_390 = {
     "⚓ 傳統產業 (20)": [("1313.TW","聯成"),("1101.TW","台泥"),("1102.TW","亞泥"),("1301.TW","台塑"),("1303.TW","南亞"),("1326.TW","台化"),("6505.TW","台塑化"),("2002.TW","中鋼"),("2014.TW","中鴻"),("2105.TW","正新"),("2603.TW","長榮"),("2609.TW","陽明"),("2615.TW","萬海"),("2618.TW","長榮航"),("1476.TW","儒星"),("1477.TW","聚陽"),("1503.TW","士電"),("1513.TW","中興電"),("1519.TW","華城"),("1717.TW","長興")],
     "🧬 生技醫療 (20)": [("4123.TW","晟德"),("1760.TW","寶齡富錦"),("4128.TW","中天"),("4147.TW","龍燈-KY"),("4162.TW","智擎"),("4174.TW","浩鼎"),("4743.TW","合一"),("6446.TW","藥華藥"),("6472.TW","保瑞"),("6492.TW","生華科"),("6547.TW","高端"),("6550.TW","北極星"),("6589.TW","台康生"),("1795.TW","美時"),("4104.TW","佳醫"),("4119.TW","旭富"),("4137.TW","麗豐"),("1701.TW","中化"),("1720.TW","生達"),("1762.TW","中化生")]
 }
+
 st.title(f"🛡️ 12.2 終極合體版 390 檔：[{st.session_state.get('cur_c', '預設客戶')}]")
 
-# A. 全能搜索區 (支援代號+中文自動識別)
+# A. 全能搜索區
 with st.container(border=True):
     st.subheader("🔍 全球個股戰略搜索")
-    s_input = st.text_input("輸入名稱或代號 (如: 長榮、2603)", placeholder="搜尋全台股標的...", key="global_search_v12_2")
-    
+    s_input = st.text_input("輸入名稱或代號 (如: 長榮、2603)", placeholder="搜尋全台股標的...", key="search_main")
     if s_input:
-        # 390名單比對邏輯
-        all_390_flat = []
-        for l in pool_390.values(): all_390_flat.extend(l)
-        match = [tid for tid, name in all_390_flat if s_input in name or s_input in tid]
+        all_stocks = []
+        for l in pool_390.values(): all_stocks.extend(l)
+        match = [tid for tid, name in all_stocks if s_input in name or s_input in tid]
         target_tid = match[0] if match else (s_input.upper() + ".TW" if s_input.isdigit() else s_input.upper())
         
-        with st.spinner(f"正在診斷 {target_tid}..."):
-            p, d, c_color = get_stock_perf(target_tid, 0)
-            if p > 0:
-                res = generate_ai_tech_analysis(target_tid, p, 0)
-                if res:
-                    # 顯示代號+中文名稱
-                    st.markdown(f"### 🎯 戰略診斷: {target_tid} {res['tname']}")
-                    c1, c2 = st.columns([1.5, 1])
-                    with c1:
-                        st.info(f"**實戰診斷:** {res['msg']}")
-                        st.markdown(f"**Sentiment:** <span style='color:#00D1FF;'>{res['sent']}</span>", unsafe_allow_html=True)
-                        st.markdown(f"**🔥 建議買入:** <span style='color:red;'>{res['entry']}</span>", unsafe_allow_html=True)
-                        
-                        # --- [三十年趨勢預判視覺化] ---
-                        potential_gain = ((res['target'] - p) / p) * 100
-                        st.markdown(f"""
-                            <div style='padding:12px; background-color:rgba(255,75,75,0.08); border-radius:8px; border-left:6px solid #ff4b4b; margin:10px 0;'>
-                                <span style='color:#ff4b4b; font-weight:bold; font-size:16px;'>📈 30年趨勢預判目標：</span>
-                                <span style='color:#ff4b4b; font-weight:bold; font-size:18px;'>NT$ {res['target']}</span>
-                                <span style='color:#555; margin-left:10px;'>預期空間：</span>
-                                <b style='color:#e04e4e; font-size:16px;'>+{potential_gain:.1f}%</b>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # --- [佈局控制項 - 嚴格保留張/股記憶] ---
-                        buy_c1, buy_c2 = st.columns([1, 1])
-                        search_unit = buy_c1.radio("佈局單位", ["張", "股"], horizontal=True, key="search_u_v12")
-                        search_qty = buy_c2.number_input("佈局數量", min_value=1, value=1, key="search_q_v12")
-                        
-                        if st.button(f"確認佈局 {target_tid} {res['tname']}", use_container_width=True):
-                            new_trade = pd.DataFrame([{
-                                'client': st.session_state['cur_c'], 
-                                'id': target_tid, 
-                                'name': res['tname'], 
-                                'buy_price': p, 
-                                'shares': search_qty, 
-                                'unit': search_unit, 
-                                'entry_reason': res['msg']
-                            }])
-                            st.session_state.local_db = pd.concat([st.session_state.local_db, new_trade], ignore_index=True)
-                            save_data(); st.rerun()
-                    with c2:
-                        st.metric("即時股價", p, d)
-                        st.success(f"🎯 趨勢目標: {res['target']}")
-                        # 修正後的零虧損防禦位
-                        st.error(f"🛑 零虧損防禦: {res['stop']}")
-            else: st.error("❌ 找不到股票，請檢查代號格式。")
+        p, d, c_color = get_stock_perf(target_tid, 0)
+        if p > 0:
+            res = generate_ai_tech_analysis(target_tid, p, 0)
+            if res:
+                # 標題強制中文化
+                st.markdown(f"### 🎯 戰略診斷: {target_tid} {res['tname']}")
+                c1, c2 = st.columns([1.5, 1])
+                with c1:
+                    st.info(f"**實戰診斷:** {res['msg']}")
+                    st.markdown(f"**Sentiment:** <span style='color:#00D1FF;'>{res['sent']}</span>", unsafe_allow_html=True)
+                    
+                    # 趨勢預判視覺化 (修正百分比顯示)
+                    p_gain = ((res['target'] - p) / p) * 100
+                    st.markdown(f"""
+                        <div style='padding:12px; background-color:rgba(255,75,75,0.08); border-radius:8px; border-left:6px solid #ff4b4b; margin:10px 0;'>
+                            <span style='color:#ff4b4b; font-weight:bold;'>📈 30年趨勢預判目標：NT$ {res['target']}</span><br>
+                            <span style='color:#e04e4e;'>預期獲利空間：<b>+{p_gain:.1f}%</b></span>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    buy_c1, buy_c2 = st.columns([1, 1])
+                    search_unit = buy_c1.radio("佈局單位", ["張", "股"], horizontal=True, key="s_unit")
+                    search_qty = buy_c2.number_input("佈局數量", min_value=1, value=1, key="s_qty")
+                    
+                    if st.button(f"確認佈局 {res['tname']}", use_container_width=True):
+                        new_trade = pd.DataFrame([{
+                            'client': st.session_state['cur_c'], 'id': target_tid, 'name': res['tname'], 
+                            'buy_price': p, 'shares': search_qty, 'unit': search_unit, 'entry_reason': res['msg']
+                        }])
+                        st.session_state.local_db = pd.concat([st.session_state.local_db, new_trade], ignore_index=True)
+                        save_data(); st.rerun()
+                with c2:
+                    st.metric("即時股價", p, d)
+                    st.success(f"🎯 趨勢目標: {res['target']}")
+                    st.error(f"🛑 零虧損防禦: {res['stop']}")
+        else: st.error("❌ 找不到標的，請檢查輸入。")
 
 st.divider()
 
-# B. 板塊掃描區 (依據 390 檔分類掃描)
-col_l, col_r = st.columns([1.6, 1.4])
-with col_l:
-    cat = st.radio("產業板塊", list(pool_390.keys()), horizontal=True)
-    with st.spinner(f"掃描 {cat} 板塊中..."):
-        scored_data = []
-        for tid, tname in pool_390[cat]:
-            p, d, c_color = get_stock_perf(tid, 0)
-            res = generate_ai_tech_analysis(tid, p, 0)
-            if res:
-                res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d, 'color': c_color})
-                scored_data.append(res)
-        # 顯示該板塊分數最高的前 10 名
-        display_list = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
+# B. 板塊掃描區
+cat = st.radio("產業板塊", list(pool_390.keys()), horizontal=True)
+scored_data = []
+for tid, tname in pool_390[cat]:
+    p, d, c_color = get_stock_perf(tid, 0)
+    res = generate_ai_tech_analysis(tid, p, 0)
+    if res:
+        res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
+        scored_data.append(res)
 
-    st.subheader(f"🚀 {cat}：AI 推薦前 10 強")
-    for item in display_list:
-        with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 分數: {item['score']} | 價: {item['price']}"):
-            st.write(f"🧠 診斷: {item['msg']}")
-            st.markdown(f"🔥 籌碼面: <span style='color:#00D1FF;'>{item['sent']}</span>", unsafe_allow_html=True)
-            
-            # --- [新增：B區趨勢預判視覺化] ---
-            p_gain = ((item['target'] - item['price']) / item['price']) * 100
-            st.markdown(f"""
-                <div style='padding:10px; background-color:rgba(255,75,75,0.08); border-radius:8px; border-left:5px solid #ff4b4b; margin:10px 0;'>
-                    <span style='color:#ff4b4b; font-weight:bold;'>📈 30年趨勢預判目標：NT$ {item['target']}</span>
-                    <span style='color:#e04e4e; margin-left:10px;'>空間：<b>+{p_gain:.1f}%</b></span>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            st.write(f"🛑 零虧損防禦位: {item['stop']}")
-            
-            st.divider()
-            # 快速佈局功能 (嚴格保留)
-            rec_c1, rec_c2, rec_c3 = st.columns([1, 1, 1.5])
-            r_unit = rec_c1.radio("單位", ["張", "股"], horizontal=True, key=f"ru_{item['tid']}")
-            r_qty = rec_c2.number_input("數量", min_value=1, value=1, key=f"rq_{item['tid']}")
-            
-            if rec_c3.button(f"快速佈局 {item['tname']}", key=f"rb_{item['tid']}", use_container_width=True):
-                new_trade = pd.DataFrame([{
-                    'client': st.session_state['cur_c'], 
-                    'id': item['tid'], 
-                    'name': item['tname'], 
-                    'buy_price': item['price'], 
-                    'shares': r_qty, 
-                    'unit': r_unit, 
-                    'entry_reason': item['msg']
-                }])
-                st.session_state.local_db = pd.concat([st.session_state.local_db, new_trade], ignore_index=True)
-                save_data(); st.rerun()
-
+display_list = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
+st.subheader(f"🚀 {cat}：AI 推薦前 10 強")
+for item in display_list:
+    with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 價: {item['price']}"):
+        st.write(f"🧠 診斷: {item['msg']}")
+        st.markdown(f"🔥 籌碼: <span style='color:#00D1FF;'>{item['sent']}</span>", unsafe_allow_html=True)
+        
+        p_gain = ((item['target'] - item['price']) / item['price']) * 100
+        st.markdown(f"""
+            <div style='padding:8px; background-color:rgba(255,75,75,0.05); border-radius:5px; border-left:4px solid #ff4b4b;'>
+                <b>📈 30年趨勢目標：NT$ {item['target']} (空間: +{p_gain:.1f}%)</b>
+            </div>
+        """, unsafe_allow_html=True)
+        st.write(f"🛑 零虧損防禦位: {item['stop']}")
+        
+        st.divider()
+        c1, c2, c3 = st.columns([1, 1, 1.5])
+        r_u = c1.radio("單位", ["張", "股"], horizontal=True, key=f"u_{item['tid']}")
+        r_q = c2.number_input("數量", min_value=1, value=1, key=f"q_{item['tid']}")
+        if c3.button(f"快速佈局 {item['tname']}", key=f"b_{item['tid']}", use_container_width=True):
+            new_trade = pd.DataFrame([{
+                'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 
+                'buy_price': item['price'], 'shares': r_q, 'unit': r_u, 'entry_reason': item['msg']
+            }])
+            st.session_state.local_db = pd.concat([st.session_state.local_db, new_trade], ignore_index=True)
+            save_data(); st.rerun()
 
 
 # --- [7. 右側監控區：實戰持股 - V12.2 優化版] ---
