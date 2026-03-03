@@ -203,13 +203,13 @@ pool_390 = {
     "🧬 生技醫療 (20)": [("4123.TW","晟德"),("1760.TW","寶齡富錦"),("4128.TW","中天"),("4147.TW","龍燈-KY"),("4162.TW","智擎"),("4174.TW","浩鼎"),("4743.TW","合一"),("6446.TW","藥華藥"),("6472.TW","保瑞"),("6492.TW","生華科"),("6547.TW","高端"),("6550.TW","北極星"),("6589.TW","台康生"),("1795.TW","美時"),("4104.TW","佳醫"),("4119.TW","旭富"),("4137.TW","麗豐"),("1701.TW","中化"),("1720.TW","生達"),("1762.TW","中化生")]
 }
 
-# --- [V12.2 主畫面 UI 邏輯] ---
+# --- [V12.2 終極合體版 UI 邏輯：三十年趨勢預判顯示強化] ---
 st.title(f"🛡️ 12.2 終極合體版 390 檔：[{st.session_state.get('cur_c', '預設客戶')}]")
 
-# A. 全能搜索區 (含單位記憶功能)
+# A. 全能搜索區 (含單位記憶與趨勢預判)
 with st.container(border=True):
     st.subheader("🔍 全球個股戰略搜索")
-    s_input = st.text_input("輸入名稱或代號 (如: 長榮、2603)", placeholder="搜尋全台股標的...")
+    s_input = st.text_input("輸入名稱或代號 (如: 長榮、2603)", placeholder="搜尋全台股標的...", key="global_search")
     if s_input:
         all_390 = []
         for l in pool_390.values(): all_390.extend(l)
@@ -228,7 +228,16 @@ with st.container(border=True):
                         st.markdown(f"**Sentiment:** <span style='color:#00D1FF;'>{res['sent']}</span>", unsafe_allow_html=True)
                         st.markdown(f"**🔥 建議買入:** <span style='color:red;'>{res['entry']}</span>", unsafe_allow_html=True)
                         
-                        # --- [優化：找回張/股佈局控制項] ---
+                        # --- [新增：A區趨勢預判強化顯示] ---
+                        potential_gain = ((res['target'] - p) / p) * 100
+                        st.markdown(f"""
+                            <div style='padding:10px; background-color:rgba(255,75,75,0.08); border-radius:8px; border-left:5px solid #ff4b4b; margin:10px 0;'>
+                                <span style='color:#ff4b4b; font-weight:bold;'>📈 30年趨勢預判目標：NT$ {res['target']}</span><br>
+                                <span style='color:#e04e4e; font-size:14px;'>預期獲利空間：<b>+{potential_gain:.1f}%</b></span>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # --- [佈局控制項 - 嚴格沿用] ---
                         buy_c1, buy_c2 = st.columns([1, 1])
                         search_unit = buy_c1.radio("佈局單位", ["張", "股"], horizontal=True, key="search_u")
                         search_qty = buy_c2.number_input("佈局數量", min_value=1, value=1, key="search_q")
@@ -247,12 +256,13 @@ with st.container(border=True):
                             save_data(); st.rerun()
                     with c2:
                         st.metric("即時股價", p, d)
-                        st.success(f"🎯 目標: {res['target']}"); st.error(f"🛑 止損: {res['stop']}")
+                        st.success(f"🎯 趨勢目標: {res['target']}")
+                        st.error(f"🛑 防禦止損: {res['stop']}")
             else: st.error("❌ 找不到股票，請檢查格式。")
 
 st.divider()
 
-# B. 板塊掃描區 (含 12.1 實戰快速佈局按鈕)
+# B. 板塊掃描區 (含 12.1 實戰快速佈局按鈕與趨勢顯示)
 col_l, col_r = st.columns([1.6, 1.4])
 with col_l:
     cat = st.radio("產業板塊", list(pool_390.keys()), horizontal=True)
@@ -269,12 +279,22 @@ with col_l:
     st.subheader(f"🚀 {cat}：AI 推薦前 10 強")
     for item in display_list:
         with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 分數: {item['score']} | 價: {item['price']}"):
-            st.write(f"診斷: {item['msg']}")
-            st.markdown(f"籌碼: <span style='color:#00D1FF;'>{item['sent']}</span>", unsafe_allow_html=True)
-            st.write(f"止損參考: {item['stop']}")
+            st.write(f"🧠 診斷: {item['msg']}")
+            st.markdown(f"🔥 籌碼面: <span style='color:#00D1FF;'>{item['sent']}</span>", unsafe_allow_html=True)
+            
+            # --- [新增：B區趨勢預判強化顯示] ---
+            p_gain = ((item['target'] - item['price']) / item['price']) * 100
+            st.markdown(f"""
+                <div style='padding:10px; background-color:rgba(255,75,75,0.08); border-radius:8px; border-left:5px solid #ff4b4b; margin:10px 0;'>
+                    <span style='color:#ff4b4b; font-weight:bold;'>📈 30年趨勢預判目標：NT$ {item['target']}</span>
+                    <span style='color:#e04e4e; margin-left:10px;'>空間：<b>+{p_gain:.1f}%</b></span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            st.write(f"🛑 零虧損防禦位: {item['stop']}")
             
             st.divider()
-            # --- [優化：找回推薦清單內的張/股佈局按鈕] ---
+            # --- [佈局按鈕 - 嚴格沿用] ---
             rec_c1, rec_c2, rec_c3 = st.columns([1, 1, 1.5])
             r_unit = rec_c1.radio("單位", ["張", "股"], horizontal=True, key=f"ru_{item['tid']}")
             r_qty = rec_c2.number_input("數量", min_value=1, value=1, key=f"rq_{item['tid']}")
