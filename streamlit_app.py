@@ -333,7 +333,7 @@ with col_l:
                 save_data(); st.rerun()
 
 
-# --- [7. 右側監控區：實戰持股 - V11.4] ---
+# --- [7. 右側監控區：實戰持股 - V12.2 優化版] ---
 with col_r:
     st.subheader(f"💼 [{st.session_state['cur_c']}] 實戰持股明細")
     my_holdings = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
@@ -342,41 +342,81 @@ with col_r:
         st.info("目前尚無持股數據。")
     else:
         total_unrealized_pnl = 0 
+        # 遍歷持股清單
         for idx, row in my_holdings.iterrows():
+            # 獲取最新即時行情
             cp, cd, cc = get_stock_perf(row['id'], 0)
-            try: d_val = float(cd.replace('%','').replace('+',''))
+            
+            # 解析漲跌幅數值
+            try: d_val = float(cd.split('(')[1].replace('%','').replace(')',''))
             except: d_val = 0
+            
+            # 調用 AI 大腦診斷 (包含洗盤偵測與止損目標建議)
             res = generate_ai_tech_analysis(row['id'], cp, d_val)
+            
             if res:
+                # 損益計算邏輯：自動識別「張(1000股)」或「股(1股)」
                 multiplier = 1000 if row['unit'] == "張" else 1
                 stock_pnl = (cp - row['buy_price']) * row['shares'] * multiplier
                 total_unrealized_pnl += stock_pnl
-                pnl_color = "#e04e4e" if stock_pnl >= 0 else "#4ea04e"
+                pnl_color = "#ff4b4b" if stock_pnl >= 0 else "#008000" # 紅漲綠跌 (台股慣用)
                 
                 with st.container(border=True):
+                    # 第一列：名稱與損益
                     t_col1, t_col2 = st.columns([1.5, 1])
                     t_col1.markdown(f"**{row['name']}** <small>{row['id']}</small>", unsafe_allow_html=True)
-                    t_col2.markdown(f"<div style='text-align:right; color:{pnl_color}; font-weight:bold;'>NT$ {stock_pnl:,.0f}</div>", unsafe_allow_html=True)
+                    t_col2.markdown(f"<div style='text-align:right; color:{pnl_color}; font-weight:bold; font-size:15px;'>NT$ {stock_pnl:,.0f}</div>", unsafe_allow_html=True)
+                    
+                    # 第二列：即時數據與持股細節
                     d_col1, d_col2, d_col3 = st.columns(3)
                     d_col1.caption(f"現價: {cp}")
                     d_col2.caption(f"成本: {row['buy_price']}")
-                    d_col3.markdown(f"<small>持股: <b>{row['shares']}</b> {row['unit']}</small>", unsafe_allow_html=True)
+                    d_col3.markdown(f"<small>持有: <b>{row['shares']}</b> {row['unit']}</small>", unsafe_allow_html=True)
                     
-                    with st.expander(f"⚙️ 減持 / 平倉 ({row['unit']})"):
-                        st.write(f"當前單位：{row['unit']}")
+                    # 診斷與籌碼狀態顯示
+                    st.markdown(f"<small>🧠 診斷: {res['msg']}</small>", unsafe_allow_html=True)
+                    st.markdown(f"<small>🔥 籌碼: {res['sent']}</small>", unsafe_allow_html=True)
+
+                    # 減持邏輯：嚴格對應買入時的單位
+                    with st.expander(f"⚙️ 執行減持 / 平倉 ({row['unit']})"):
+                        st.write(f"當前單位為「{row['unit']}」，請輸入欲賣出數量：")
                         sell_col1, sell_col2 = st.columns([1.5, 1])
-                        s_qty = sell_col1.number_input(f"減持數", min_value=1, max_value=int(row['shares']), value=1, key=f"sq_{idx}")
-                        if sell_col2.button("確認", key=f"sbtn_{idx}", use_container_width=True):
-                            if s_qty >= row['shares']: st.session_state.local_db = st.session_state.local_db.drop(idx)
-                            else: st.session_state.local_db.at[idx, 'shares'] -= s_qty
+                        
+                        # 自動抓取該筆資料原本的單位，確保減持不跨單位出錯
+                        s_qty = sell_col1.number_input(
+                            f"減持{row['unit']}數", 
+                            min_value=1, 
+                            max_value=int(row['shares']), 
+                            value=int(row['shares']) if row['shares'] > 0 else 1, 
+                            key=f"sq_{idx}"
+                        )
+                        
+                        if sell_col2.button("確認出脫", key=f"sbtn_{idx}", use_container_width=True):
+                            if s_qty >= row['shares']: 
+                                # 全數賣出，移除該筆
+                                st.session_state.local_db = st.session_state.local_db.drop(idx)
+                            else: 
+                                # 部分減持，減少股數/張數
+                                st.session_state.local_db.at[idx, 'shares'] -= s_qty
                             save_data()
                             st.rerun()
-                    if cp < res['stop']: st.markdown(f"<small style='color:#4ea04e;'>🛑 跌破止損 {res['stop']}</small>", unsafe_allow_html=True)
-                    elif cp >= res['target']: st.markdown(f"<small style='color:#e04e4e;'>🎯 達標預警 {res['target']}</small>", unsafe_allow_html=True)
 
+                    # 預警系統
+                    if cp <= res['stop']: 
+                        st.warning(f"🚨 跌破止損價 {res['stop']}，請評估全撤！")
+                    elif cp >= res['target']: 
+                        st.success(f"🎯 已達目標價 {res['target']}，建議部分分盤獲利！")
+
+        # 底部總帳戶總覽
         st.markdown("---")
-        total_color = "#e04e4e" if total_unrealized_pnl >= 0 else "#4ea04e"
-        st.markdown(f"<div style='padding:12px; border:1px solid #ddd; border-radius:8px; text-align:center;'><div style='font-size:13px; color:#666;'>帳戶總未實現損益</div><div style='font-size:22px; font-weight:bold; color:{total_color};'>NT$ {total_unrealized_pnl:,.0f}</div></div>", unsafe_allow_html=True)
+        total_color = "#ff4b4b" if total_unrealized_pnl >= 0 else "#008000"
+        st.markdown(f"""
+            <div style='padding:12px; border:2px solid {total_color}; border-radius:10px; text-align:center; background-color: rgba(255, 75, 75, 0.05);'>
+                <div style='font-size:14px; color:#555;'>當前對象 [{st.session_state['cur_c']}] 總未實現損益</div>
+                <div style='font-size:26px; font-weight:bold; color:{total_color};'>NT$ {total_unrealized_pnl:,.0f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
 
 # --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
 st.divider()
