@@ -41,7 +41,31 @@ def load_data():
         st.session_state.client_list = pd.read_csv(CLIENT_FILE)['name'].tolist()
         
 # --- [3. 終極 AI 戰略引擎 V12.2 (開業級合體版)] ---
+
+def get_stock_perf(ticker, prev_price):
+    """基礎股價抓取函數：確保後續介面能抓到即時數據"""
+    try:
+        stock = yf.Ticker(ticker)
+        # 抓取最近兩天數據計算漲跌
+        hist = stock.history(period="2d")
+        if len(hist) < 2:
+            # 如果是新上市或數據不足，嘗試抓取當前報價
+            fast = stock.fast_info
+            current_p = round(fast.last_price, 2)
+            return current_p, "0.0 (0.00%)", "grey"
+        
+        current_p = round(hist['Close'].iloc[-1], 2)
+        last_p = hist['Close'].iloc[-2]
+        diff = current_p - last_p
+        pct = (diff / last_p) * 100
+        
+        color = "red" if diff > 0 else "green" if diff < 0 else "grey"
+        return current_p, f"{diff:+.1f} ({pct:+.2f}%)", color
+    except Exception as e:
+        return 0, "N/A", "grey"
+
 def generate_ai_tech_analysis(ticker, price, diff_pct):
+    """AI 戰略大腦：整合洗盤偵測與 12.2 逃頂法則"""
     try:
         stock = yf.Ticker(ticker)
         # 抓取 300 天數據，確保年線(240)、季線(60)與指標精確
@@ -102,7 +126,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
 
         # --- [C. 12.2 開業級：逃頂與防禦賣出法則] ---
 
-        # 1. 強化版高檔逃頂 (60分K級別背離偵測)
+        # 1. 強化版高檔逃頂 (乖離偵測)
         if price > ma60 * 1.3: # 乖離率 > 30%
             score -= 30
             risk_msg.append("🚨 高檔乖離過大：強制獲利了結")
@@ -134,7 +158,6 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             "stop": stop_p
         }
     except: return None
-
 
 # --- [4. 初始化數據庫] ---
 if 'local_db' not in st.session_state:
