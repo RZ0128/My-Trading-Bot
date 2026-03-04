@@ -180,9 +180,7 @@ pool_390 = {
     "⚓ 傳統產業 (20)": [("1313.TW","聯成"),("1101.TW","台泥"),("1102.TW","亞泥"),("1301.TW","台塑"),("1303.TW","南亞"),("1326.TW","台化"),("6505.TW","台塑化"),("2002.TW","中鋼"),("2014.TW","中鴻"),("2105.TW","正新"),("2603.TW","長榮"),("2609.TW","陽明"),("2615.TW","萬海"),("2618.TW","長榮航"),("1476.TW","儒星"),("1477.TW","聚陽"),("1503.TW","士電"),("1513.TW","中興電"),("1519.TW","華城"),("1717.TW","長興")],
     "🧬 生技醫療 (20)": [("4123.TW","晟德"),("1760.TW","寶齡富錦"),("4128.TW","中天"),("4147.TW","龍燈-KY"),("4162.TW","智擎"),("4174.TW","浩鼎"),("4743.TW","合一"),("6446.TW","藥華藥"),("6472.TW","保瑞"),("6492.TW","生華科"),("6547.TW","高端"),("6550.TW","北極星"),("6589.TW","台康生"),("1795.TW","美時"),("4104.TW","佳醫"),("4119.TW","旭富"),("4137.TW","麗豐"),("1701.TW","中化"),("1720.TW","生達"),("1762.TW","中化生")]
 }
-# --- [接續在 pool_390 字典定義之後...] ---
-
-# 側邊欄底部補充：系統時間 (修正圖7左下角空白)
+# --- [修正：側邊欄時間顯示 (解決圖 7 空白問題)] ---
 with st.sidebar:
     st.divider()
     st.caption(f"🕒 系統時間: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -193,28 +191,22 @@ st.title(f"🛡️ 12.2 終極合體版 390 檔：[{st.session_state.get('cur_c'
 col_l, col_r = st.columns([1.6, 1.4])
 
 with col_l:
-    # --- [A. 全能搜索區：修正 ValueError 與重複顯示] ---
+    # --- [A. 全能搜索區：修正圖 9 的 ValueError] ---
     with st.container(border=True):
         st.subheader("🔍 全球個股戰略搜索")
         s_input = st.text_input("輸入名稱或代號 (如: 台積電、2603)", placeholder="搜尋全台股標的...", key="global_search")
         if s_input:
-            # 修正 ValueError 邏輯：先展開 390 名單
+            # 展開 390 名單以供匹配
             all_stocks = []
-            for category in pool_390.values():
-                all_stocks.extend(category)
+            for cat in pool_390.values():
+                all_stocks.extend(cat)
             
-            # 搜尋匹配
+            # 搜尋邏輯：修正圖 9 報錯位置
             match = [tid for tid, name in all_stocks if s_input in name or s_input in tid]
-            
-            # 確定最終代號
-            if match:
-                target_tid = match[0]
-            else:
-                # 若不在 390 名單內，嘗試自動補齊 .TW
-                target_tid = s_input.upper() + ".TW" if s_input.isdigit() else s_input.upper()
-            
+            target_tid = match[0] if match else (s_input.upper() + ".TW" if s_input.isdigit() else s_input.upper())
             t_name = get_stock_name(target_tid)
-            # 修正圖 7：如果名稱跟代號一樣，就不重複顯示
+            
+            # 修正圖 7：避免名稱重複顯示
             display_header = f"{target_tid} {t_name}" if t_name != target_tid else target_tid
             
             with st.spinner(f"正在診斷 {t_name}..."):
@@ -229,7 +221,7 @@ with col_l:
                             st.markdown(f"**Sentiment:** <span style='color:#00D1FF;'>{res['sent']}</span>", unsafe_allow_html=True)
                             st.markdown(f"**🔥 建議買入:** <span style='color:red;'>{res['entry']}</span>", unsafe_allow_html=True)
                             
-                            # 佈局控制項
+                            # 佈局控制項 (張/股切換)
                             buy_c1, buy_c2 = st.columns([1, 1])
                             search_unit = buy_c1.radio("佈局單位", ["張", "股"], horizontal=True, key="search_u")
                             search_qty = buy_c2.number_input("佈局數量", min_value=1, value=1, key="search_q")
@@ -249,7 +241,7 @@ with col_l:
                             st.error(f"🛑 防禦止損: {res['stop']}")
 
     st.divider()
-    # --- [B. 板塊掃描區 (保留 390 名單快速佈局)] ---
+    # --- [B. 板塊掃描區] ---
     cat_choice = st.radio("產業板塊掃描", list(pool_390.keys()), horizontal=True)
     scored_data = []
     for tid, tname in pool_390[cat_choice]:
@@ -259,6 +251,7 @@ with col_l:
             res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
             scored_data.append(res)
     
+    st.subheader(f"🚀 {cat_choice} AI 推薦前 10 強")
     for item in sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]:
         with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 價: {item['price']}"):
             st.write(f"🧠 {item['msg']} | 籌碼: {item['sent']}")
@@ -275,26 +268,29 @@ with col_l:
                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_trade], ignore_index=True)
                 save_data(); st.rerun()
 
-# --- [7. 右側監控區：修正圖 7 平倉按鈕樣式] ---
+# --- [7. 右側監控區：修正圖 7 平倉按鈕與損益顯示] ---
 with col_r:
     st.subheader(f"💼 庫存明細")
     my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.get('cur_c', 'Robert')]
     total_pnl = 0
-    for idx, row in my_h.iterrows():
-        cp, cd, cc = get_stock_perf(row['id'], 0)
-        mult = 1000 if row['unit'] == "張" else 1
-        pnl = (cp - row['buy_price']) * row['shares'] * mult
-        total_pnl += pnl
-        with st.container(border=True):
-            st.markdown(f"**{row['name']}** ({row['id']})")
-            st.markdown(f"損益: <span style='color:{'red' if pnl>=0 else 'green'}; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
-            st.caption(f"現價: {cp} | 成本: {row['buy_price']} | 持有: {row['shares']} {row['unit']}")
-            # 修正圖 7：讓平倉按鈕填滿寬度，變明顯
-            if st.button("🔥 全數平倉", key=f"fbtn_{idx}", use_container_width=True):
-                st.session_state.local_db = st.session_state.local_db.drop(idx); save_data(); st.rerun()
+    if my_h.empty:
+        st.info("尚無持有標的")
+    else:
+        for idx, row in my_h.iterrows():
+            cp, cd, cc = get_stock_perf(row['id'], 0)
+            mult = 1000 if row['unit'] == "張" else 1
+            pnl = (cp - row['buy_price']) * row['shares'] * mult
+            total_pnl += pnl
+            with st.container(border=True):
+                st.markdown(f"**{row['name']}** ({row['id']})")
+                st.markdown(f"損益: <span style='color:{'red' if pnl>=0 else 'green'}; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
+                st.caption(f"現價: {cp} | 成本: {row['buy_price']} | 持有: {row['shares']} {row['unit']}")
+                
+                # 修正圖 7：平倉按鈕滿版化
+                if st.button("🔥 全數平倉", key=f"fbtn_{idx}", use_container_width=True):
+                    st.session_state.local_db = st.session_state.local_db.drop(idx); save_data(); st.rerun()
     st.divider()
     st.metric("📊 總未實現損益", f"NT$ {total_pnl:,.0f}")
-
 
 
 # --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
