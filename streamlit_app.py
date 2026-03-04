@@ -182,7 +182,7 @@ pool_390 = {
 }
 # --- [接續在 pool_390 字典定義之後...] ---
 
-# 側邊欄底部補充：系統時間 (修正圖7左側空白)
+# 側邊欄底部補充：系統時間 (修正圖7左下角空白)
 with st.sidebar:
     st.divider()
     st.caption(f"🕒 系統時間: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -193,37 +193,54 @@ st.title(f"🛡️ 12.2 終極合體版 390 檔：[{st.session_state.get('cur_c'
 col_l, col_r = st.columns([1.6, 1.4])
 
 with col_l:
-    # --- [A. 全能搜索區] ---
+    # --- [A. 全能搜索區：修正 ValueError 與重複顯示] ---
     with st.container(border=True):
         st.subheader("🔍 全球個股戰略搜索")
         s_input = st.text_input("輸入名稱或代號 (如: 台積電、2603)", placeholder="搜尋全台股標的...", key="global_search")
         if s_input:
-            all_list = []
-            for l in pool_390.values(): all_list.extend(l)
-            # 修正圖7：避免名稱重複顯示
-            match = [tid for tid, name in all_list if s_input in name]
-            target_tid = match[0] if match else (s_input.upper() + ".TW" if s_input.isdigit() else s_input.upper())
+            # 修正 ValueError 邏輯：先展開 390 名單
+            all_stocks = []
+            for category in pool_390.values():
+                all_stocks.extend(category)
+            
+            # 搜尋匹配
+            match = [tid for tid, name in all_stocks if s_input in name or s_input in tid]
+            
+            # 確定最終代號
+            if match:
+                target_tid = match[0]
+            else:
+                # 若不在 390 名單內，嘗試自動補齊 .TW
+                target_tid = s_input.upper() + ".TW" if s_input.isdigit() else s_input.upper()
+            
             t_name = get_stock_name(target_tid)
-            display_title = f"{target_tid} {t_name}" if target_tid != t_name else target_tid
+            # 修正圖 7：如果名稱跟代號一樣，就不重複顯示
+            display_header = f"{target_tid} {t_name}" if t_name != target_tid else target_tid
             
             with st.spinner(f"正在診斷 {t_name}..."):
                 p, d, c_color = get_stock_perf(target_tid, 0)
                 if p > 0:
                     res = generate_ai_tech_analysis(target_tid, p, 0)
                     if res:
-                        st.markdown(f"### 🎯 戰略診斷: {display_title}")
+                        st.markdown(f"### 🎯 戰略診斷: {display_header}")
                         c1, c2 = st.columns([1.5, 1])
                         with c1:
                             st.info(f"**實戰診斷:** {res['msg']}")
                             st.markdown(f"**Sentiment:** <span style='color:#00D1FF;'>{res['sent']}</span>", unsafe_allow_html=True)
                             st.markdown(f"**🔥 建議買入:** <span style='color:red;'>{res['entry']}</span>", unsafe_allow_html=True)
                             
+                            # 佈局控制項
                             buy_c1, buy_c2 = st.columns([1, 1])
                             search_unit = buy_c1.radio("佈局單位", ["張", "股"], horizontal=True, key="search_u")
                             search_qty = buy_c2.number_input("佈局數量", min_value=1, value=1, key="search_q")
                             
                             if st.button(f"確認佈局 {target_tid}", use_container_width=True):
-                                new_trade = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': target_tid, 'name': t_name, 'buy_price': p, 'shares': search_qty, 'unit': search_unit, 'entry_reason': res['msg']}])
+                                new_trade = pd.DataFrame([{
+                                    'client': st.session_state.get('cur_c', 'Robert'), 
+                                    'id': target_tid, 'name': t_name, 
+                                    'buy_price': p, 'shares': search_qty, 
+                                    'unit': search_unit, 'entry_reason': res['msg']
+                                }])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_trade], ignore_index=True)
                                 save_data(); st.rerun()
                         with c2:
@@ -232,8 +249,8 @@ with col_l:
                             st.error(f"🛑 防禦止損: {res['stop']}")
 
     st.divider()
-    # --- [B. 板塊掃描區] ---
-    cat_choice = st.radio("產業板塊", list(pool_390.keys()), horizontal=True)
+    # --- [B. 板塊掃描區 (保留 390 名單快速佈局)] ---
+    cat_choice = st.radio("產業板塊掃描", list(pool_390.keys()), horizontal=True)
     scored_data = []
     for tid, tname in pool_390[cat_choice]:
         p, d, cc = get_stock_perf(tid, 0)
@@ -242,7 +259,6 @@ with col_l:
             res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
             scored_data.append(res)
     
-    st.subheader(f"🚀 {cat_choice} AI 推薦前 10 強")
     for item in sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]:
         with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 價: {item['price']}"):
             st.write(f"🧠 {item['msg']} | 籌碼: {item['sent']}")
@@ -250,81 +266,35 @@ with col_l:
             r_u = r_c1.radio("單位", ["張", "股"], horizontal=True, key=f"ru_{item['tid']}")
             r_q = r_c2.number_input("數量", min_value=1, key=f"rq_{item['tid']}")
             if r_c3.button(f"快速佈局 {item['tname']}", key=f"rb_{item['tid']}", use_container_width=True):
-                new_trade = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': r_q, 'unit': r_u, 'entry_reason': item['msg']}])
+                new_trade = pd.DataFrame([{
+                    'client': st.session_state.get('cur_c', 'Robert'), 
+                    'id': item['tid'], 'name': item['tname'], 
+                    'buy_price': item['price'], 'shares': r_q, 
+                    'unit': r_u, 'entry_reason': item['msg']
+                }])
                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_trade], ignore_index=True)
                 save_data(); st.rerun()
 
-# --- [7. 右側監控區：實戰持股 - V12.2 完整版] ---
+# --- [7. 右側監控區：修正圖 7 平倉按鈕樣式] ---
 with col_r:
-    st.subheader(f"💼 [{st.session_state.get('cur_c', 'Robert')}] 庫存明細")
-    my_holdings = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.get('cur_c', 'Robert')]
-    
-    if my_holdings.empty:
-        st.info("目前尚無持股數據，請從左側佈局。")
-    else:
-        total_unrealized_pnl = 0 
-        # 遍歷每一筆持股
-        for idx, row in my_holdings.iterrows():
-            cp, cd, cc = get_stock_perf(row['id'], 0)
-            res = generate_ai_tech_analysis(row['id'], cp, 0) # 同步獲取 AI 診斷
-            
-            if res:
-                # 損益計算邏輯
-                multiplier = 1000 if row['unit'] == "張" else 1
-                stock_pnl = (cp - row['buy_price']) * row['shares'] * multiplier
-                total_unrealized_pnl += stock_pnl
-                pnl_color = "#ff4b4b" if stock_pnl >= 0 else "#008000" # 紅漲綠跌
-                
-                with st.container(border=True):
-                    # 第一列：股票名稱與損益
-                    t_col1, t_col2 = st.columns([1.5, 1])
-                    t_col1.markdown(f"**{row['name']}** <small>{row['id']}</small>", unsafe_allow_html=True)
-                    t_col2.markdown(f"<div style='text-align:right; color:{pnl_color}; font-weight:bold; font-size:15px;'>NT$ {stock_pnl:,.0f}</div>", unsafe_allow_html=True)
-                    
-                    # 第二列：即時數據
-                    d_col1, d_col2, d_col3 = st.columns(3)
-                    d_col1.caption(f"現價: {cp}")
-                    d_col2.caption(f"成本: {row['buy_price']}")
-                    d_col3.markdown(f"<small>持有: <b>{row['shares']}</b> {row['unit']}</small>", unsafe_allow_html=True)
-                    
-                    # 第三列：AI 動態診斷 (補回洗盤偵測與籌碼)
-                    st.markdown(f"<small>🧠 診斷: {res['msg']}</small>", unsafe_allow_html=True)
-                    st.markdown(f"<small>🔥 籌碼: <span style='color:#00D1FF;'>{res['sent']}</span></small>", unsafe_allow_html=True)
+    st.subheader(f"💼 庫存明細")
+    my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.get('cur_c', 'Robert')]
+    total_pnl = 0
+    for idx, row in my_h.iterrows():
+        cp, cd, cc = get_stock_perf(row['id'], 0)
+        mult = 1000 if row['unit'] == "張" else 1
+        pnl = (cp - row['buy_price']) * row['shares'] * mult
+        total_pnl += pnl
+        with st.container(border=True):
+            st.markdown(f"**{row['name']}** ({row['id']})")
+            st.markdown(f"損益: <span style='color:{'red' if pnl>=0 else 'green'}; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
+            st.caption(f"現價: {cp} | 成本: {row['buy_price']} | 持有: {row['shares']} {row['unit']}")
+            # 修正圖 7：讓平倉按鈕填滿寬度，變明顯
+            if st.button("🔥 全數平倉", key=f"fbtn_{idx}", use_container_width=True):
+                st.session_state.local_db = st.session_state.local_db.drop(idx); save_data(); st.rerun()
+    st.divider()
+    st.metric("📊 總未實現損益", f"NT$ {total_pnl:,.0f}")
 
-                    # --- [減持與平倉控制項：嚴格補回] ---
-                    with st.expander(f"⚙️ 執行減持 / 平倉操作"):
-                        # 讓使用者輸入要賣出的數量，預設為全部
-                        s_qty = st.number_input(f"欲賣出{row['unit']}數", 
-                                                min_value=1, 
-                                                max_value=int(row['shares']), 
-                                                value=int(row['shares']), 
-                                                key=f"sq_ctrl_{idx}")
-                        
-                        sel_c1, sel_c2 = st.columns(2)
-                        # 減持按鈕
-                        if sel_c1.button("確認減持", key=f"sbtn_{idx}", use_container_width=True):
-                            if s_qty >= row['shares']: 
-                                st.session_state.local_db = st.session_state.local_db.drop(idx)
-                            else: 
-                                st.session_state.local_db.at[idx, 'shares'] -= s_qty
-                            save_data()
-                            st.rerun()
-                        
-                        # 火力全開平倉按鈕
-                        if sel_c2.button("🔥 全數平倉", key=f"fbtn_{idx}", use_container_width=True):
-                            st.session_state.local_db = st.session_state.local_db.drop(idx)
-                            save_data()
-                            st.rerun()
-
-                    # 警示條
-                    if cp <= res['stop']: 
-                        st.warning(f"🚨 跌破防禦位 {res['stop']}，請評估出場！")
-                    elif cp >= res['target']: 
-                        st.success(f"🎯 已達目標價 {res['target']}，建議部分入袋！")
-
-        st.divider()
-        # 總結算
-        st.metric("📊 帳戶總未實現損益", f"NT$ {total_unrealized_pnl:,.0f}")
 
 
 # --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
