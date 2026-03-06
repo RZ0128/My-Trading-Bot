@@ -96,10 +96,12 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         price_drop_5d = (c.iloc[-1] < c.iloc[-5])
         vol_dry_out = (v.iloc[-1] < v_ma20 * 0.7) # 量縮至月均量 7 成以下
         
+        # [12.2 核心位階參考]
+        low_30 = hist_full['Close'].quantile(0.3)
+        
         score = 40 # 基礎分
         
         # --- 核心邏輯 1: 籌碼洗盤偵測 (融合 12.2 靈魂) ---
-        # 修正：只要在支撐位出現縮量，不論回檔幅度，即判定為大戶收貨
         is_wash_done = False
         sentiment = "散戶進場 (融資增)"
         
@@ -111,6 +113,14 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             sentiment = "大戶收貨 (融資減)"
             score += 30
             is_wash_done = True
+
+        # --- [新增：35年資深分析師價值發現模塊] ---
+        # 針對大成鋼這類低位階、安全、但動能尚未爆發的標的進行補償
+        is_value_gem = False
+        if price <= low_30 * 1.05 and on_support and vol_dry_out:
+            score += 20 # 價值補償分
+            is_value_gem = True
+            sentiment = "💎 戰略價值區 (大戶長期鎖籌)"
             
         # --- 核心邏輯 2: 均線糾結與位階 (12.2 均線壓縮) ---
         ma_gap = pd.Series([ma20, ma60, ma240]).std() / price
@@ -120,7 +130,6 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             score += 10
             
         # --- 核心邏輯 3: [historical_surge_analysis] 歷史暴衝基因 ---
-        # 檢查過去一年內是否有單日漲幅 > 7% 且 帶量 3 倍的記錄
         surges = hist_full.tail(250).apply(lambda x: (x['Close'] - x['Open'])/x['Open'] > 0.07, axis=1)
         if surges.any():
             score += 5 # 具備妖股基因
@@ -149,6 +158,9 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         else:
             rank, msg, target, window = "🔍 C級:短線觀察", "動能不足或位階稍高，僅適短線。", price * 1.08, "3-7天"
 
+        # 診斷文字合成
+        if is_value_gem:
+            msg = "💎 偵測到長線戰略價值位，適合左側先行佈局 " + msg
         if is_wash_done and on_support:
             msg = "🔥 偵測到洗盤完成，準備破新高 " + msg
 
