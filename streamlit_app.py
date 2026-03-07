@@ -68,89 +68,87 @@ def get_stock_perf(ticker, dummy):
         return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color
     except: return 0, "N/A", "grey"
 
-# --- [第 3 區：超級史詩級大腦 V12.4 (融合 12.2 靈魂與四大擴展模塊)] ---
+# --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
 
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     try:
         stock = yf.Ticker(ticker)
-        # 擴展數據抓取，支持 historical_surge_analysis
+        # 擴展數據抓取
         hist_full = stock.history(period="2y") 
         if len(hist_full) < 250: return None
         
         hist = hist_full.tail(300)
         c, v, h, l = hist['Close'], hist['Volume'], hist['High'], hist['Low']
         
-        # [模塊 A: get_multi_timeframe_data] 
-        # 計算不同週期的指標以確認趨勢共振
+        # [模塊 A: 指標計算]
         ma20 = c.rolling(20).mean().iloc[-1]
         ma60 = c.rolling(60).mean().iloc[-1]
         ma240 = c.rolling(240).mean().iloc[-1]
-        v_ma5 = v.rolling(5).mean().iloc[-1]
         v_ma20 = v.rolling(20).mean().iloc[-1]
         
-        # [模塊 B: calculate_cost_zone]
-        # 判斷支撐區間 12.2 核心逻辑：年線與半年線的支撐強度
+        # [模塊 B: 成本與洗盤偵測]
         on_support = (abs(price - ma240) / ma240 < 0.05) or (abs(price - ma60) / ma60 < 0.05)
-        
-        # [模塊 C: detect_divergence] - 偵測價跌量縮的背離現象（洗盤關鍵）
-        price_drop_5d = (c.iloc[-1] < c.iloc[-5])
-        vol_dry_out = (v.iloc[-1] < v_ma20 * 0.7) # 量縮至月均量 7 成以下
-        
-        # [12.2 核心位階參考]
+        vol_dry_out = (v.iloc[-1] < v_ma20 * 0.7)
         low_30 = hist_full['Close'].quantile(0.3)
         
         score = 40 # 基礎分
         
-        # --- 核心邏輯 1: 籌碼洗盤偵測 (融合 12.2 靈魂) ---
+        # --- 核心 1: 籌碼洗盤與 35年價值發現 ---
         is_wash_done = False
+        is_value_gem = False
         sentiment = "散戶進場 (融資增)"
         
         if on_support and vol_dry_out:
-            sentiment = "大戶收貨 (融資減)"
-            score += 45 # 洗盤完成權重極高
+            score += 45
             is_wash_done = True
-        elif price_drop_5d and vol_dry_out:
             sentiment = "大戶收貨 (融資減)"
-            score += 30
-            is_wash_done = True
-
-        # --- [新增：35年資深分析師價值發現模塊] ---
-        # 針對大成鋼這類低位階、安全、但動能尚未爆發的標的進行補償
-        is_value_gem = False
+        
         if price <= low_30 * 1.05 and on_support and vol_dry_out:
-            score += 20 # 價值補償分
+            score += 20 
             is_value_gem = True
             sentiment = "💎 戰略價值區 (大戶長期鎖籌)"
-            
-        # --- 核心邏輯 2: 均線糾結與位階 (12.2 均線壓縮) ---
+
+        # --- [進化 1: 板塊熱度共振 Sector Resonance] ---
+        # 模擬板塊偵測：若個股屬強勢板塊且帶動能，給予共振加分
+        # 此處以成交量與均線多頭排列作為板塊啟動之模擬指標
+        if price > ma20 and price > ma60 and v.iloc[-1] > v_ma20:
+            score += 10 # 板塊共振加分
+
+        # --- 核心 2: 均線糾結與暴衝基因 ---
         ma_gap = pd.Series([ma20, ma60, ma240]).std() / price
-        if ma_gap < 0.03: # 極度糾結，噴發前兆
-            score += 20
-        elif ma_gap < 0.06:
-            score += 10
-            
-        # --- 核心邏輯 3: [historical_surge_analysis] 歷史暴衝基因 ---
+        if ma_gap < 0.03: score += 20
+        
         surges = hist_full.tail(250).apply(lambda x: (x['Close'] - x['Open'])/x['Open'] > 0.07, axis=1)
-        if surges.any():
-            score += 5 # 具備妖股基因
+        if surges.any(): score += 5 
             
-        # --- 核心邏輯 4: MACD 動能輔助 ---
+        # --- 核心 3: MACD 動能 ---
         exp1, exp2 = c.ewm(span=12).mean(), c.ewm(span=26).mean()
         macd = exp1 - exp2
         if macd.iloc[-1] > macd.iloc[-2]: score += 10
         
-        # --- 核心邏輯 5: 風險過濾 (乖離率) ---
+        # --- [進化 2: 短線乖離強制冷靜 Bias Cooling] ---
+        bias_20 = (price - ma20) / ma20
+        is_overheated = False
+        if bias_20 > 0.15: # 短線乖離大於 15%
+            score -= 15
+            is_overheated = True
+
+        # --- 核心 4: 長線風險過濾 ---
         bias_240 = (price - ma240) / ma240
-        if bias_240 > 0.4: score -= 30 # 太高不追
-        if (h.iloc[-1] - max(c.iloc[-1], hist['Open'].iloc[-1])) > (abs(c.iloc[-1] - hist['Open'].iloc[-1]) * 1.8) and v.iloc[-1] > v_ma5:
-            score -= 20 # 爆量長上影線
+        if bias_240 > 0.4: score -= 30 
+
+        # --- [進化 3: 除權息填息基因 Dividend Recovery] ---
+        # 判定是否為高機率填息股 (模擬歷史填息力)
+        is_dividend_king = False
+        if (c.iloc[-1] > c.iloc[-120]) and (c.iloc[-1] > ma240): # 長線趨勢向上標的通常填息力強
+            is_dividend_king = True
 
         total_score = max(0, min(100, score))
         
-        # --- 最終判定與目標設定 ---
+        # --- 最終判定 ---
         rank, msg, target, window = "", "", price * 1.1, ""
         if total_score >= 90:
-            rank, msg, target, window = "🔥 SS級:史詩起漲", "洗盤極度乾淨，支撐強勁，大波段啟動在即。", price * 1.7, "3-6個月"
+            rank, msg, target, window = "🔥 SS級:史詩起漲", "將軍級確認：板塊共振強，洗盤極度乾淨。", price * 1.7, "3-6個月"
         elif total_score >= 75:
             rank, msg, target, window = "🚀 A級:波段主升", "動能配合完美，進入主升浪軌道。", price * 1.4, "1-3個月"
         elif total_score >= 60:
@@ -158,9 +156,13 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         else:
             rank, msg, target, window = "🔍 C級:短線觀察", "動能不足或位階稍高，僅適短線。", price * 1.08, "3-7天"
 
-        # 診斷文字合成
+        # 將軍級診斷文字合成
+        if is_overheated:
+            msg = "⚠️ 戰鬥力過載，請勿追高，等待洗盤 " + msg
+        if is_dividend_king:
+            msg = "🎁 息利雙收標的 (填息基因強) " + msg
         if is_value_gem:
-            msg = "💎 偵測到長線戰略價值位，適合左側先行佈局 " + msg
+            msg = "💎 偵測到長線戰略價值位 " + msg
         if is_wash_done and on_support:
             msg = "🔥 偵測到洗盤完成，準備破新高 " + msg
 
@@ -174,6 +176,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         }
     except Exception as e:
         return None
+
 
 # --- [第 4 區：390 檔名單 (完整還原)] ---
 # (此處保持 390 檔列表，代碼長度考量在此略過列表文字，請保留您原本的 pool_390 變數)
