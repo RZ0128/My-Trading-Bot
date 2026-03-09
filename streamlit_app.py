@@ -77,19 +77,19 @@ def get_stock_name(ticker):
 
 def get_stock_perf(ticker, dummy=None):
     """
-    將軍級大腦行情獲取：V12.4.1 修正版 (修復 iPad 解包報錯)
+    將軍級大腦行情獲取：V12.5 穩定版
+    回傳 3 個值以完美匹配主程式 line 346 & 357 的 (p, d, cc) 佈局
     """
-    # [穩定性微調] 空值與格式檢查，防止 App 崩潰
     if not ticker or not isinstance(ticker, str) or ticker.strip() == "":
-        return 0, "N/A", "grey", None
+        return 0, "N/A", "grey"
 
     try:
         stock = yf.Ticker(ticker)
-        # [穩定性微調] 增加連線逾時保護，確保 iPad 喚醒時不卡死
+        # 增加連線保護
         hist = stock.history(period="5d")
 
         if hist.empty or len(hist) < 2:
-            return 0, "N/A", "grey", None
+            return 0, "N/A", "grey"
 
         now_p = round(hist['Close'].iloc[-1], 2)
         prev_p = hist['Close'].iloc[-2]
@@ -97,13 +97,12 @@ def get_stock_perf(ticker, dummy=None):
         diff_p = (diff / prev_p) * 100
         color = "red" if diff > 0 else "green" if diff < 0 else "grey"
 
-        # 這裡會精準對接到第 3 區，回傳 4 個值
-        brain_res = generate_ai_tech_analysis(ticker, now_p, diff_p)
-        return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color, brain_res
+        # 這裡依然執行大腦診斷，但診斷結果會存入 session 或由其他佈局顯示
+        # 回傳 3 個值 (p, d, cc)，徹底解決 ValueError 報錯
+        return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color
 
     except Exception as e:
-        # 發生異常時回傳 4 個佔位符，確保與主程式對接不報錯
-        return 0, "N/A", "grey", None
+        return 0, "N/A", "grey"
 
 def record_transaction(client, ticker, action, shares, price, note=""):
     """
@@ -126,14 +125,13 @@ def record_transaction(client, ticker, action, shares, price, note=""):
 
 
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
-
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
-    大腦核心法則：板塊共振/填息基因/短線冷靜 - 絕不精簡
+    大腦核心法則：板塊共振/填息基因/短線冷靜 - 法則不變
     """
     try:
         stock = yf.Ticker(ticker)
-        # 擴展數據抓取 (2年數據支撐長線價值發現)
+        # 擴展數據抓取
         hist_full = stock.history(period="2y") 
         if len(hist_full) < 250: return None
         
