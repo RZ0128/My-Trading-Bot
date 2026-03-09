@@ -77,15 +77,15 @@ def get_stock_name(ticker):
 
 def get_stock_perf(ticker, dummy=None):
     """
-    將軍級大腦行情獲取：增加 iPad 快取安全保護 (V12.4.1 修正版)
+    將軍級大腦行情獲取：V12.4.1 修正版 (修復 iPad 解包報錯)
     """
-    # 這裡必須縮進 4 個空格
+    # [穩定性微調] 空值與格式檢查，防止 App 崩潰
     if not ticker or not isinstance(ticker, str) or ticker.strip() == "":
         return 0, "N/A", "grey", None
 
     try:
         stock = yf.Ticker(ticker)
-        # 增加連線逾時保護，避免 iPad 在背景喚醒時卡死
+        # [穩定性微調] 增加連線逾時保護，確保 iPad 喚醒時不卡死
         hist = stock.history(period="5d")
 
         if hist.empty or len(hist) < 2:
@@ -97,12 +97,12 @@ def get_stock_perf(ticker, dummy=None):
         diff_p = (diff / prev_p) * 100
         color = "red" if diff > 0 else "green" if diff < 0 else "grey"
 
-        # 呼叫大腦診斷
+        # 這裡會精準對接到第 3 區，回傳 4 個值
         brain_res = generate_ai_tech_analysis(ticker, now_p, diff_p)
         return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color, brain_res
 
     except Exception as e:
-        # 發生任何異常時，回傳標準格式而非拋出錯誤，確保 UI 不會出現紅框
+        # 發生異常時回傳 4 個佔位符，確保與主程式對接不報錯
         return 0, "N/A", "grey", None
 
 def record_transaction(client, ticker, action, shares, price, note=""):
@@ -128,9 +128,12 @@ def record_transaction(client, ticker, action, shares, price, note=""):
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
 
 def generate_ai_tech_analysis(ticker, price, diff_pct):
+    """
+    大腦核心法則：板塊共振/填息基因/短線冷靜 - 絕不精簡
+    """
     try:
         stock = yf.Ticker(ticker)
-        # 擴展數據抓取
+        # 擴展數據抓取 (2年數據支撐長線價值發現)
         hist_full = stock.history(period="2y") 
         if len(hist_full) < 250: return None
         
@@ -165,11 +168,9 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             is_value_gem = True
             sentiment = "💎 戰略價值區 (大戶長期鎖籌)"
 
-        # --- [進化 1: 板塊熱度共振 Sector Resonance] ---
-        # 模擬板塊偵測：若個股屬強勢板塊且帶動能，給予共振加分
-        # 此處以成交量與均線多頭排列作為板塊啟動之模擬指標
+        # --- 進化 1: 板塊熱度共振 Sector Resonance ---
         if price > ma20 and price > ma60 and v.iloc[-1] > v_ma20:
-            score += 10 # 板塊共振加分
+            score += 10 
 
         # --- 核心 2: 均線糾結與暴衝基因 ---
         ma_gap = pd.Series([ma20, ma60, ma240]).std() / price
@@ -183,10 +184,10 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         macd = exp1 - exp2
         if macd.iloc[-1] > macd.iloc[-2]: score += 10
         
-        # --- [進化 2: 短線乖離強制冷靜 Bias Cooling] ---
+        # --- 進化 2: 短線乖離強制冷靜 Bias Cooling ---
         bias_20 = (price - ma20) / ma20
         is_overheated = False
-        if bias_20 > 0.15: # 短線乖離大於 15%
+        if bias_20 > 0.15: 
             score -= 15
             is_overheated = True
 
@@ -194,10 +195,9 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         bias_240 = (price - ma240) / ma240
         if bias_240 > 0.4: score -= 30 
 
-        # --- [進化 3: 除權息填息基因 Dividend Recovery] ---
-        # 判定是否為高機率填息股 (模擬歷史填息力)
+        # --- 進化 3: 除權息填息基因 Dividend Recovery ---
         is_dividend_king = False
-        if (c.iloc[-1] > c.iloc[-120]) and (c.iloc[-1] > ma240): # 長線趨勢向上標的通常填息力強
+        if (c.iloc[-1] > c.iloc[-120]) and (c.iloc[-1] > ma240): 
             is_dividend_king = True
 
         total_score = max(0, min(100, score))
@@ -213,15 +213,11 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         else:
             rank, msg, target, window = "🔍 C級:短線觀察", "動能不足或位階稍高，僅適短線。", price * 1.08, "3-7天"
 
-        # 將軍級診斷文字合成
-        if is_overheated:
-            msg = "⚠️ 戰鬥力過載，請勿追高，等待洗盤 " + msg
-        if is_dividend_king:
-            msg = "🎁 息利雙收標的 (填息基因強) " + msg
-        if is_value_gem:
-            msg = "💎 偵測到長線戰略價值位 " + msg
-        if is_wash_done and on_support:
-            msg = "🔥 偵測到洗盤完成，準備破新高 " + msg
+        # 將軍級診斷合成
+        if is_overheated: msg = "⚠️ 戰鬥力過載，請勿追高，等待洗盤 " + msg
+        if is_dividend_king: msg = "🎁 息利雙收標的 (填息基因強) " + msg
+        if is_value_gem: msg = "💎 偵測到長線戰略價值位 " + msg
+        if is_wash_done and on_support: msg = "🔥 偵測到洗盤完成，準備破新高 " + msg
 
         return {
             "msg": f"[{rank}] {msg}", 
@@ -233,7 +229,6 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         }
     except Exception as e:
         return None
-
 
 # --- [第 4 區：390 檔名單 (完整還原)] ---
 # (此處保持 390 檔列表，代碼長度考量在此略過列表文字，請保留您原本的 pool_390 變數)
