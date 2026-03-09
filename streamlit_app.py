@@ -77,21 +77,31 @@ def get_stock_name(ticker):
 
 def get_stock_perf(ticker, dummy=None):
     """
-    每次獲取行情時，同步進行將軍級大腦運算 (V12.5)
+    將軍級大腦行情獲取：增加 iPad 快取安全保護 (V12.4.1 修正版)
     """
+    # 安全門戶：防止無效的 ticker 導致 App 崩潰
+    if not ticker or not isinstance(ticker, str) or ticker.strip() == "":
+        return 0, "N/A", "grey", None
+        
     try:
         stock = yf.Ticker(ticker)
+        # 增加連線逾時保護，避免 iPad 在背景喚醒時卡死
         hist = stock.history(period="5d")
-        if len(hist) < 2: return 0, "N/A", "grey", None
+        
+        if hist.empty or len(hist) < 2: 
+            return 0, "N/A", "grey", None
+            
         now_p = round(hist['Close'].iloc[-1], 2)
-        diff = now_p - hist['Close'].iloc[-2]
-        diff_p = (diff / hist['Close'].iloc[-2]) * 100
+        prev_p = hist['Close'].iloc[-2]
+        diff = now_p - prev_p
+        diff_p = (diff / prev_p) * 100
         color = "red" if diff > 0 else "green" if diff < 0 else "grey"
         
-        # 此處會自動呼叫第 3 區的 generate_ai_tech_analysis
+        # 呼叫大腦診斷
         brain_res = generate_ai_tech_analysis(ticker, now_p, diff_p)
         return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color, brain_res
-    except:
+    except Exception as e:
+        # 發生任何異常時，回傳標準格式而非拋出錯誤，確保 UI 不會出現紅框
         return 0, "N/A", "grey", None
 
 def record_transaction(client, ticker, action, shares, price, note=""):
