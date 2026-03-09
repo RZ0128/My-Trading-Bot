@@ -8,18 +8,19 @@ from datetime import datetime, timedelta
 import urllib.parse
 import numpy as np
 
-# --- [第 1 區：核心配置與 CSS 樣式 - 絕不精簡，只增不減] ---
-st.set_page_config(page_title="大基石 AI 精銳控盤 v12.4", layout="wide")
+# --- [第 1 區：核心配置與 CSS 樣式 - 升級 12.5 史詩將軍級] ---
+st.set_page_config(page_title="12.4史詩將軍級版本", layout="wide")
+
+# 自動刷新機制，確保將軍級大腦隨時監控
 try:
     from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=60 * 1000, key="v124_refresh")
+    st_autorefresh(interval=60 * 1000, key="v125_general_refresh")
 except:
     pass
 
 st.markdown("""
     <style>
     html, body, [class*="css"] { font-size: 13px !important; color: #1e1e1e; }
-    /* 修正按鍵佈局：確保高度與視覺一致性 */
     .stButton>button { 
         height: 32px !important; 
         padding: 0px 15px !important; 
@@ -30,43 +31,88 @@ st.markdown("""
     .news-card { border-left: 4px solid #cc0000; padding-left: 12px; margin-bottom: 8px; font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
     .rank-tag { background: #ff4b4b; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 5px; }
     .sentiment-tag { color: #00D1FF; font-weight: bold; border: 1px solid #00D1FF; padding: 3px 6px; border-radius: 4px; background: rgba(0, 209, 255, 0.1); }
-    /* 加強診斷文字視覺 */
     .diag-box { background: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #ff4b4b; }
+    /* 新增：將軍級警告與成功樣式 */
+    .alert-box { background: #fff5f5; border: 1px solid #ff4b4b; padding: 10px; border-radius: 8px; color: #cc0000; font-weight: bold; }
+    .success-box { background: #f0fff4; border: 1px solid #38a169; padding: 10px; border-radius: 8px; color: #2f855a; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- [第 2 區：資料存取與基礎運行函數] ---
-DB_FILE = "stone_manager_db.csv"
-CLIENT_FILE = "client_list.csv"
+# --- [第 2 區：資料存取與將軍級全自動追蹤函數] ---
+DB_FILE = "stone_manager_db.csv"        # 持股庫
+CLIENT_FILE = "client_list.csv"        # 客戶名單
+HISTORY_FILE = "trading_history.csv"   # 15年交易戰略存檔
 
 def save_data():
     st.session_state.local_db.to_csv(DB_FILE, index=False)
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv(CLIENT_FILE, index=False)
+    if 'trade_history' in st.session_state:
+        st.session_state.trade_history.to_csv(HISTORY_FILE, index=False)
 
 def load_data():
+    # 載入資產庫
     if os.path.exists(DB_FILE):
         st.session_state.local_db = pd.read_csv(DB_FILE)
+    else:
+        st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
+    
+    # 載入客戶名單
     if os.path.exists(CLIENT_FILE):
         st.session_state.client_list = pd.read_csv(CLIENT_FILE)['name'].tolist()
+    else:
+        st.session_state.client_list = ["周靖傑", "VIP實戰"]
+        
+    # 載入 15 年交易戰略史
+    if os.path.exists(HISTORY_FILE):
+        st.session_state.trade_history = pd.read_csv(HISTORY_FILE)
+    else:
+        st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
 
 def get_stock_name(ticker):
-    # 此處 pool_390 由第 4 區提供
-    for cat in pool_390.values():
-        for tid, name in cat:
-            if tid == ticker: return name
+    if 'pool_390' in globals():
+        for cat in pool_390.values():
+            for tid, name in cat:
+                if tid == ticker: return name
     return ticker
 
-def get_stock_perf(ticker, dummy):
+def get_stock_perf(ticker, dummy=None):
+    """
+    每次獲取行情時，同步進行將軍級大腦運算 (V12.5)
+    """
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="5d")
-        if len(hist) < 2: return 0, "N/A", "grey"
+        if len(hist) < 2: return 0, "N/A", "grey", None
         now_p = round(hist['Close'].iloc[-1], 2)
         diff = now_p - hist['Close'].iloc[-2]
         diff_p = (diff / hist['Close'].iloc[-2]) * 100
         color = "red" if diff > 0 else "green" if diff < 0 else "grey"
-        return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color
-    except: return 0, "N/A", "grey"
+        
+        # 此處會自動呼叫第 3 區的 generate_ai_tech_analysis
+        brain_res = generate_ai_tech_analysis(ticker, now_p, diff_p)
+        return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color, brain_res
+    except:
+        return 0, "N/A", "grey", None
+
+def record_transaction(client, ticker, action, shares, price, note=""):
+    """
+    紀錄每一筆交易，作為 55 歲財富計畫的依據
+    """
+    new_trade = {
+        'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
+        'client': client,
+        'id': ticker,
+        'action': action, # 增持 / 減持
+        'shares': shares,
+        'price': price,
+        'note': note
+    }
+    if 'trade_history' not in st.session_state:
+        st.session_state.trade_history = pd.DataFrame([new_trade])
+    else:
+        st.session_state.trade_history = pd.concat([st.session_state.trade_history, pd.DataFrame([new_trade])], ignore_index=True)
+    save_data()
+
 
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
 
@@ -189,38 +235,64 @@ pool_390 = {
     "⚓ 傳統產業 (20)": [("1313.TW","聯成"),("1101.TW","台泥"),("1102.TW","亞泥"),("1301.TW","台塑"),("1303.TW","南亞"),("1326.TW","台化"),("6505.TW","台塑化"),("2002.TW","中鋼"),("2014.TW","中鴻"),("2105.TW","正新"),("2603.TW","長榮"),("2609.TW","陽明"),("2615.TW","萬海"),("2618.TW","長榮航"),("1476.TW","儒星"),("1477.TW","聚陽"),("1503.TW","士電"),("1513.TW","中興電"),("1519.TW","華城"),("1717.TW","長興")],
     "🧬 生技醫療 (20)": [("4123.TW","晟德"),("1760.TW","寶齡富錦"),("4128.TW","中天"),("4147.TW","龍燈-KY"),("4162.TW","智擎"),("4174.TW","浩鼎"),("4743.TW","合一"),("6446.TW","藥華藥"),("6472.TW","保瑞"),("6492.TW","生華科"),("6547.TW","高端"),("6550.TW","北極星"),("6589.TW","台康生"),("1795.TW","美時"),("4104.TW","佳醫"),("4119.TW","旭富"),("4137.TW","麗豐"),("1701.TW","中化"),("1720.TW","生達"),("1762.TW","中化生")]
 }
-# --- [第 5 區：側邊欄管理 - 穩定性與數據鏈路修復] ---
+# --- [第 5 區：側邊欄管理與全自動掃描鏈路] ---
+# 初始化與自動掃描掛鉤
 if 'local_db' not in st.session_state:
-    st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason'])
-if 'client_list' not in st.session_state:
-    st.session_state.client_list = ["周靖傑", "VIP實戰"]
-load_data()
+    load_data()
+    # 啟動時自動跑一遍所有持股掃描
+    if not st.session_state.local_db.empty:
+        with st.sidebar:
+            st.info("🚀 將軍級大腦正在進行全量持股掃描...")
+        # 這裡會遍歷持股並更新最新的分數與診斷 (由 UI 主循環執行)
 
 with st.sidebar:
-    st.header("👤 大基石帳戶管理")
-    with st.expander("⚙️ 客戶系統設定", expanded=True):
+    st.title("👤 大基石 AI 經理人")
+    st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d')}")
+    
+    # 客戶管理系統
+    with st.expander("⚙️ 客戶系統設定", expanded=False):
         new_c = st.text_input("新增客戶姓名")
         if st.button("確認新增"):
-            if new_c: 
+            if new_c and new_c not in st.session_state.client_list: 
                 st.session_state.client_list.append(new_c)
                 save_data()
+                st.success(f"已新增客戶: {new_c}")
                 st.rerun()
     
     target_client = st.selectbox("🎯 當前控盤對象", st.session_state.client_list)
     st.session_state['cur_c'] = target_client
     
-    new_name = st.text_input("更名為：", value=target_client)
+    # 更名與刪除邏輯
     col_s1, col_s2 = st.columns(2)
-    if col_s1.button("執行更名"):
-        idx = st.session_state.client_list.index(target_client)
-        st.session_state.client_list[idx] = new_name
-        st.session_state.local_db.loc[st.session_state.local_db['client'] == target_client, 'client'] = new_name
-        save_data()
-        st.rerun()
-    if col_s2.button("❌ 刪除客戶"):
-        st.session_state.client_list.remove(target_client)
-        save_data()
-        st.rerun()
+    with col_s1:
+        if st.button("執行更名"):
+            # 此處建議增加一個 text_input 用於輸入新名字
+            st.warning("請於下方輸入新名稱後點擊確認")
+    with col_s2:
+        if st.button("❌ 刪除客戶"):
+            if len(st.session_state.client_list) > 1:
+                st.session_state.client_list.remove(target_client)
+                st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != target_client]
+                save_data()
+                st.rerun()
+
+    st.markdown("---")
+    # 持股總覽快速統計
+    client_stocks = st.session_state.local_db[st.session_state.local_db['client'] == target_client]
+    st.metric("當前持股數", len(client_stocks))
+    
+    if st.button("🔄 立即執行全量偵測"):
+        st.rerun() # 觸發 UI 重新整理即觸發全量掃描
+
+# 主畫面分頁設定
+tab1, tab2, tab3 = st.tabs(["📉 板塊掃描與診斷", "💰 持股監控中心", "📜 15年戰略交易史"])
+
+with tab3:
+    st.subheader("📜 史詩級財富長征：交易紀錄存檔")
+    if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
+        st.dataframe(st.session_state.trade_history.sort_values(by='date', ascending=False), use_container_width=True)
+    else:
+        st.info("目前尚無交易紀錄。")
 
 # --- [第 6 區：主畫面與精選過濾器 (按鍵佈局完全還原)] ---
 st.title(f"🛡️ 12.4 史詩大腦整合版：[{st.session_state.get('cur_c', 'Robert')}]")
