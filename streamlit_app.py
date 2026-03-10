@@ -236,6 +236,7 @@ pool_390 = {
     "🧬 生技醫療 (20)": [("4123.TW","晟德"),("1760.TW","寶齡富錦"),("4128.TW","中天"),("4147.TW","龍燈-KY"),("4162.TW","智擎"),("4174.TW","浩鼎"),("4743.TW","合一"),("6446.TW","藥華藥"),("6472.TW","保瑞"),("6492.TW","生華科"),("6547.TW","高端"),("6550.TW","北極星"),("6589.TW","台康生"),("1795.TW","美時"),("4104.TW","佳醫"),("4119.TW","旭富"),("4137.TW","麗豐"),("1701.TW","中化"),("1720.TW","生達"),("1762.TW","中化生")]
 }
 
+
 # --- [第 5 區：側邊欄管理與分頁控制] ---
 if 'local_db' not in st.session_state:
     load_data()
@@ -273,13 +274,12 @@ with st.sidebar:
     st.metric("當前持股數", len(client_stocks))
 
 # --- [導航切換邏輯整合] ---
-# 使用 st.tabs 並將原本的第 6 區與第 7 區佈局嵌入
 tab_scan, tab_monitor, tab_history = st.tabs(["📉 板塊掃描與診斷", "💰 持股監控中心", "📜 15年戰略交易史"])
 
 # --- [第 6 區：主畫面與板塊掃描] ---
 with tab_scan:
     st.title(f"🛡️ 12.4 史詩大腦整合版: [{st.session_state.get('cur_c', 'Robert')}]")
-    col_l, col_r_placeholder = st.columns([1.6, 1.4]) # 保持比例一致
+    col_l, col_r_placeholder = st.columns([1.6, 1.4]) 
 
     with col_l:
         with st.container(border=True):
@@ -308,7 +308,6 @@ with tab_scan:
                             if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
                                 new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
-                                # 紀錄交易
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
                                 st.success("交易紀錄已同步存檔")
                                 st.rerun()
@@ -345,7 +344,7 @@ with tab_scan:
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
                     st.rerun()
 
-# --- [第 7 區：持股監控中心內容] ---
+# --- [第 7 區：持股監控中心與交易紀錄] ---
 with tab_monitor:
     st.subheader(f"💼 [{st.session_state.get('cur_c', 'Robert')}] 持股監控")
     my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.get('cur_c', 'Robert')]
@@ -381,19 +380,24 @@ with tab_monitor:
     else:
         st.info("目前尚無持有標的。")
 
-# --- [交易紀錄標籤內容] ---
 with tab_history:
     st.subheader("📜 史詩級財富長征：15年戰略交易紀錄")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
-        # 顯示時按時間倒序排列，讓最新的交易在最上方
         st.dataframe(st.session_state.trade_history.sort_values(by='date', ascending=False), use_container_width=True)
+        
+        st.divider()
+        st.markdown("### ☁️ 雲端備份指引")
+        st.info("💡 為了確保紀錄永久保存，請複製上方表格內容，點擊下方按鈕貼入您的 Google Sheet 中。")
+        
+        # 雲端導航按鈕 (已與您的 SHEET_ID 綁定)
+        st.link_button("🔗 開啟您的雲端保險箱 (Google Sheets)", f"https://docs.google.com/spreadsheets/d/1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90/edit")
+        
         if st.button("🗑️ 清空歷史紀錄 (慎用)"):
              st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
              save_data()
              st.rerun()
     else:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
-
         
 
 # --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
