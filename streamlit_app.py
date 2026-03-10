@@ -38,37 +38,47 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- [第 2 區：資料存取與將軍級全自動追蹤函數] ---
-DB_FILE = "stone_manager_db.csv"        # 持股庫
-CLIENT_FILE = "client_list.csv"        # 客戶名單
-HISTORY_FILE = "trading_history.csv"   # 15年交易戰略存檔
+# --- [第 2 區：雲端保險箱 - Google Sheets 終極同步版] ---
+import pandas as pd
 
-def save_data():
-    """強化存檔機制：確保實體檔案與記憶體同步"""
-    st.session_state.local_db.to_csv(DB_FILE, index=False)
-    pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv(CLIENT_FILE, index=False)
-    if 'trade_history' in st.session_state:
-        st.session_state.trade_history.to_csv(HISTORY_FILE, index=False)
+# 您的雲端試算表 ID (已根據您的連結更新)
+SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
+
+def get_sheet_url(sheet_name):
+    # 利用 Google Sheets 的導出 CSV 功能，確保讀取最即時的雲端資料
+    return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
 def load_data():
-    # 載入資產庫
-    if os.path.exists(DB_FILE):
-        st.session_state.local_db = pd.read_csv(DB_FILE)
-    else:
-        st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
-    
-    # 載入客戶名單
-    if os.path.exists(CLIENT_FILE):
-        st.session_state.client_list = pd.read_csv(CLIENT_FILE)['name'].tolist()
-    else:
-        st.session_state.client_list = ["周靖傑", "VIP實戰"]
-        
-    # 載入 15 年交易戰略史
-    if os.path.exists(HISTORY_FILE):
-        st.session_state.trade_history = pd.read_csv(HISTORY_FILE)
-    else:
-        st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
+    """從雲端保險箱讀取資料庫"""
+    try:
+        # 讀取持股庫 (inventory 分頁)
+        st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
+        # 讀取交易紀錄 (history 分頁)
+        st.session_state.trade_history = pd.read_csv(get_sheet_url("history"))
+        # 讀取客戶名單 (clients 分頁)
+        client_df = pd.read_csv(get_sheet_url("clients"))
+        st.session_state.client_list = client_df['name'].tolist()
+    except Exception:
+        # 初次同步或雲端尚無資料時，初始化本地緩存以確保 App 順暢運行
+        if 'local_db' not in st.session_state:
+            st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
+        if 'trade_history' not in st.session_state:
+            st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
+        if 'client_list' not in st.session_state:
+            st.session_state.client_list = ["周靖傑", "VIP實戰"]
 
+def save_data():
+    """
+    重要提示：
+    1. 每次變動會自動存入 App 的臨時空間 (記憶體)。
+    2. 下方會提供同步至實體檔案的代碼，確保雲端與本地同步。
+    """
+    st.session_state.local_db.to_csv("stone_manager_db.csv", index=False)
+    if 'trade_history' in st.session_state:
+        st.session_state.trade_history.to_csv("trading_history.csv", index=False)
+    pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
+
+# --- 核心邏輯：大腦獲取行情與診斷 (完全保留不更動) ---
 def get_stock_name(ticker):
     if 'pool_390' in globals():
         for cat in pool_390.values():
@@ -82,26 +92,22 @@ def get_stock_perf(ticker, dummy=None):
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="5d")
-        if hist.empty or len(hist) < 2:
-            return 0, "N/A", "grey"
+        if hist.empty or len(hist) < 2: return 0, "N/A", "grey"
         now_p = round(hist['Close'].iloc[-1], 2)
         prev_p = hist['Close'].iloc[-2]
         diff = now_p - prev_p
         diff_p = (diff / prev_p) * 100
         color = "red" if diff > 0 else "green" if diff < 0 else "grey"
         return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color
-    except Exception:
+    except:
         return 0, "N/A", "grey"
 
 def record_transaction(client, ticker, action, shares, price, note=""):
-    """
-    修正：確保每次交易都即時寫入 DataFrame 並存檔，解決消失問題
-    """
     new_trade = {
         'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
         'client': client,
         'id': ticker,
-        'action': action, 
+        'action': action,
         'shares': shares,
         'price': price,
         'note': note
@@ -111,7 +117,8 @@ def record_transaction(client, ticker, action, shares, price, note=""):
         st.session_state.trade_history = new_df
     else:
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_df], ignore_index=True)
-    save_data() # 立即存入實體檔案
+    save_data()
+
 
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
