@@ -382,15 +382,33 @@ with tab_monitor:
 
 with tab_history:
     st.subheader("📜 史詩級財富長征：15年戰略交易紀錄")
+    
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
+        # 1. 先把資料轉換成 CSV 格式
+        csv_data = st.session_state.trade_history.sort_values(by='date', ascending=False).to_csv(index=False).encode('utf-8-sig')
+        
+        # 2. 顯示表格 (讓您看數據)
         st.dataframe(st.session_state.trade_history.sort_values(by='date', ascending=False), use_container_width=True)
         
         st.divider()
-        st.markdown("### ☁️ 雲端備份指引")
-        st.info("💡 為了確保紀錄永久保存，請複製上方表格內容，點擊下方按鈕貼入您的 Google Sheet 中。")
+        st.markdown("### ☁️ 雲端備份雙強方案")
         
-        # 雲端導航按鈕 (已與您的 SHEET_ID 綁定)
-        st.link_button("🔗 開啟您的雲端保險箱 (Google Sheets)", f"https://docs.google.com/spreadsheets/d/1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90/edit")
+        # 建立兩欄位，左邊下載檔案，右邊開啟連結
+        col_dl, col_link = st.columns(2)
+        
+        with col_dl:
+            # 這是給 iPad 的必勝招：直接下載成檔案
+            st.download_button(
+                label="📥 下載交易紀錄檔案 (CSV)",
+                data=csv_data,
+                file_name=f"trade_history_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            st.caption("點擊後選擇『儲存到檔案』，再到 Google Sheets 執行『匯入』")
+
+        with col_link:
+            st.link_button("🔗 開啟您的雲端保險箱 (Google Sheets)", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
         
         if st.button("🗑️ 清空歷史紀錄 (慎用)"):
              st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
@@ -398,6 +416,7 @@ with tab_history:
              st.rerun()
     else:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
+
         
 
 # --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
