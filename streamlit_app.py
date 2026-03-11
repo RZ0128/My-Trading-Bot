@@ -9,15 +9,16 @@ import urllib.parse
 import numpy as np
 
 # --- [第 1 區：核心配置與 CSS 樣式 - 升級 12.5 史詩將軍級] ---
-st.set_page_config(page_title="12.4史詩將軍級版本", layout="wide")
+st.set_page_config(page_title="大基石-12.5史詩將軍級", layout="wide")
 
-# 自動刷新機制，確保將軍級大腦隨時監控
+# 自動刷新機制
 try:
     from streamlit_autorefresh import st_autorefresh
     st_autorefresh(interval=60 * 1000, key="v125_general_refresh")
 except:
     pass
 
+# CSS 樣式表 (保留所有佈局與特別優化)
 st.markdown("""
     <style>
     html, body, [class*="css"] { font-size: 13px !important; color: #1e1e1e; }
@@ -32,24 +33,44 @@ st.markdown("""
     .rank-tag { background: #ff4b4b; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 5px; }
     .sentiment-tag { color: #00D1FF; font-weight: bold; border: 1px solid #00D1FF; padding: 3px 6px; border-radius: 4px; background: rgba(0, 209, 255, 0.1); }
     .diag-box { background: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #ff4b4b; }
-    /* 新增：將軍級警告與成功樣式 */
-    .alert-box { background: #fff5f5; border: 1px solid #ff4b4b; padding: 10px; border-radius: 8px; color: #cc0000; font-weight: bold; }
-    .success-box { background: #f0fff4; border: 1px solid #38a169; padding: 10px; border-radius: 8px; color: #2f855a; }
+    .status-bar { padding: 8px 15px; border-radius: 10px; margin-bottom: 15px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
+    .status-on { background-color: #e6fffa; color: #2c7a7b; border: 1px solid #81e6d9; }
+    .status-off { background-color: #fff5f5; color: #c53030; border: 1px solid #feb2b2; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- [第 2 區：雲端保險箱 - Google Sheets 終極同步版] ---
-import pandas as pd
-import yfinance as yf
-from datetime import datetime
-
-# 您的雲端試算表 ID (已確認為最新正確 ID)
+# --- [第 2 區：雲端保險箱核心連線 - 執行狀態監控] ---
 SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
 
 def get_sheet_url(sheet_name):
-    # 利用 Google Sheets 的導出 CSV 功能，確保讀取最即時的雲端資料
     return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
+def check_connection():
+    """檢測與 Google Sheets 的連線狀態"""
+    try:
+        # 嘗試讀取 history 分頁的第一行來測試連線
+        test_df = pd.read_csv(get_sheet_url("history"), nrows=1)
+        return True, "✅ 雲端同步中：已成功連結 StoneManager_DB"
+    except Exception as e:
+        error_msg = str(e)
+        if "404" in error_msg:
+            return False, "❌ 連線失敗：找不到試算表 (請檢查 SHEET_ID)"
+        elif "empty" in error_msg:
+            return True, "⚠️ 連線成功：但 history 分頁目前是空的"
+        else:
+            return False, f"❌ 連線失敗：分頁名稱不正確或權限未開放"
+
+# 顯示頂部標題與連線狀態燈
+st.title("🛡️ 大基石 - AI 戰略經理人")
+
+is_connected, status_text = check_connection()
+if is_connected:
+    st.markdown(f'<div class="status-bar status-on">🌐 {status_text}</div>', unsafe_allow_html=True)
+else:
+    st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
+    st.info("💡 提示：請確保 Google Sheets 已改名為 history/inventory/clients 並已『發布到網路』。")
+
+# --- 接下來銜接您的 load_data() 邏輯與核心大腦 ---
 def load_data():
     """混合記憶模式：確保雲端資料存在，同時保留手動輸入的靈活性"""
     try:
