@@ -51,24 +51,26 @@ def get_sheet_url(sheet_name):
     return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
 def load_data():
-    """從雲端保險箱讀取資料庫，確保資料能『過夜』"""
+    """混合記憶模式：確保雲端資料存在，同時保留手動輸入的靈活性"""
     try:
-        # 1. 讀取持股庫 (從 inventory 分頁)
+        # 1. 讀取雲端資料
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
-        
-        # 2. 讀取交易紀錄 (從 history 分頁)
         st.session_state.trade_history = pd.read_csv(get_sheet_url("history"))
         
-        # 3. 讀取客戶名單 (從 clients 分頁)
+        # 2. 讀取客戶名單並與本地名單合併
         client_df = pd.read_csv(get_sheet_url("clients"))
-        # 這裡做一個保護，如果 csv 讀取後欄位名不同，自動校正
-        if 'name' in client_df.columns:
-            st.session_state.client_list = client_df['name'].tolist()
-        else:
-            st.session_state.client_list = client_df.iloc[:, 0].tolist()
+        cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
+        
+        # 關鍵修正：保留 App 裡已經輸入但還沒傳上雲端的姓名
+        if 'client_list' not in st.session_state:
+            st.session_state.client_list = ["周靖傑", "VIP實戰"]
             
-    except Exception as e:
-        # 如果雲端尚無資料，初始化本地緩存，確保 App 啟動不崩潰
+        # 合併雲端與本地名單（去重）
+        combined = list(set(st.session_state.client_list + cloud_clients))
+        st.session_state.client_list = combined
+            
+    except Exception:
+        # 發生錯誤時的保險機制
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
         if 'trade_history' not in st.session_state:
