@@ -40,8 +40,10 @@ st.markdown("""
 
 # --- [第 2 區：雲端保險箱 - Google Sheets 終極同步版] ---
 import pandas as pd
+import yfinance as yf
+from datetime import datetime
 
-# 您的雲端試算表 ID (已根據您的連結更新)
+# 您的雲端試算表 ID (已確認為最新正確 ID)
 SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
 
 def get_sheet_url(sheet_name):
@@ -49,36 +51,39 @@ def get_sheet_url(sheet_name):
     return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
 def load_data():
-    """從雲端保險箱讀取資料庫"""
+    """從雲端保險箱讀取資料庫，確保資料能『過夜』"""
     try:
-        # 讀取持股庫 (inventory 分頁)
+        # 1. 讀取持股庫 (從 inventory 分頁)
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
-        # 讀取交易紀錄 (history 分頁)
+        
+        # 2. 讀取交易紀錄 (從 history 分頁)
         st.session_state.trade_history = pd.read_csv(get_sheet_url("history"))
-        # 讀取客戶名單 (clients 分頁)
+        
+        # 3. 讀取客戶名單 (從 clients 分頁)
         client_df = pd.read_csv(get_sheet_url("clients"))
-        st.session_state.client_list = client_df['name'].tolist()
-    except Exception:
-        # 初次同步或雲端尚無資料時，初始化本地緩存以確保 App 順暢運行
+        # 這裡做一個保護，如果 csv 讀取後欄位名不同，自動校正
+        if 'name' in client_df.columns:
+            st.session_state.client_list = client_df['name'].tolist()
+        else:
+            st.session_state.client_list = client_df.iloc[:, 0].tolist()
+            
+    except Exception as e:
+        # 如果雲端尚無資料，初始化本地緩存，確保 App 啟動不崩潰
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
         if 'trade_history' not in st.session_state:
             st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
         if 'client_list' not in st.session_state:
-            st.session_state.client_list = ["周靖傑", "VIP實戰"]
+            st.session_state.client_list = ["周靖傑", "VIP實戰", "Robert"]
 
 def save_data():
-    """
-    重要提示：
-    1. 每次變動會自動存入 App 的臨時空間 (記憶體)。
-    2. 下方會提供同步至實體檔案的代碼，確保雲端與本地同步。
-    """
+    """將變動存入本地緩存 (備份用)"""
     st.session_state.local_db.to_csv("stone_manager_db.csv", index=False)
     if 'trade_history' in st.session_state:
         st.session_state.trade_history.to_csv("trading_history.csv", index=False)
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
 
-# --- 核心邏輯：大腦獲取行情與診斷 (完全保留不更動) ---
+# --- 核心邏輯：大腦獲取行情與診斷 (完全保留「大基石」原則，絕不更動) ---
 def get_stock_name(ticker):
     if 'pool_390' in globals():
         for cat in pool_390.values():
@@ -118,6 +123,9 @@ def record_transaction(client, ticker, action, shares, price, note=""):
     else:
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_df], ignore_index=True)
     save_data()
+
+# 在載入區塊最後，執行一次初始化讀取
+load_data()
 
 
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
