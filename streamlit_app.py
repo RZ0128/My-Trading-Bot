@@ -507,9 +507,9 @@ with tab_history:
     else:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
 
-# --- [第 8 區：板塊掃描結果渲染 (含 K線連結)] ---
-# 注意：此處必須完全靠左，不可有額外縮排
+# --- [第 8 區：板塊掃描結果渲染 (含 K線連結) - 校正版] ---
 scored_data = []
+# 確保這部分邏輯只跑一次，不要被包在 loop 或 if 內
 with st.spinner(f"正在掃描 {cat_choice}..."):
     for tid, tname in pool_390[cat_choice]:
         p, d, cc = get_stock_perf(tid, 0)
@@ -518,55 +518,88 @@ with st.spinner(f"正在掃描 {cat_choice}..."):
             res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
             scored_data.append(res)
 
-avg_s = np.mean([x['score'] for x in scored_data]) if scored_data else 0
-st.subheader(f"🚀 {cat_choice} (板塊共振度: {avg_s:.1f})")
-
-top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
-for item in top_picks:
-    clean_id = str(item['tid']).split('.')[0]
-    kline_url = f"https://tw.stock.yahoo.com/quote/{clean_id}.TW/chart"
+if scored_data:
+    avg_s = np.mean([x['score'] for x in scored_data])
+    st.subheader(f"🚀 {cat_choice} (板塊共振度: {avg_s:.1f})")
     
-    # 確保連結出現在摺疊選單的第一行
-    with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
-        st.markdown(f"📈 **[點我開啟 {item['tname']} 即時K線圖]({kline_url})**")
-        st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
-        st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{item['sent']}</span>", unsafe_allow_html=True)
-        st.markdown("---")
+    top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
+    for item in top_picks:
+        clean_id = str(item['tid']).split('.')[0]
+        # 修正連結邏輯
+        kline_url = f"https://tw.stock.yahoo.com/quote/{clean_id}.TW/chart"
         
-        # 保持原有快速佈局按鈕，不更動佈局
-        k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
-        quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
-        quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
-        if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
-            new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
-            st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
-            record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
-            st.rerun()
+        with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
+            # 1. 頂部連結 (加粗顯眼)
+            st.markdown(f"📈 **[點我開啟 {item['tname']} 即時K線圖]({kline_url})**")
+            
+            # 2. 診斷與籌碼
+            st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
+            st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{item['sent']}</span>", unsafe_allow_html=True)
+            st.markdown("---")
+            
+            # 3. 按鈕佈局 (加入 unique key 避免重複報錯)
+            k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
+            quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}_v2")
+            quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}_v2")
+            if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}_v2", use_container_width=True):
+                new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
+                st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
+                record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
+                st.rerun()
 
 
+# --- 9. 全球情報 (全面喚醒版) ---
+st.divider()
+st.header("🌎 全球 24H 戰略情報中樞")
 
-# --- 9. 全球情報 (時效校準強化版) ---
 def fetch_massive_intel(query_list):
     ssl._create_default_https_context = ssl._create_unverified_context
     all_entries = []
+    backup_entries = [] # 兜底備份
     now = datetime.now()
     
     for q in query_list:
-        # 強制指定 hl=zh-TW (繁體中文)
         u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
         try:
             feed = feedparser.parse(u)
             for entry in feed.entries:
-                # 取得發布時間，若解析失敗則給予當前時間避免丟失
+                backup_entries.append(entry)
                 try:
                     p_time = datetime(*entry.published_parsed[:6])
-                    # 放寬至 72 小時並處理時區緩衝
-                    if (now - p_time).total_seconds() < 259200: # 72 hours
+                    # 放寬至 120 小時 (確保新聞量充足)
+                    if (now - p_time).total_seconds() < 432000: 
                         all_entries.append(entry)
                 except:
-                    all_entries.append(entry) # 無法解析時間的視為最新，避免漏新聞
+                    all_entries.append(entry)
         except:
             continue
             
-    unique_news = {n.link: n for n in all_entries}.values()
-    return sorted(list(unique_news), key=lambda x: x.published if hasattr(x, 'published') else '', reverse=True)[:18]
+    # 如果過濾後沒新聞，就用備份的所有新聞
+    display_list = all_entries if all_entries else backup_entries
+    unique_news = {n.link: n for n in display_list}.values()
+    return sorted(list(unique_news), key=lambda x: getattr(x, 'published', ''), reverse=True)[:15]
+
+intel_map = {
+    "🇺🇸 美國戰略": ["川普 馬斯克", "輝達 聯準會", "美股 走勢"],
+    "🇪🇺 歐洲動態": ["歐洲經濟", "烏克蘭 局勢", "歐盟 政策"],
+    "🇮🇱 中東衝突": ["中東戰爭", "紅海 航運", "石油"],
+    "🇯🇵 亞洲科技": ["台積電 半導體", "日本 股市", "科技 趨勢"],
+    "🇨🇳 中國觀點": ["中國 經濟", "人民幣 政策"]
+}
+
+tabs = st.tabs(list(intel_map.keys()))
+for tab, (region, q_list) in zip(tabs, intel_map.items()):
+    with tab:
+        items = fetch_massive_intel(q_list)
+        if items:
+            for n in items:
+                st.markdown(f"""
+                    <div class='news-card'>
+                        🕒 {getattr(n, 'published', '即時')[5:16]} | 
+                        <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-weight:500;'>
+                            {n.title}
+                        </a>
+                    </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info(f"正在連線全球數據庫，請稍候...")
