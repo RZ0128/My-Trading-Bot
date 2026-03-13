@@ -250,10 +250,12 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             "score": total_score, 
             "target": round(target, 1), 
             "stop": round(ma20*0.96, 1), 
-            "window": window
+            "window": window,
+            "raw_id": ticker # 新增此項以確保第8區連結生成
         }
     except Exception as e:
         return None
+
 
 # --- [第 4 區：390 檔名單 (完整還原)] ---
 # (此處保持 390 檔列表，代碼長度考量在此略過列表文字，請保留您原本的 pool_390 變數)
@@ -505,7 +507,6 @@ with tab_history:
     else:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
 
-
         # --- [第 8 區：板塊掃描結果渲染 (含 K線連結)] ---
         scored_data = []
         with st.spinner(f"正在掃描 {cat_choice}..."):
@@ -521,13 +522,13 @@ with tab_history:
         
         top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
         for item in top_picks:
-            # 生成 Yahoo 奇摩股市 K 線圖連結
+            # 修正：生成 K 線圖連結的邏輯
             clean_id = str(item['tid']).split('.')[0]
             kline_url = f"https://tw.stock.yahoo.com/quote/{clean_id}.TW/chart"
             
             with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
-                # 新增：K線圖跳轉連結
-                st.markdown(f"🔗 [點我查看 {item['tname']} 即時 K 線圖]({kline_url})")
+                # 修正：確保連結出現在 Expander 內部第一行
+                st.markdown(f"📈 **[點我開啟 {item['tname']} ({clean_id}) 即時K線圖]({kline_url})**")
                 
                 st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
                 st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{item['sent']}</span>", unsafe_allow_html=True)
@@ -544,31 +545,34 @@ with tab_history:
                     st.rerun()
 
 
-# --- [第 9 區：全球 24H 戰略情報中樞] (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
+
+# --- 9. 全球情報 (48小時時效強化版) ---
 st.divider()
 st.header("🌎 全球 24H 戰略情報中樞")
 
 def fetch_massive_intel(query_list):
-    # 確保連線安全繞過，這是在 8.5 版本中表現最穩定的方式
     ssl._create_default_https_context = ssl._create_unverified_context
     all_entries = []
     
+    # 獲取當前時間以進行過濾
+    now = datetime.now()
+    
     for q in query_list:
-        # 強制指定 hl=zh-TW (繁體中文) 與 gl=TW (台灣區域)，確保直觀觀看
         u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
         try:
             feed = feedparser.parse(u)
-            all_entries.extend(feed.entries)
+            for entry in feed.entries:
+                # 修正：解析新聞時間並過濾 48 小時內的舊聞
+                published_time = datetime(*entry.published_parsed[:6])
+                if now - published_time < timedelta(hours=48):
+                    all_entries.append(entry)
         except:
             continue
             
-    # 去重處理：避免不同關鍵字抓到重複新聞
     unique_news = {n.link: n for n in all_entries}.values()
-    
-    # 排序並取前 18 則 (維持 8.5 版的高密度)
     return sorted(list(unique_news), key=lambda x: x.published, reverse=True)[:18]
 
-# --- 精準戰略關鍵字地圖 (全繁體中文優化) ---
+# --- 精準戰略關鍵字地圖 ---
 intel_map = {
     "🇺🇸 美國戰略": ["川普+馬斯克+華爾街", "輝達+聯準會+降息"],
     "🇪🇺 歐洲動態": ["歐洲+經濟+烏克蘭局勢", "歐元區+歐洲央行+能源"],
@@ -583,10 +587,9 @@ for tab, (region, q_list) in zip(tabs, intel_map.items()):
     with tab:
         items = fetch_massive_intel(q_list)
         if not items:
-            st.warning(f"目前 {region} 暫無最新中文情報，系統持續監控中...")
+            st.warning(f"目前 {region} 48小時內暫無最新情報，系統持續監控中...")
         else:
             for n in items:
-                # 樣式採用 8.5 版本的 news-card 結構
                 st.markdown(f"""
                     <div class='news-card'>
                         🕒 {n.published[5:16]} | 
