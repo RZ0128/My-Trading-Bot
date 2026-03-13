@@ -344,9 +344,9 @@ with st.sidebar:
 # --- [導航切換邏輯整合] ---
 tab_scan, tab_monitor, tab_history = st.tabs(["📉 板塊掃描與診斷", "💰 持股監控中心", "📜 15年戰略交易史"])
 
-# --- [第 6 區：主畫面與板塊掃描] ---
+# --- [第 6 區：主畫面與板塊導航] ---
 with tab_scan:
-    st.title(f"🛡️ 12.4 史詩大腦整合版: [{st.session_state.get('cur_c', 'Robert')}]")
+    st.title(f"🛡️ 大基石 12.5 戰略版: [{st.session_state.get('cur_c', 'Robert')}]")
     col_l, col_r_placeholder = st.columns([1.6, 1.4]) 
 
     with col_l:
@@ -362,7 +362,13 @@ with tab_scan:
                 if p > 0:
                     res = generate_ai_tech_analysis(tid, p, 0)
                     if res:
+                        # 搜尋結果的一鍵直達 K 線
+                        clean_id = tid.split('.')[0]
+                        direct_url = f"https://www.tradingview.com/chart/?symbol=TWSE%3A{clean_id}"
+                        
                         st.markdown(f"### 🎯 戰略診斷: {get_stock_name(tid)} ({tid})")
+                        st.link_button(f"📈 開啟 {get_stock_name(tid)} 即時全功能 K 線圖", direct_url, use_container_width=True)
+                        
                         sc1, sc2 = st.columns([1.5, 1])
                         with sc1:
                             st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
@@ -373,44 +379,18 @@ with tab_scan:
                             q = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_main")
                             u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_main")
                             
-                            if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
+                            if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", key="main_buy_btn", use_container_width=True):
                                 new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
-                                st.success("交易紀錄已同步存檔")
                                 st.rerun()
                         with sc2:
                             st.metric("即時股價", p, d)
                             st.success(f"🎯 目標預期: {res['target']}")
 
         st.divider()
-        cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True)
-        
-        scored_data = []
-        with st.spinner(f"正在掃描 {cat_choice}..."):
-            for tid, tname in pool_390[cat_choice]:
-                p, d, cc = get_stock_perf(tid, 0)
-                res = generate_ai_tech_analysis(tid, p, 0)
-                if res:
-                    res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
-                    scored_data.append(res)
-        
-        avg_s = np.mean([x['score'] for x in scored_data]) if scored_data else 0
-        st.subheader(f"🚀 {cat_choice} (板塊共振度: {avg_s:.1f})")
-        
-        top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
-        for item in top_picks:
-            with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
-                st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
-                st.markdown("---")
-                k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
-                quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
-                quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
-                if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
-                    new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
-                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
-                    record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
-                    st.rerun()
+        # 這裡僅保留選擇按鈕，渲染交給第 8 區，徹底解決重複標題問題
+        cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True, key="cat_radio")
 
 # --- [第 7 區：持股監控中心與交易紀錄] ---
 with tab_monitor:
