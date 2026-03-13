@@ -493,9 +493,9 @@ with tab_history:
     else:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
 
-# --- [第 8 區：板塊掃描結果渲染 (含 K線連結) - 校正版] ---
+# --- [第 8 區：板塊掃描結果渲染 (一鍵直達版)] ---
+# 確保這部分在第 6 區之後執行，且沒有多餘縮排
 scored_data = []
-# 確保這部分邏輯只跑一次，不要被包在 loop 或 if 內
 with st.spinner(f"正在掃描 {cat_choice}..."):
     for tid, tname in pool_390[cat_choice]:
         p, d, cc = get_stock_perf(tid, 0)
@@ -510,20 +510,20 @@ if scored_data:
     
     top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
     for item in top_picks:
+        # 核心： TradingView 直接加載代碼，無需搜尋
         clean_id = str(item['tid']).split('.')[0]
-        # 修正連結邏輯
-        kline_url = f"https://tw.stock.yahoo.com/quote/{clean_id}.TW/chart"
+        direct_url = f"https://www.tradingview.com/chart/?symbol=TWSE%3A{clean_id}"
         
         with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
-            # 1. 頂部連結 (加粗顯眼)
-            st.markdown(f"📈 **[點我開啟 {item['tname']} 即時K線圖]({kline_url})**")
+            # 1. 一鍵直達 K 線按鈕 (放在最上方)
+            st.link_button(f"📈 一鍵開啟 {item['tname']} ({clean_id}) 全功能圖表", direct_url, use_container_width=True)
             
-            # 2. 診斷與籌碼
+            # 2. 診斷資訊
             st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
             st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{item['sent']}</span>", unsafe_allow_html=True)
             st.markdown("---")
             
-            # 3. 按鈕佈局 (加入 unique key 避免重複報錯)
+            # 3. 快速佈局按鈕 (使用 v2 key 防止衝突)
             k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
             quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}_v2")
             quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}_v2")
