@@ -295,29 +295,31 @@ with st.sidebar:
         
         st.markdown("---")
         
-                # 2. 更名功能 (強化版：徹底刪除舊紀錄並清洗緩存)
+        # 2. 更名功能 (終極版：加入 key 清除機制)
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
         new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
         if st.button("📝 執行更名", use_container_width=True):
             if new_name and new_name != current_idx_name:
-                # A. 列表層級：先轉換為 Set 再轉回 List，強制去重並清洗掉空白
-                old_list = list(st.session_state.client_list)
-                updated_list = [new_name if str(c) == current_idx_name else str(c) for c in old_list]
-                # 關鍵：強制排除舊名字，確保不殘留
-                st.session_state.client_list = sorted(list(set([c for c in updated_list if c != current_idx_name])))
-                
-                # B. 資料庫層級：同步更新所有紀錄的標籤
+                # A. 數據庫同步更名
                 st.session_state.local_db.loc[st.session_state.local_db['client'] == current_idx_name, 'client'] = new_name
                 if 'trade_history' in st.session_state:
                     st.session_state.trade_history.loc[st.session_state.trade_history['client'] == current_idx_name, 'client'] = new_name
                 
-                # C. 指針層級：強制將當前選擇指向新名字，並手動清空相關緩存 key
-                st.session_state['cur_c'] = new_name
+                # B. 強制重建名單 (不使用 append，直接從數據庫抓取唯一的 client 欄位)
+                # 這樣能保證「VIP實戰」絕對不會出現在新名單中
+                st.session_state.client_list = sorted(st.session_state.local_db['client'].unique().tolist())
                 
-                # D. 存檔並觸發強制刷新
+                # C. 重要：重置下拉選單的狀態
+                # 我們把當前選擇設為新名字，並手動清空 selectbox 的內部 key
+                st.session_state['cur_c'] = new_name
+                if 'client_selector' in st.session_state:
+                    del st.session_state['client_selector'] 
+                
                 save_data()
-                st.success(f"更名成功！已將 {current_idx_name} 徹底替換為 {new_name}")
-                st.rerun() # 強制重新渲染整個頁面以刷新選單
+                st.success(f"更名成功！已切換至: {new_name}")
+                
+                # D. 徹底刷新
+                st.rerun()
 
 
     # --- 下拉選單 ---
