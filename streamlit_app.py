@@ -505,33 +505,63 @@ with tab_history:
     else:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
 
-        
 
-# --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
+# --- [第 8 區：板塊掃描結果渲染 (含 K線連結)] ---
+        scored_data = []
+        with st.spinner(f"正在掃描 {cat_choice}..."):
+            for tid, tname in pool_390[cat_choice]:
+                p, d, cc = get_stock_perf(tid, 0)
+                res = generate_ai_tech_analysis(tid, p, 0)
+                if res:
+                    res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
+                    scored_data.append(res)
+        
+        avg_s = np.mean([x['score'] for x in scored_data]) if scored_data else 0
+        st.subheader(f"🚀 {cat_choice} (板塊共振度: {avg_s:.1f})")
+        
+        top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
+        for item in top_picks:
+            # 生成 Yahoo 奇摩股市 K 線圖連結
+            clean_id = str(item['tid']).split('.')[0]
+            kline_url = f"https://tw.stock.yahoo.com/quote/{clean_id}.TW/chart"
+            
+            with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
+                # 新增：K線圖跳轉連結
+                st.markdown(f"🔗 [點我查看 {item['tname']} 即時 K 線圖]({kline_url})")
+                
+                st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
+                st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{item['sent']}</span>", unsafe_allow_html=True)
+                st.markdown("---")
+                
+                # 保留原有快速佈局按鈕佈局，不做任何簡化
+                k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
+                quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
+                quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
+                if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
+                    new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
+                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
+                    record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
+                    st.rerun()
+
+
+# --- [第 9 區：全球 24H 戰略情報中樞] ---
 st.divider()
 st.header("🌎 全球 24H 戰略情報中樞")
 
 def fetch_massive_intel(query_list):
-    # 確保連線安全繞過，這是在 8.5 版本中表現最穩定的方式
+    # 確保連線安全繞過
     ssl._create_default_https_context = ssl._create_unverified_context
     all_entries = []
-    
     for q in query_list:
-        # 強制指定 hl=zh-TW (繁體中文) 與 gl=TW (台灣區域)，確保直觀觀看
         u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
         try:
             feed = feedparser.parse(u)
             all_entries.extend(feed.entries)
         except:
             continue
-            
-    # 去重處理：避免不同關鍵字抓到重複新聞
     unique_news = {n.link: n for n in all_entries}.values()
-    
-    # 排序並取前 18 則 (維持 8.5 版的高密度)
     return sorted(list(unique_news), key=lambda x: x.published, reverse=True)[:18]
 
-# --- 精準戰略關鍵字地圖 (全繁體中文優化) ---
 intel_map = {
     "🇺🇸 美國戰略": ["川普+馬斯克+華爾街", "輝達+聯準會+降息"],
     "🇪🇺 歐洲動態": ["歐洲+經濟+烏克蘭局勢", "歐元區+歐洲央行+能源"],
@@ -541,15 +571,13 @@ intel_map = {
 }
 
 tabs = st.tabs(list(intel_map.keys()))
-
 for tab, (region, q_list) in zip(tabs, intel_map.items()):
     with tab:
         items = fetch_massive_intel(q_list)
         if not items:
-            st.warning(f"目前 {region} 暫無最新中文情報，系統持續監控中...")
+            st.warning(f"目前 {region} 暫無最新中文情報...")
         else:
             for n in items:
-                # 樣式採用 8.5 版本的 news-card 結構
                 st.markdown(f"""
                     <div class='news-card'>
                         🕒 {n.published[5:16]} | 
