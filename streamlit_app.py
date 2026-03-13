@@ -507,94 +507,66 @@ with tab_history:
     else:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
 
-        # --- [第 8 區：板塊掃描結果渲染 (含 K線連結)] ---
-        scored_data = []
-        with st.spinner(f"正在掃描 {cat_choice}..."):
-            for tid, tname in pool_390[cat_choice]:
-                p, d, cc = get_stock_perf(tid, 0)
-                res = generate_ai_tech_analysis(tid, p, 0)
-                if res:
-                    res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
-                    scored_data.append(res)
+# --- [第 8 區：板塊掃描結果渲染 (含 K線連結)] ---
+# 注意：此處必須完全靠左，不可有額外縮排
+scored_data = []
+with st.spinner(f"正在掃描 {cat_choice}..."):
+    for tid, tname in pool_390[cat_choice]:
+        p, d, cc = get_stock_perf(tid, 0)
+        res = generate_ai_tech_analysis(tid, p, 0)
+        if res:
+            res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
+            scored_data.append(res)
+
+avg_s = np.mean([x['score'] for x in scored_data]) if scored_data else 0
+st.subheader(f"🚀 {cat_choice} (板塊共振度: {avg_s:.1f})")
+
+top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
+for item in top_picks:
+    clean_id = str(item['tid']).split('.')[0]
+    kline_url = f"https://tw.stock.yahoo.com/quote/{clean_id}.TW/chart"
+    
+    # 確保連結出現在摺疊選單的第一行
+    with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
+        st.markdown(f"📈 **[點我開啟 {item['tname']} 即時K線圖]({kline_url})**")
+        st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
+        st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{item['sent']}</span>", unsafe_allow_html=True)
+        st.markdown("---")
         
-        avg_s = np.mean([x['score'] for x in scored_data]) if scored_data else 0
-        st.subheader(f"🚀 {cat_choice} (板塊共振度: {avg_s:.1f})")
-        
-        top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
-        for item in top_picks:
-            # 修正：生成 K 線圖連結的邏輯
-            clean_id = str(item['tid']).split('.')[0]
-            kline_url = f"https://tw.stock.yahoo.com/quote/{clean_id}.TW/chart"
-            
-            with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
-                # 修正：確保連結出現在 Expander 內部第一行
-                st.markdown(f"📈 **[點我開啟 {item['tname']} ({clean_id}) 即時K線圖]({kline_url})**")
-                
-                st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
-                st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{item['sent']}</span>", unsafe_allow_html=True)
-                st.markdown("---")
-                
-                # 保留原有快速佈局按鈕佈局，不做任何簡化
-                k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
-                quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
-                quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
-                if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
-                    new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
-                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
-                    record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
-                    st.rerun()
+        # 保持原有快速佈局按鈕，不更動佈局
+        k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
+        quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
+        quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
+        if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
+            new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
+            st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
+            record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
+            st.rerun()
 
 
 
-# --- 9. 全球情報 (48小時時效強化版) ---
-st.divider()
-st.header("🌎 全球 24H 戰略情報中樞")
-
+# --- 9. 全球情報 (時效校準強化版) ---
 def fetch_massive_intel(query_list):
     ssl._create_default_https_context = ssl._create_unverified_context
     all_entries = []
-    
-    # 獲取當前時間以進行過濾
     now = datetime.now()
     
     for q in query_list:
+        # 強制指定 hl=zh-TW (繁體中文)
         u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
         try:
             feed = feedparser.parse(u)
             for entry in feed.entries:
-                # 修正：解析新聞時間並過濾 48 小時內的舊聞
-                published_time = datetime(*entry.published_parsed[:6])
-                if now - published_time < timedelta(hours=48):
-                    all_entries.append(entry)
+                # 取得發布時間，若解析失敗則給予當前時間避免丟失
+                try:
+                    p_time = datetime(*entry.published_parsed[:6])
+                    # 放寬至 72 小時並處理時區緩衝
+                    if (now - p_time).total_seconds() < 259200: # 72 hours
+                        all_entries.append(entry)
+                except:
+                    all_entries.append(entry) # 無法解析時間的視為最新，避免漏新聞
         except:
             continue
             
     unique_news = {n.link: n for n in all_entries}.values()
-    return sorted(list(unique_news), key=lambda x: x.published, reverse=True)[:18]
-
-# --- 精準戰略關鍵字地圖 ---
-intel_map = {
-    "🇺🇸 美國戰略": ["川普+馬斯克+華爾街", "輝達+聯準會+降息"],
-    "🇪🇺 歐洲動態": ["歐洲+經濟+烏克蘭局勢", "歐元區+歐洲央行+能源"],
-    "🇮🇱 中東衝突": ["中東戰爭+以色列+伊朗", "紅海+航運+石油價格"],
-    "🇯🇵 亞洲科技": ["台積電+半導體+CoWoS", "日本+日經+科技股"],
-    "🇨🇳 中國觀點": ["中國+經濟+政策+財經 -新華網 -人民網"]
-}
-
-tabs = st.tabs(list(intel_map.keys()))
-
-for tab, (region, q_list) in zip(tabs, intel_map.items()):
-    with tab:
-        items = fetch_massive_intel(q_list)
-        if not items:
-            st.warning(f"目前 {region} 48小時內暫無最新情報，系統持續監控中...")
-        else:
-            for n in items:
-                st.markdown(f"""
-                    <div class='news-card'>
-                        🕒 {n.published[5:16]} | 
-                        <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e;'>
-                            {n.title}
-                        </a>
-                    </div>
-                """, unsafe_allow_html=True)
+    return sorted(list(unique_news), key=lambda x: x.published if hasattr(x, 'published') else '', reverse=True)[:18]
