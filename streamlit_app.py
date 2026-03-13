@@ -506,7 +506,7 @@ with tab_history:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
 
 
-# --- [第 8 區：板塊掃描結果渲染 (含 K線連結)] ---
+        # --- [第 8 區：板塊掃描結果渲染 (含 K線連結)] ---
         scored_data = []
         with st.spinner(f"正在掃描 {cat_choice}..."):
             for tid, tname in pool_390[cat_choice]:
