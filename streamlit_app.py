@@ -268,7 +268,7 @@ pool_390 = {
 }
 
 
-# --- [第 5 區：側邊欄管理與分頁控制] ---
+# --- [第 5 區：側邊欄管理與分頁控制 - 將軍級名單管理] ---
 if 'local_db' not in st.session_state:
     load_data()
 
@@ -276,65 +276,70 @@ with st.sidebar:
     st.title("👤 大基石 AI 經理人")
     st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d')}")
     
-    with st.expander("⚙️ 客戶系統設定", expanded=False):
+    # 確保 client_list 存在且無重複/無 nan
+    if 'client_list' not in st.session_state:
+        st.session_state.client_list = ["周靖傑", "VIP實戰", "Robert"]
+    
+    # 清洗名單：移除 nan 並確保唯一性
+    st.session_state.client_list = sorted(list(set([str(c) for c in st.session_state.client_list if str(c) != 'nan' and c != ""])))
+
+    with st.expander("⚙️ 客戶系統設定 (增/改/刪)", expanded=False):
         # 1. 新增客戶
         new_c = st.text_input("新增客戶姓名", key="add_client_input")
-        if st.button("確認新增"):
+        if st.button("➕ 確認新增"):
             if new_c and new_c not in st.session_state.client_list: 
                 st.session_state.client_list.append(new_c)
                 save_data()
-                st.success(f"已新增客戶: {new_c}")
+                st.success(f"已新增: {new_c}")
                 st.rerun()
         
         st.markdown("---")
         
         # 2. 更名功能
-        target_old_name = st.session_state.get('cur_c', st.session_state.client_list[0])
-        new_name = st.text_input("輸入新名稱", value=target_old_name, key="rename_input")
-        if st.button("執行更名", use_container_width=True):
-            if new_name and new_name != target_old_name:
-                # 更新列表
-                idx = st.session_state.client_list.index(target_old_name)
-                st.session_state.client_list[idx] = new_name
-                # 更新數據庫標籤
-                st.session_state.local_db.loc[st.session_state.local_db['client'] == target_old_name, 'client'] = new_name
-                if 'trade_history' in st.session_state:
-                    st.session_state.trade_history.loc[st.session_state.trade_history['client'] == target_old_name, 'client'] = new_name
+        current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
+        new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
+        if st.button("📝 執行更名", use_container_width=True):
+            if new_name and new_name != current_idx_name:
+                # A. 更新名單列表
+                st.session_state.client_list = [new_name if c == current_idx_name else c for c in st.session_state.client_list]
                 
+                # B. 批次更新所有資料庫中的標籤
+                st.session_state.local_db.loc[st.session_state.local_db['client'] == current_idx_name, 'client'] = new_name
+                if 'trade_history' in st.session_state:
+                    st.session_state.trade_history.loc[st.session_state.trade_history['client'] == current_idx_name, 'client'] = new_name
+                
+                # C. 切換當前指針
                 st.session_state['cur_c'] = new_name
                 save_data()
-                st.success(f"更名成功！請務必同步至雲端。")
+                st.success(f"更名成功！已將 {current_idx_name} 改為 {new_name}")
                 st.rerun()
 
-    # --- 下拉選單 (排除 nan) ---
-    valid_clients = [c for c in st.session_state.client_list if str(c) != 'nan']
-    target_client = st.selectbox("🎯 當前控盤對象", valid_clients, index=0)
+    # --- 下拉選單 ---
+    target_client = st.selectbox("🎯 當前控盤對象", st.session_state.client_list, key="client_selector")
     st.session_state['cur_c'] = target_client
     
-    # 3. 刪除客戶 (修正：徹底移除 session 中的紀錄)
+    # 3. 刪除客戶 (強化版：清空數據後切換)
     if st.button("❌ 刪除當前客戶", use_container_width=True):
-        if len(valid_clients) > 1:
-            client_to_del = st.session_state['cur_c']
-            # 1. 從列表中移除
-            st.session_state.client_list = [c for c in st.session_state.client_list if c != client_to_del]
-            # 2. 從本地數據庫移除
-            st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != client_to_del]
-            # 3. 重置當前選擇
+        if len(st.session_state.client_list) > 1:
+            to_del = st.session_state['cur_c']
+            # A. 從列表移除
+            st.session_state.client_list.remove(to_del)
+            # B. 從資料庫移除所有相關紀錄
+            st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != to_del]
+            # C. 指針歸零
             st.session_state['cur_c'] = st.session_state.client_list[0]
             
             save_data()
-            st.warning(f"已移除 [{client_to_del}]。請立即下載 CSV 覆蓋雲端以永久刪除。")
+            st.warning(f"已徹底刪除 [{to_del}] 所有紀錄。")
             st.rerun()
         else:
-            st.error("最後一名客戶不可刪除")
+            st.error("系統必須保留至少一名客戶。")
 
     st.markdown("---")
     # 顯示持股數
-    client_stocks = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
-    st.metric("當前持股數", len(client_stocks))
+    c_stocks = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
+    st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
 
-# --- [導航切換邏輯整合] ---
-tab_scan, tab_monitor, tab_history = st.tabs(["📉 板塊掃描與診斷", "💰 持股監控中心", "📜 15年戰略交易史"])
 
 # --- [第 6 區：主畫面與板塊掃描] ---
 with tab_scan:
