@@ -544,24 +544,31 @@ with tab_history:
                     st.rerun()
 
 
-# --- [第 9 區：全球 24H 戰略情報中樞] ---
+# --- [第 9 區：全球 24H 戰略情報中樞] (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
 st.divider()
 st.header("🌎 全球 24H 戰略情報中樞")
 
 def fetch_massive_intel(query_list):
-    # 確保連線安全繞過
+    # 確保連線安全繞過，這是在 8.5 版本中表現最穩定的方式
     ssl._create_default_https_context = ssl._create_unverified_context
     all_entries = []
+    
     for q in query_list:
+        # 強制指定 hl=zh-TW (繁體中文) 與 gl=TW (台灣區域)，確保直觀觀看
         u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
         try:
             feed = feedparser.parse(u)
             all_entries.extend(feed.entries)
         except:
             continue
+            
+    # 去重處理：避免不同關鍵字抓到重複新聞
     unique_news = {n.link: n for n in all_entries}.values()
+    
+    # 排序並取前 18 則 (維持 8.5 版的高密度)
     return sorted(list(unique_news), key=lambda x: x.published, reverse=True)[:18]
 
+# --- 精準戰略關鍵字地圖 (全繁體中文優化) ---
 intel_map = {
     "🇺🇸 美國戰略": ["川普+馬斯克+華爾街", "輝達+聯準會+降息"],
     "🇪🇺 歐洲動態": ["歐洲+經濟+烏克蘭局勢", "歐元區+歐洲央行+能源"],
@@ -571,13 +578,15 @@ intel_map = {
 }
 
 tabs = st.tabs(list(intel_map.keys()))
+
 for tab, (region, q_list) in zip(tabs, intel_map.items()):
     with tab:
         items = fetch_massive_intel(q_list)
         if not items:
-            st.warning(f"目前 {region} 暫無最新中文情報...")
+            st.warning(f"目前 {region} 暫無最新中文情報，系統持續監控中...")
         else:
             for n in items:
+                # 樣式採用 8.5 版本的 news-card 結構
                 st.markdown(f"""
                     <div class='news-card'>
                         🕒 {n.published[5:16]} | 
