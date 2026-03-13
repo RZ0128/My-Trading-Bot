@@ -154,42 +154,39 @@ load_data()
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
-    大腦核心法則：板塊共振/填息基因/短線冷靜 - 法則嚴格守護
+    大腦核心法則：板塊共振/填息基因/短線冷靜 - 法則不變
     """
     try:
         stock = yf.Ticker(ticker)
-        # 擴展數據抓取：2年歷史數據以支撐年線計算
+        # 擴展數據抓取
         hist_full = stock.history(period="2y") 
         if len(hist_full) < 250: return None
         
         hist = hist_full.tail(300)
         c, v, h, l = hist['Close'], hist['Volume'], hist['High'], hist['Low']
         
-        # [模塊 A: 關鍵均線與量能計算]
+        # [模塊 A: 指標計算]
         ma20 = c.rolling(20).mean().iloc[-1]
         ma60 = c.rolling(60).mean().iloc[-1]
         ma240 = c.rolling(240).mean().iloc[-1]
         v_ma20 = v.rolling(20).mean().iloc[-1]
         
-        # [模塊 B: 成本區間與洗盤偵測邏輯]
-        # 判斷股價是否回檔至年線(240MA)或半年線(60MA)
+        # [模塊 B: 成本與洗盤偵測]
         on_support = (abs(price - ma240) / ma240 < 0.05) or (abs(price - ma60) / ma60 < 0.05)
-        # 判斷成交量是否極度萎縮 (洗盤特徵)
         vol_dry_out = (v.iloc[-1] < v_ma20 * 0.7)
-        # 30% 低位階區間計算
         low_30 = hist_full['Close'].quantile(0.3)
         
-        score = 40 # 基礎初始化分數
+        score = 40 # 基礎分
         
-        # --- 核心 1: 籌碼洗盤與 35年價值發現 (大戶行為偵測) ---
+        # --- 核心 1: 籌碼洗盤與 35年價值發現 ---
         is_wash_done = False
         is_value_gem = False
-        sentiment = "散戶進場 (融資增)" # 預設情緒
+        sentiment = "散戶進場 (融資增)"
         
         if on_support and vol_dry_out:
             score += 45
             is_wash_done = True
-            sentiment = "大戶收貨 (融資減)" # 符合洗盤邏輯
+            sentiment = "大戶收貨 (融資減)"
         
         if price <= low_30 * 1.05 and on_support and vol_dry_out:
             score += 20 
@@ -201,15 +198,13 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             score += 10 
 
         # --- 核心 2: 均線糾結與暴衝基因 ---
-        # 計算均線乖離率，小於3%代表準備噴發
         ma_gap = pd.Series([ma20, ma60, ma240]).std() / price
         if ma_gap < 0.03: score += 20
         
-        # 偵測過去一年是否有漲幅大於7%的長紅K
         surges = hist_full.tail(250).apply(lambda x: (x['Close'] - x['Open'])/x['Open'] > 0.07, axis=1)
         if surges.any(): score += 5 
             
-        # --- 核心 3: MACD 動能指標 ---
+        # --- 核心 3: MACD 動能 ---
         exp1, exp2 = c.ewm(span=12).mean(), c.ewm(span=26).mean()
         macd = exp1 - exp2
         if macd.iloc[-1] > macd.iloc[-2]: score += 10
@@ -223,7 +218,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
 
         # --- 核心 4: 長線風險過濾 ---
         bias_240 = (price - ma240) / ma240
-        if bias_240 > 0.4: score -= 30 # 位階過高警告
+        if bias_240 > 0.4: score -= 30 
 
         # --- 進化 3: 除權息填息基因 Dividend Recovery ---
         is_dividend_king = False
@@ -232,7 +227,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
 
         total_score = max(0, min(100, score))
         
-        # --- 最終判定邏輯 ---
+        # --- 最終判定 ---
         rank, msg, target, window = "", "", price * 1.1, ""
         if total_score >= 90:
             rank, msg, target, window = "🔥 SS級:史詩起漲", "將軍級確認：板塊共振強，洗盤極度乾淨。", price * 1.7, "3-6個月"
@@ -243,7 +238,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         else:
             rank, msg, target, window = "🔍 C級:短線觀察", "動能不足或位階稍高，僅適短線。", price * 1.08, "3-7天"
 
-        # 診斷文字合成
+        # 將軍級診斷合成
         if is_overheated: msg = "⚠️ 戰鬥力過載，請勿追高，等待洗盤 " + msg
         if is_dividend_king: msg = "🎁 息利雙收標的 (填息基因強) " + msg
         if is_value_gem: msg = "💎 偵測到長線戰略價值位 " + msg
@@ -255,13 +250,10 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             "score": total_score, 
             "target": round(target, 1), 
             "stop": round(ma20*0.96, 1), 
-            "window": window,
-            "ticker": ticker # 必須傳回代號以連動第 8 區按鈕
+            "window": window
         }
     except Exception as e:
         return None
-
-
 
 # --- [第 4 區：390 檔名單 (完整還原)] ---
 # (此處保持 390 檔列表，代碼長度考量在此略過列表文字，請保留您原本的 pool_390 變數)
@@ -344,9 +336,9 @@ with st.sidebar:
 # --- [導航切換邏輯整合] ---
 tab_scan, tab_monitor, tab_history = st.tabs(["📉 板塊掃描與診斷", "💰 持股監控中心", "📜 15年戰略交易史"])
 
-# --- [第 6 區：主畫面與搜索 (精簡版：移除重複渲染)] ---
+# --- [第 6 區：主畫面與板塊掃描] ---
 with tab_scan:
-    st.title(f"🛡️ 大基石 12.5 戰略版: [{st.session_state.get('cur_c', 'Robert')}]")
+    st.title(f"🛡️ 12.4 史詩大腦整合版: [{st.session_state.get('cur_c', 'Robert')}]")
     col_l, col_r_placeholder = st.columns([1.6, 1.4]) 
 
     with col_l:
@@ -363,15 +355,6 @@ with tab_scan:
                     res = generate_ai_tech_analysis(tid, p, 0)
                     if res:
                         st.markdown(f"### 🎯 戰略診斷: {get_stock_name(tid)} ({tid})")
-                        
-                        # 搜尋結果直接內嵌 TradingView 圖表，解決搜尋後還要再找連結的問題
-                        clean_id = tid.split('.')[0]
-                        chart_html_search = f"""
-                        <iframe src="https://s.tradingview.com/widgetembed/?symbol=TWSE%3A{clean_id}&interval=D&theme=light&style=1&locale=zh_TW" 
-                        width="100%" height="400" frameborder="0" allowtransparency="true" scrolling="no"></iframe>
-                        """
-                        st.components.v1.html(chart_html_search, height=410)
-                        
                         sc1, sc2 = st.columns([1.5, 1])
                         with sc1:
                             st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
@@ -379,21 +362,47 @@ with tab_scan:
                             st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{res['sent']}</span>", unsafe_allow_html=True)
                             
                             u_c1, u_c2 = st.columns(2)
-                            q = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_main_v5")
-                            u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_main_v5")
+                            q = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_main")
+                            u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_main")
                             
-                            if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", key="main_buy_btn_v5", use_container_width=True):
+                            if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
                                 new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
+                                st.success("交易紀錄已同步存檔")
                                 st.rerun()
                         with sc2:
                             st.metric("即時股價", p, d)
                             st.success(f"🎯 目標預期: {res['target']}")
 
         st.divider()
-        # 這裡是唯一的核心按鈕，不再此處顯示列表，由第 8 區統一負責
-        cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True, key="cat_radio_v5")
+        cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True)
+        
+        scored_data = []
+        with st.spinner(f"正在掃描 {cat_choice}..."):
+            for tid, tname in pool_390[cat_choice]:
+                p, d, cc = get_stock_perf(tid, 0)
+                res = generate_ai_tech_analysis(tid, p, 0)
+                if res:
+                    res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
+                    scored_data.append(res)
+        
+        avg_s = np.mean([x['score'] for x in scored_data]) if scored_data else 0
+        st.subheader(f"🚀 {cat_choice} (板塊共振度: {avg_s:.1f})")
+        
+        top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
+        for item in top_picks:
+            with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
+                st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
+                st.markdown("---")
+                k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
+                quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
+                quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
+                if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
+                    new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
+                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
+                    record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
+                    st.rerun()
 
 # --- [第 7 區：持股監控中心與交易紀錄] ---
 with tab_monitor:
@@ -496,50 +505,9 @@ with tab_history:
     else:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
 
-# --- [第 8 區：板塊掃描唯一渲染中心 (內嵌 K 線圖版)] ---
-scored_data = []
-with st.spinner(f"正在掃描 {cat_choice}..."):
-    for tid, tname in pool_390[cat_choice]:
-        p, d, cc = get_stock_perf(tid, 0)
-        res = generate_ai_tech_analysis(tid, p, 0)
-        if res:
-            res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
-            scored_data.append(res)
-
-if scored_data:
-    avg_s = np.mean([x['score'] for x in scored_data])
-    st.subheader(f"🚀 {cat_choice} (板塊共振度: {avg_s:.1f})")
-    
-    top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
-    for item in top_picks:
-        clean_id = str(item['tid']).split('.')[0]
-        
-        with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
-            # 【專業升級】TradingView 官方原生圖表組件，一秒直接載入 K 線
-            chart_html = f"""
-            <div style="height:400px; margin-bottom:10px;">
-                <iframe src="https://s.tradingview.com/widgetembed/?symbol=TWSE%3A{clean_id}&interval=D&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=f1f3f6&studies=[]&theme=light&style=1&timezone=Asia%2FTaipei&locale=zh_TW" 
-                width="100%" height="400" frameborder="0" allowtransparency="true" scrolling="no"></iframe>
-            </div>
-            """
-            st.components.v1.html(chart_html, height=410)
-            
-            st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
-            st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{item['sent']}</span>", unsafe_allow_html=True)
-            st.markdown("---")
-            
-            k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
-            quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}_v4")
-            quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}_v4")
-            if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}_v4", use_container_width=True):
-                new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
-                st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
-                record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
-                st.rerun()
 
 
-
-# --- 9. 全球情報 (全面喚醒版) ---
+# --- 8. 全球情報 (全面喚醒版) ---
 st.divider()
 st.header("🌎 全球 24H 戰略情報中樞")
 
