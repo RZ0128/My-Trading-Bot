@@ -295,24 +295,30 @@ with st.sidebar:
         
         st.markdown("---")
         
-        # 2. 更名功能
+                # 2. 更名功能 (強化版：徹底刪除舊紀錄並清洗緩存)
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
         new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
         if st.button("📝 執行更名", use_container_width=True):
             if new_name and new_name != current_idx_name:
-                # A. 更新名單列表
-                st.session_state.client_list = [new_name if c == current_idx_name else c for c in st.session_state.client_list]
+                # A. 列表層級：先轉換為 Set 再轉回 List，強制去重並清洗掉空白
+                old_list = list(st.session_state.client_list)
+                updated_list = [new_name if str(c) == current_idx_name else str(c) for c in old_list]
+                # 關鍵：強制排除舊名字，確保不殘留
+                st.session_state.client_list = sorted(list(set([c for c in updated_list if c != current_idx_name])))
                 
-                # B. 批次更新所有資料庫中的標籤
+                # B. 資料庫層級：同步更新所有紀錄的標籤
                 st.session_state.local_db.loc[st.session_state.local_db['client'] == current_idx_name, 'client'] = new_name
                 if 'trade_history' in st.session_state:
                     st.session_state.trade_history.loc[st.session_state.trade_history['client'] == current_idx_name, 'client'] = new_name
                 
-                # C. 切換當前指針
+                # C. 指針層級：強制將當前選擇指向新名字，並手動清空相關緩存 key
                 st.session_state['cur_c'] = new_name
+                
+                # D. 存檔並觸發強制刷新
                 save_data()
-                st.success(f"更名成功！已將 {current_idx_name} 改為 {new_name}")
-                st.rerun()
+                st.success(f"更名成功！已將 {current_idx_name} 徹底替換為 {new_name}")
+                st.rerun() # 強制重新渲染整個頁面以刷新選單
+
 
     # --- 下拉選單 ---
     target_client = st.selectbox("🎯 當前控盤對象", st.session_state.client_list, key="client_selector")
