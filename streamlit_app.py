@@ -70,24 +70,29 @@ else:
     st.info("💡 提示：請確保 Google Sheets 已改名為 history/inventory/clients 並已『發布到網路』。")
 
 def load_data():
-    """混合記憶模式：確保雲端資料存在，同時保留手動輸入的靈活性"""
+    """混合記憶模式：確保雲端資料存在，同時徹底過濾幽靈名單"""
+    # 定義絕對黑名單
+    BLACKLIST = ["VIP實戰", "周靖傑", "nan", "None", "Unnamed: 0", None]
+    
     try:
         # 1. 讀取雲端資料
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
         st.session_state.trade_history = pd.read_csv(get_sheet_url("history"))
         
-        # 2. 讀取客戶名單
+        # 2. 讀取客戶名單並執行過濾
         client_df = pd.read_csv(get_sheet_url("clients"))
-        cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
+        cloud_clients = []
+        if 'name' in client_df.columns:
+            cloud_clients = [str(n).strip() for n in client_df['name'].dropna() 
+                             if str(n).strip() not in BLACKLIST and len(str(n).strip()) > 0]
         
-        # [核心修正]：不再硬編碼 "周靖傑", "VIP實戰"，改以 Robert 為基石，其餘由資料庫驅動
+        # 3. 初始化並合併 (以 Robert 為基石)
         if 'client_list' not in st.session_state:
             st.session_state.client_list = ["Robert"]
             
-        # 合併雲端與本地名單（去重並過濾無效值）
-        ghosts = ["nan", "None", None]
         combined = list(set(st.session_state.client_list + cloud_clients))
-        st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
+        # 最終過濾，去除所有 nan 或黑名單名稱
+        st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in BLACKLIST and str(c) != "nan"])
             
     except Exception:
         if 'local_db' not in st.session_state:
@@ -270,9 +275,9 @@ pool_390 = {
 if 'local_db' not in st.session_state:
     load_data()
 
-# 確保幽靈名單不會在切換時復活
-target_ghosts = ["VIP實戰", "周靖傑", "nan", None]
-st.session_state.client_list = [c for c in st.session_state.client_list if c not in target_ghosts]
+# [核心修正]：確保幽靈名單不會在切換時復活 (不可減少原有邏輯)
+target_ghosts = ["VIP實戰", "周靖傑", "nan", "None", None, "Unnamed: 0"]
+st.session_state.client_list = [c for c in st.session_state.client_list if c not in target_ghosts and str(c).strip() != ""]
 
 with st.sidebar:
     st.title("👤 大基石 AI 經理人")
@@ -282,7 +287,7 @@ with st.sidebar:
         # 1. 新增客戶
         new_c = st.text_input("新增客戶姓名", key="add_client_input")
         if st.button("➕ 確認新增"):
-            if new_c and new_c not in st.session_state.client_list: 
+            if new_c and new_c not in st.session_state.client_list and new_c not in target_ghosts: 
                 st.session_state.client_list.append(new_c)
                 new_row = pd.DataFrame([{'client': new_c, 'id': 'INIT', 'name': '初始紀錄', 'buy_price': 0, 'shares': 0, 'unit': '股', 'entry_reason': '系統新增'}])
                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
@@ -295,16 +300,16 @@ with st.sidebar:
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
         new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
         if st.button("📝 執行更名", use_container_width=True):
-            if new_name and new_name != current_idx_name:
+            if new_name and new_name != current_idx_name and new_name not in target_ghosts:
                 st.session_state.local_db['client'] = st.session_state.local_db['client'].replace(current_idx_name, new_name)
                 # 同步更新名單陣列
                 st.session_state.client_list = [new_name if x == current_idx_name else x for x in st.session_state.client_list]
                 st.session_state['cur_c'] = new_name
                 save_data(); st.rerun()
 
-    # --- 下拉選單 ---
+    # --- 下拉選單 (加入安全檢查) ---
     if st.session_state.get('cur_c') not in st.session_state.client_list:
-        st.session_state['cur_c'] = st.session_state.client_list[0]
+        st.session_state['cur_c'] = "Robert" if "Robert" in st.session_state.client_list else st.session_state.client_list[0]
 
     st.session_state['cur_c'] = st.selectbox(
         "🎯 當前控盤對象", 
@@ -398,8 +403,6 @@ with tab_scan:
                     st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
                     st.rerun()
-
-
 
 
 # --- [第 7 區：持股監控中心與交易紀錄] ---
