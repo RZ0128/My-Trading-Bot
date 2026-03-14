@@ -350,11 +350,15 @@ with st.sidebar:
 
 
 # --- [第 6 區：主畫面與板塊掃描] ---
-# 關鍵修復：定義主畫面的導覽標籤，確保 tab_scan, tab_monitor, tab_history 變數存在
+# 關鍵修復 A：定義標籤，並加入防錯邏輯處理空資料庫更名
 tab_scan, tab_monitor, tab_history = st.tabs(["🔍 戰略掃描", "💼 持股監控", "📜 交易紀錄"])
 
 with tab_scan:
-    st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.get('cur_c', '未指定')}]")
+    # 這裡加入一個小檢查，防止 current_idx_name 在初次載入或清空時失效
+    if 'cur_c' not in st.session_state or not st.session_state.cur_c:
+        st.session_state.cur_c = st.session_state.client_list[0] if st.session_state.client_list else "Robert"
+
+    st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.cur_c}]")
     col_l, col_r_placeholder = st.columns([1.6, 1.4]) 
 
     with col_l:
@@ -364,10 +368,8 @@ with tab_scan:
             if s_input:
                 all_l = []
                 for l in pool_390.values(): all_l.extend(l)
-                # 搜尋邏輯：優先匹配 390 名單
                 match = [tid for tid, name in all_l if s_input in name or s_input in tid]
                 tid = match[0] if match else (s_input.upper() + ".TW" if s_input.isdigit() else s_input.upper())
-                
                 p, d, cc = get_stock_perf(tid, 0)
                 if p > 0:
                     res = generate_ai_tech_analysis(tid, p, 0)
@@ -384,15 +386,7 @@ with tab_scan:
                             u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_main")
                             
                             if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
-                                new_t = pd.DataFrame([{
-                                    'client': st.session_state['cur_c'], 
-                                    'id': tid, 
-                                    'name': get_stock_name(tid), 
-                                    'buy_price': p, 
-                                    'shares': q, 
-                                    'unit': u, 
-                                    'entry_reason': res['msg']
-                                }])
+                                new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
                                 st.success("交易紀錄已同步存檔")
@@ -425,18 +419,11 @@ with tab_scan:
                 quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
                 quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
                 if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
-                    new_t = pd.DataFrame([{
-                        'client': st.session_state['cur_c'], 
-                        'id': item['tid'], 
-                        'name': item['tname'], 
-                        'buy_price': item['price'], 
-                        'shares': quick_q, 
-                        'unit': quick_u, 
-                        'entry_reason': item['msg']
-                    }])
+                    new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
                     st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
                     st.rerun()
+
 
 # --- [第 7 區：持股監控中心與交易紀錄] ---
 with tab_monitor:
