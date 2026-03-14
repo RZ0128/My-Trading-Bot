@@ -48,7 +48,6 @@ def get_sheet_url(sheet_name):
 def check_connection():
     """檢測與 Google Sheets 的連線狀態"""
     try:
-        # 嘗試讀取 history 分頁的第一行來測試連線
         test_df = pd.read_csv(get_sheet_url("history"), nrows=1)
         return True, "✅ 雲端同步中：已成功連結 StoneManager_DB"
     except Exception as e:
@@ -70,7 +69,6 @@ else:
     st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
     st.info("💡 提示：請確保 Google Sheets 已改名為 history/inventory/clients 並已『發布到網路』。")
 
-# --- 接下來銜接您的 load_data() 邏輯與核心大腦 ---
 def load_data():
     """混合記憶模式：確保雲端資料存在，同時保留手動輸入的靈活性"""
     try:
@@ -78,26 +76,26 @@ def load_data():
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
         st.session_state.trade_history = pd.read_csv(get_sheet_url("history"))
         
-        # 2. 讀取客戶名單並與本地名單合併
+        # 2. 讀取客戶名單
         client_df = pd.read_csv(get_sheet_url("clients"))
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
         
-        # 關鍵修正：保留 App 裡已經輸入但還沒傳上雲端的姓名
+        # [核心修正]：不再硬編碼 "周靖傑", "VIP實戰"，改以 Robert 為基石，其餘由資料庫驅動
         if 'client_list' not in st.session_state:
-            st.session_state.client_list = ["周靖傑", "VIP實戰"]
+            st.session_state.client_list = ["Robert"]
             
-        # 合併雲端與本地名單（去重）
+        # 合併雲端與本地名單（去重並過濾無效值）
+        ghosts = ["nan", "None", None]
         combined = list(set(st.session_state.client_list + cloud_clients))
-        st.session_state.client_list = combined
+        st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
             
     except Exception:
-        # 發生錯誤時的保險機制
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
         if 'trade_history' not in st.session_state:
             st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
         if 'client_list' not in st.session_state:
-            st.session_state.client_list = ["周靖傑", "VIP實戰", "Robert"]
+            st.session_state.client_list = ["Robert"]
 
 def save_data():
     """將變動存入本地緩存 (備份用)"""
@@ -106,7 +104,7 @@ def save_data():
         st.session_state.trade_history.to_csv("trading_history.csv", index=False)
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
 
-# --- 核心邏輯：大腦獲取行情與診斷 (完全保留「大基石」原則，絕不更動) ---
+# --- 核心邏輯：大腦獲取行情與診斷 (完全還原，絕不更動) ---
 def get_stock_name(ticker):
     if 'pool_390' in globals():
         for cat in pool_390.values():
@@ -147,8 +145,8 @@ def record_transaction(client, ticker, action, shares, price, note=""):
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_df], ignore_index=True)
     save_data()
 
-# 在載入區塊最後，執行一次初始化讀取
 load_data()
+
 
 
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
