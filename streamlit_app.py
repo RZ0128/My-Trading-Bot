@@ -268,33 +268,31 @@ pool_390 = {
 }
 
 
-# --- [第 5 區：側邊欄管理 - 12.5 絕對同步版] ---
+# --- [第 5 區：側邊欄管理 - 徹底重置與同步穩定版] ---
 
-# 1. 基礎數據加載
 if 'local_db' not in st.session_state:
     load_data()
 
+# 🔥 [清道夫邏輯]：強制抹除舊版本殘留的名單，確保不再死而復生
+target_ghosts = ["VIP實戰", "周靖傑", "nan", "nan", None]
+if not st.session_state.local_db.empty:
+    st.session_state.local_db = st.session_state.local_db[~st.session_state.local_db['client'].isin(target_ghosts)]
+    st.session_state.local_db = st.session_state.local_db.dropna(subset=['client'])
+
+# 初始化名單：只保留 Robert，除非資料庫有「非幽靈」的新客戶
+db_clients = st.session_state.local_db['client'].unique().tolist()
+st.session_state.client_list = sorted(list(set(["Robert"] + [c for c in db_clients if c not in target_ghosts])))
+
 with st.sidebar:
     st.title("👤 大基石 AI 經理人")
+    st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d')}")
     
-    # 💡 核心修正：強制從資料庫抓取唯一名單，徹底消滅新舊並存與 nan
-    def get_synced_clients():
-        if st.session_state.local_db.empty:
-            return ["Robert"]
-        # 抓取所有不為空且不是 nan 的客戶名
-        raw_list = st.session_state.local_db['client'].unique().tolist()
-        clean_list = sorted([str(c) for c in raw_list if str(c) != 'nan' and str(c).strip() != "" and str(c) != 'INIT'])
-        return clean_list if clean_list else ["Robert"]
-
-    # 每次刷新都重新計算名單
-    st.session_state.client_list = get_synced_clients()
-
     with st.expander("⚙️ 客戶系統設定 (增/改/刪)", expanded=False):
-        # 1. 新增客戶 (直接寫入一筆虛擬紀錄，讓選單抓到它)
+        # 1. 新增客戶
         new_c = st.text_input("新增客戶姓名", key="add_client_input")
         if st.button("➕ 確認新增"):
             if new_c and new_c not in st.session_state.client_list: 
-                new_row = pd.DataFrame([{'client': new_c, 'id': 'INIT', 'name': '初始化', 'buy_price': 0, 'shares': 0, 'unit': '股', 'entry_reason': 'System'}])
+                new_row = pd.DataFrame([{'client': new_c, 'id': 'INIT', 'name': '初始紀錄', 'buy_price': 0, 'shares': 0, 'unit': '股', 'entry_reason': '系統新增'}])
                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
                 st.session_state['cur_c'] = new_c
                 save_data()
@@ -302,29 +300,19 @@ with st.sidebar:
         
         st.markdown("---")
         
-        # 2. 更名功能 (強制重寫資料庫，舊名必死)
+        # 2. 更名功能
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
         new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
         if st.button("📝 執行更名", use_container_width=True):
             if new_name and new_name != current_idx_name:
-                # A. 直接在資料庫執行「全域替換」
                 st.session_state.local_db['client'] = st.session_state.local_db['client'].replace(current_idx_name, new_name)
-                if 'trade_history' in st.session_state:
-                    st.session_state.trade_history['client'] = st.session_state.trade_history['client'].replace(current_idx_name, new_name)
-                
-                # B. 同步指針
                 st.session_state['cur_c'] = new_name
-                # C. 清除所有選單緩存
-                for key in list(st.session_state.keys()):
-                    if "client_selector" in key: del st.session_state[key]
-                
                 save_data()
-                st.success(f"更名成功！已切換至: {new_name}")
                 st.rerun()
 
-    # --- 下拉選單 (強制鎖定同步後的名單) ---
+    # --- 下拉選單 ---
     if st.session_state.get('cur_c') not in st.session_state.client_list:
-        st.session_state['cur_c'] = st.session_state.client_list[0]
+        st.session_state['cur_c'] = "Robert"
 
     target_client = st.selectbox(
         "🎯 當前控盤對象", 
@@ -334,31 +322,30 @@ with st.sidebar:
     )
     st.session_state['cur_c'] = target_client
     
-    # 3. 刪除客戶 (徹底從資料庫拔除)
+    # 3. 刪除功能
     if st.button("❌ 刪除當前客戶", use_container_width=True):
-        if len(st.session_state.client_list) > 1 or st.session_state['cur_c'] != "Robert":
+        if st.session_state['cur_c'] != "Robert":
             to_del = st.session_state['cur_c']
             st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != to_del]
-            st.session_state['cur_c'] = "Robert" if "Robert" in st.session_state.client_list else st.session_state.local_db['client'].iloc[0]
-            
-            for key in list(st.session_state.keys()):
-                if "client_selector" in key: del st.session_state[key]
-            
+            st.session_state['cur_c'] = "Robert"
             save_data()
-            st.warning(f"已徹底刪除 [{to_del}]。")
             st.rerun()
+        else:
+            st.error("系統預設客戶 Robert 不可刪除。")
+
+    st.markdown("---")
+    c_stocks = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
+    st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
 
 
-# --- [第 6 區：主畫面與板塊掃描 - 12.5 史詩穩定版] ---
+# --- [第 6 區：主畫面與板塊掃描 - 大基石 12.5 完整佈局版] ---
 tab_scan, tab_monitor, tab_history = st.tabs(["🔍 戰略掃描", "💼 持股監控", "📜 交易紀錄"])
 
 with tab_scan:
-    # 這裡確保標題讀取最新的當前客戶
-    current_user = st.session_state.get('cur_c', 'Robert')
-    st.title(f"🛡️ 12.5 史詩大腦整合版: [{current_user}]")
+    # 標題與客戶指針同步
+    st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.cur_c}]")
     
     col_l, col_r_placeholder = st.columns([1.6, 1.4]) 
-
     with col_l:
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
@@ -385,7 +372,15 @@ with tab_scan:
                             u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_main")
                             
                             if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
-                                new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
+                                new_t = pd.DataFrame([{
+                                    'client': st.session_state['cur_c'], 
+                                    'id': tid, 
+                                    'name': get_stock_name(tid), 
+                                    'buy_price': p, 
+                                    'shares': q, 
+                                    'unit': u, 
+                                    'entry_reason': res['msg']
+                                }])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
                                 st.success("交易紀錄已同步存檔")
@@ -395,33 +390,10 @@ with tab_scan:
                             st.success(f"🎯 目標預期: {res['target']}")
 
         st.divider()
+        # --- 390檔板塊掃描 ---
         cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True)
         
-        scored_data = []
-        with st.spinner(f"正在掃描 {cat_choice}..."):
-            for tid, tname in pool_390[cat_choice]:
-                p, d, cc = get_stock_perf(tid, 0)
-                res = generate_ai_tech_analysis(tid, p, 0)
-                if res:
-                    res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
-                    scored_data.append(res)
-        
-        avg_s = np.mean([x['score'] for x in scored_data]) if scored_data else 0
-        st.subheader(f"🚀 {cat_choice} (板塊共振度: {avg_s:.1f})")
-        
-        top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
-        for item in top_picks:
-            with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
-                st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
-                st.markdown("---")
-                k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
-                quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
-                quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
-                if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
-                    new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
-                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
-                    record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
-                    st.rerun()
+        scored_data =
 
 
 
