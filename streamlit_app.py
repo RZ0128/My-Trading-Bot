@@ -308,10 +308,11 @@ def record_transaction(client, tid, action, shares, price, note):
     }
     if 'trade_history' not in st.session_state:
         st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-    st.session_state.trade_history = pd.concat([st.session_state.trade_history, pd.DataFrame([new_rec])], ignore_index=True)# --- [第六區：主畫面佈局 - 戰略掃描 + 全球情報 + 交易紀錄] ---
-tab_monitor, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
+    st.session_state.trade_history = pd.concat([st.session_state.trade_history, pd.DataFrame([new_rec])], ignore_index=True)
 
+# =================================================================
 # --- [第六區：主畫面佈局 - 戰略掃描 + 全球情報 + 交易紀錄] ---
+# =================================================================
 tab_monitor, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
 
 # --- [第一分頁：戰略監控中心] ---
@@ -352,7 +353,7 @@ with tab_monitor:
                             st.success(f"🎯 目標預期: {res['target']}")
 
         st.divider()
-        cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True)
+        cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True, key="cat_radio_main")
         scored_data = []
         with st.spinner(f"正在掃描 {cat_choice}..."):
             for tid, tname in pool_390[cat_choice]:
@@ -414,7 +415,7 @@ with tab_monitor:
             csv_inv = st.session_state.local_db.to_csv(index=False).encode('utf-8-sig')
             col_inv_dl, col_inv_link = st.columns(2)
             with col_inv_dl:
-                st.download_button("📥 下載持股監控 (CSV)", data=csv_inv, file_name="inventory.csv", use_container_width=True, key="dl_inv_final")
+                st.download_button("📥 下載持股監控 (CSV)", data=csv_inv, file_name="inventory.csv", use_container_width=True, key="dl_inv_final_final")
             with col_inv_link:
                 st.link_button("🔗 開啟雲端 (Sheets)", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
         else:
@@ -427,9 +428,8 @@ with tab_global_news:
     def fetch_massive_intel(query_list):
         ssl._create_default_https_context = ssl._create_unverified_context
         all_entries = []
-        backup_entries = [] # 兜底備份
+        backup_entries = [] 
         now = datetime.now()
-        
         for q in query_list:
             u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
             try:
@@ -442,9 +442,7 @@ with tab_global_news:
                             all_entries.append(entry)
                     except:
                         all_entries.append(entry)
-            except:
-                continue
-                
+            except: continue
         display_list = all_entries if all_entries else backup_entries
         unique_news = {n.link: n for n in display_list}.values()
         return sorted(list(unique_news), key=lambda x: getattr(x, 'published', ''), reverse=True)[:15]
@@ -457,38 +455,29 @@ with tab_global_news:
         "🇨🇳 中國觀點": ["中國 經濟", "人民幣 政策"]
     }
 
-    # 修正：將 tabs 更名為 intel_tabs 以避免衝突
     intel_tabs = st.tabs(list(intel_map.keys()))
     for tab, (region, q_list) in zip(intel_tabs, intel_map.items()):
         with tab:
             items = fetch_massive_intel(q_list)
             if items:
                 for n in items:
-                    st.markdown(f"""
-                        <div class='news-card'>
-                            🕒 {getattr(n, 'published', '即時')[5:16]} | 
-                            <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-weight:500;'>
-                                {n.title}
-                            </a>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"<div class='news-card'>🕒 {getattr(n, 'published', '即時')[5:16]} | <a href='{n.link}' target='_blank'>{n.title}</a></div>", unsafe_allow_html=True)
             else:
-                st.info(f"正在連線全球數據庫，請稍候...")
+                st.info(f"正在連線全球數據庫...")
             
 # --- [第三分頁：交易紀錄] ---
 with tab_history:
     st.subheader("📜 交易紀錄與同步")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
-        display_history = st.session_state.trade_history.sort_values(by='date', ascending=False)
-        st.dataframe(display_history, use_container_width=True)
+        st.dataframe(st.session_state.trade_history.sort_values(by='date', ascending=False), use_container_width=True)
         st.divider()
         col_h1, col_h2 = st.columns(2)
         csv_hist = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
         with col_h1:
-            st.download_button("📥 下載交易紀錄 (CSV)", data=csv_hist, file_name="trade_history.csv", use_container_width=True, key="dl_hist_final")
+            st.download_button("📥 下載交易紀錄 (CSV)", data=csv_hist, file_name="trade_history.csv", use_container_width=True, key="dl_hist_final_final")
         with col_h2:
             st.link_button("🔗 開啟雲端保險箱", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
-        if st.button("🗑️ 清空歷史紀錄 (慎用)", use_container_width=True):
+        if st.button("🗑️ 清空歷史紀錄 (慎用)", use_container_width=True, key="clear_history_btn"):
             st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
             save_data(); st.rerun()
     else:
