@@ -313,14 +313,16 @@ def record_transaction(client, tid, action, shares, price, note):
 
 
 # --- [第六區：主畫面佈局 - 戰略掃描 + 完整新聞 + 交易紀錄] ---
-# 這裡定義了三個標籤頁，後續會直接對應這三個變數
+# 定義三個分頁標籤
 tab_main, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
 
-# --- [第一頁：戰略掃描 + 持股監控] ---
+# --- [第一頁：戰略掃描 + 持股監控 (左右佈局)] ---
 with tab_main:
     st.title(f"🛡️ 12.5 史詩大腦: [{st.session_state.cur_c}]")
     
     col_l, col_r = st.columns([1.6, 1.4]) 
+    
+    # 左側：搜尋與板塊掃描
     with col_l:
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
@@ -382,29 +384,52 @@ with tab_main:
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
                     save_data(); st.rerun()
 
+    # 右側：持股監控 (完整功能恢復，不簡化按鈕)
     with col_r:
-        st.subheader(f"💼 持股監控: {st.session_state.cur_c}")
-        my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.cur_c]
+        st.subheader(f"💼 持股即時監控中心")
+        my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.get('cur_c', 'Robert')]
+        
         if not my_h.empty:
             total_pnl = 0
             for idx, row in my_h.iterrows():
                 cp, cd, cc = get_stock_perf(row['id'], 0)
-                mult = 1000 if row['unit'] == "張" else 1
-                pnl = (cp - row['buy_price']) * row['shares'] * mult
-                total_pnl += pnl
-                with st.container(border=True):
-                    st.markdown(f"**{row['name']} ({row['id']})**")
-                    pnl_color = "red" if pnl >= 0 else "green"
-                    st.markdown(f"現價: {cp} | 損益: <span style='color:{pnl_color}; font-weight:bold;'>{pnl:,.0f}</span>", unsafe_allow_html=True)
-                    if st.button("📉 平倉", key=f"close_{idx}"):
-                        record_transaction(st.session_state.cur_c, row['id'], "手動平倉", row['shares'], cp, "獲利了結")
-                        st.session_state.local_db = st.session_state.local_db.drop(idx)
-                        save_data(); st.rerun()
-            st.metric("總未實現損益", f"NT$ {total_pnl:,.0f}")
+                if cp > 0:
+                    mult = 1000 if row['unit'] == "張" else 1
+                    pnl = (cp - row['buy_price']) * row['shares'] * mult
+                    total_pnl += pnl
+                    with st.container(border=True):
+                        st.markdown(f"#### **{row['name']} ({row['id']})**")
+                        st.write(f"成本: {row['buy_price']} | 現價: {cp} | 持有: **{row['shares']} {row['unit']}**")
+                        pnl_color = "red" if pnl > 0 else "green"
+                        st.markdown(f"未實現損益: <span style='color:{pnl_color}; font-size:18px; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
+                        
+                        # --- 核心關鍵：完整還原減持按鈕佈局 ---
+                        st.markdown("---")
+                        e_c1, e_c2, e_c3 = st.columns([1, 1, 2])
+                        exit_q = e_c1.number_input("減持數量", min_value=1, max_value=int(row['shares']), value=1, key=f"eq_{idx}")
+                        exit_u = e_c2.selectbox("單位", ["張", "股"], key=f"eu_{idx}")
+                        if e_c3.button("📉 部分減持/平倉", key=f"f_{idx}", use_container_width=True):
+                            record_transaction(st.session_state['cur_c'], row['id'], "減持/平倉", exit_q, cp, "手動平倉")
+                            if exit_q >= row['shares']:
+                                st.session_state.local_db = st.session_state.local_db.drop(idx)
+                            else:
+                                st.session_state.local_db.at[idx, 'shares'] -= exit_q
+                            save_data(); st.rerun()
+            
+            st.sidebar.metric("📊 帳戶總未實現損益", f"NT$ {total_pnl:,.0f}")
+            
+            # 雲端同步按鈕
+            st.divider()
+            col_inv_dl, col_inv_link = st.columns(2)
+            csv_inv = st.session_state.local_db.to_csv(index=False).encode('utf-8-sig')
+            with col_inv_dl:
+                st.download_button("📥 下載持股監控檔案 (CSV)", data=csv_inv, file_name=f"inventory.csv", use_container_width=True)
+            with col_inv_link:
+                st.link_button("🔗 開啟雲端 (Google Sheets)", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
         else:
-            st.info("尚無持有標的")
+            st.info("目前尚無持有標的。")
 
-# --- [第二頁：全球情報 (原本第八區新聞，完全不簡化搬移)] ---
+# --- [第二頁：全球情報 (原本第八區新聞)] ---
 with tab_global_news:
     st.header("🌎 全球 24H 戰略情報中樞")
 
@@ -455,21 +480,22 @@ with tab_global_news:
             else:
                 st.info(f"正在連線全球數據庫...")
 
-# --- [第三頁：交易紀錄與雲端同步] ---
+# --- [第三頁：交易紀錄] ---
 with tab_history:
-    st.subheader("📜 歷史戰略交易紀錄")
+    st.subheader("📜 史詩級財富長征：15年戰略交易紀錄")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
-        st.dataframe(st.session_state.trade_history.sort_values(by='date', ascending=False), use_container_width=True)
+        display_history = st.session_state.trade_history.sort_values(by='date', ascending=False)
+        st.dataframe(display_history, use_container_width=True)
         
         st.divider()
-        col_dl, col_link = st.columns(2)
         csv_hist = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
-        with col_dl:
-            st.download_button("📥 下載交易紀錄 (CSV)", data=csv_hist, file_name=f"history.csv", use_container_width=True)
-        with col_link:
-            st.link_button("🔗 開啟雲端 Google Sheets", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
+        col_hist_dl, col_hist_link = st.columns(2)
+        with col_hist_dl:
+            st.download_button("📥 下載交易紀錄檔案 (CSV)", data=csv_hist, file_name=f"trade_history.csv", use_container_width=True)
+        with col_hist_link:
+            st.link_button("🔗 開啟雲端保險箱", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
     else:
-        st.info("尚無交易紀錄。")
+        st.info("目前尚無交易紀錄。")
 
 
 # --- [第 7 區：持股監控中心與交易紀錄] ---
