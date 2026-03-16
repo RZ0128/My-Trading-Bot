@@ -48,107 +48,52 @@ def get_sheet_url(sheet_name):
 def check_connection():
     """檢測與 Google Sheets 的連線狀態"""
     try:
-        # 嘗試讀取 history 分頁的第一行來測試連線
         test_df = pd.read_csv(get_sheet_url("history"), nrows=1)
         return True, "✅ 雲端同步中：已成功連結 StoneManager_DB"
     except Exception as e:
-        error_msg = str(e)
-        if "404" in error_msg:
-            return False, "❌ 連線失敗：找不到試算表 (請檢查 SHEET_ID)"
-        elif "empty" in error_msg:
-            return True, "⚠️ 連線成功：但 history 分頁目前是空的"
-        else:
-            return False, f"❌ 連線失敗：分頁名稱不正確或權限未開放"
+        return False, f"❌ 連線失敗：分頁名稱不正確或權限未開放"
 
-# 顯示頂部標題與連線狀態燈
-st.title("🛡️ 大基石 - AI 戰略經理人")
-
-is_connected, status_text = check_connection()
-if is_connected:
-    st.markdown(f'<div class="status-bar status-on">🌐 {status_text}</div>', unsafe_allow_html=True)
-else:
-    st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
-    st.info("💡 提示：請確保 Google Sheets 已改名為 history/inventory/clients 並已『發布到網路』。")
-
-# --- 接下來銜接您的 load_data() 邏輯與核心大腦 ---
 def load_data():
-    """混合記憶模式：確保雲端資料存在，同時保留手動輸入的靈活性"""
+    """混合記憶模式：硬核過濾幽靈名單，確保名單純淨"""
+    # 定義絕對黑名單
+    BLACKLIST = ["VIP實戰", "周靖傑", "nan", "None", "Unnamed: 0", None]
+    
     try:
-        # 1. 讀取雲端資料
+        # 1. 讀取雲端持股與紀錄
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
         st.session_state.trade_history = pd.read_csv(get_sheet_url("history"))
         
-        # 2. 讀取客戶名單並與本地名單合併
+        # 2. 讀取客戶名單並執行過濾
         client_df = pd.read_csv(get_sheet_url("clients"))
-        cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
+        cloud_clients = []
+        if 'name' in client_df.columns:
+            # 只保留不在黑名單內且長度大於 0 的名稱
+            cloud_clients = [str(n).strip() for n in client_df['name'].dropna() 
+                             if str(n).strip() not in BLACKLIST and len(str(n).strip()) > 0]
         
-        # 關鍵修正：保留 App 裡已經輸入但還沒傳上雲端的姓名
+        # 3. 初始化並合併 (以 Robert 為基石)
         if 'client_list' not in st.session_state:
-            st.session_state.client_list = ["周靖傑", "VIP實戰"]
+            st.session_state.client_list = ["Robert"]
             
-        # 合併雲端與本地名單（去重）
         combined = list(set(st.session_state.client_list + cloud_clients))
-        st.session_state.client_list = combined
+        # 最後一次全面過濾，確保萬無一失
+        st.session_state.client_list = sorted([c for c in combined if c not in BLACKLIST])
             
     except Exception:
-        # 發生錯誤時的保險機制
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
         if 'trade_history' not in st.session_state:
             st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
         if 'client_list' not in st.session_state:
-            st.session_state.client_list = ["周靖傑", "VIP實戰", "Robert"]
+            st.session_state.client_list = ["Robert"]
 
 def save_data():
     """將變動存入本地緩存 (備份用)"""
     st.session_state.local_db.to_csv("stone_manager_db.csv", index=False)
     if 'trade_history' in st.session_state:
         st.session_state.trade_history.to_csv("trading_history.csv", index=False)
+    # 同步名單至本地檔案
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
-
-# --- 核心邏輯：大腦獲取行情與診斷 (完全保留「大基石」原則，絕不更動) ---
-def get_stock_name(ticker):
-    if 'pool_390' in globals():
-        for cat in pool_390.values():
-            for tid, name in cat:
-                if tid == ticker: return name
-    return ticker
-
-def get_stock_perf(ticker, dummy=None):
-    if not ticker or not isinstance(ticker, str) or ticker.strip() == "":
-        return 0, "N/A", "grey"
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="5d")
-        if hist.empty or len(hist) < 2: return 0, "N/A", "grey"
-        now_p = round(hist['Close'].iloc[-1], 2)
-        prev_p = hist['Close'].iloc[-2]
-        diff = now_p - prev_p
-        diff_p = (diff / prev_p) * 100
-        color = "red" if diff > 0 else "green" if diff < 0 else "grey"
-        return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color
-    except:
-        return 0, "N/A", "grey"
-
-def record_transaction(client, ticker, action, shares, price, note=""):
-    new_trade = {
-        'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
-        'client': client,
-        'id': ticker,
-        'action': action,
-        'shares': shares,
-        'price': price,
-        'note': note
-    }
-    new_df = pd.DataFrame([new_trade])
-    if 'trade_history' not in st.session_state or st.session_state.trade_history.empty:
-        st.session_state.trade_history = new_df
-    else:
-        st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_df], ignore_index=True)
-    save_data()
-
-# 在載入區塊最後，執行一次初始化讀取
-load_data()
 
 
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
@@ -268,50 +213,77 @@ pool_390 = {
 }
 
 
-# --- [第 5 區：側邊欄管理與分頁控制] ---
+# --- [第 5 區：側邊欄管理 - 穩定修正版] ---
 if 'local_db' not in st.session_state:
     load_data()
+
+# [核心修正]：確保幽靈名單不會在切換時復活 (不可減少原有邏輯)
+target_ghosts = ["VIP實戰", "周靖傑", "nan", "None", None, "Unnamed: 0"]
+st.session_state.client_list = [c for c in st.session_state.client_list if c not in target_ghosts and str(c).strip() != ""]
 
 with st.sidebar:
     st.title("👤 大基石 AI 經理人")
     st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d')}")
     
-    with st.expander("⚙️ 客戶系統設定", expanded=False):
-        new_c = st.text_input("新增客戶姓名")
-        if st.button("確認新增"):
-            if new_c and new_c not in st.session_state.client_list: 
+    with st.expander("⚙️ 客戶系統設定 (增/改/刪)", expanded=False):
+        # 1. 新增客戶
+        new_c = st.text_input("新增客戶姓名", key="add_client_input")
+        if st.button("➕ 確認新增"):
+            if new_c and new_c not in st.session_state.client_list and new_c not in target_ghosts: 
                 st.session_state.client_list.append(new_c)
-                save_data()
-                st.success(f"已新增客戶: {new_c}")
-                st.rerun()
+                new_row = pd.DataFrame([{'client': new_c, 'id': 'INIT', 'name': '初始紀錄', 'buy_price': 0, 'shares': 0, 'unit': '股', 'entry_reason': '系統新增'}])
+                st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
+                st.session_state['cur_c'] = new_c
+                save_data(); st.rerun()
+        
+        st.markdown("---")
+        
+        # 2. 更名功能 (修正連動)
+        current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
+        new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
+        if st.button("📝 執行更名", use_container_width=True):
+            if new_name and new_name != current_idx_name and new_name not in target_ghosts:
+                st.session_state.local_db['client'] = st.session_state.local_db['client'].replace(current_idx_name, new_name)
+                # 同步更新名單陣列
+                st.session_state.client_list = [new_name if x == current_idx_name else x for x in st.session_state.client_list]
+                st.session_state['cur_c'] = new_name
+                save_data(); st.rerun()
+
+    # --- 下拉選單 (加入安全檢查) ---
+    if st.session_state.get('cur_c') not in st.session_state.client_list:
+        st.session_state['cur_c'] = "Robert" if "Robert" in st.session_state.client_list else st.session_state.client_list[0]
+
+    st.session_state['cur_c'] = st.selectbox(
+        "🎯 當前控盤對象", 
+        st.session_state.client_list, 
+        index=st.session_state.client_list.index(st.session_state['cur_c']),
+        key="client_selector"
+    )
     
-    target_client = st.selectbox("🎯 當前控盤對象", st.session_state.client_list)
-    st.session_state['cur_c'] = target_client
-    
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        if st.button("執行更名"):
-            st.warning("請確認新名稱後操作")
-    with col_s2:
-        if st.button("❌ 刪除客戶"):
-            if len(st.session_state.client_list) > 1:
-                st.session_state.client_list.remove(target_client)
-                st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != target_client]
-                save_data()
-                st.rerun()
+    # 3. 刪除功能
+    if st.button("❌ 刪除當前客戶", use_container_width=True):
+        if st.session_state['cur_c'] != "Robert":
+            to_del = st.session_state['cur_c']
+            st.session_state.client_list.remove(to_del)
+            st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != to_del]
+            st.session_state['cur_c'] = "Robert"
+            save_data(); st.rerun()
+        else:
+            st.error("系統預設客戶 Robert 不可刪除。")
 
     st.markdown("---")
-    client_stocks = st.session_state.local_db[st.session_state.local_db['client'] == target_client]
-    st.metric("當前持股數", len(client_stocks))
+    c_stocks = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
+    st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
 
-# --- [導航切換邏輯整合] ---
-tab_scan, tab_monitor, tab_history = st.tabs(["📉 板塊掃描與診斷", "💰 持股監控中心", "📜 15年戰略交易史"])
 
-# --- [第 6 區：主畫面與板塊掃描] ---
+
+# --- [第 6 區：主畫面與板塊掃描 - 完整佈局版] ---
+tab_scan, tab_monitor, tab_history = st.tabs(["🔍 戰略掃描", "💼 持股監控", "📜 交易紀錄"])
+
 with tab_scan:
-    st.title(f"🛡️ 12.4 史詩大腦整合版: [{st.session_state.get('cur_c', 'Robert')}]")
+    st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.cur_c}]")
+    
     col_l, col_r_placeholder = st.columns([1.6, 1.4]) 
-
     with col_l:
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
@@ -321,6 +293,7 @@ with tab_scan:
                 for l in pool_390.values(): all_l.extend(l)
                 match = [tid for tid, name in all_l if s_input in name or s_input in tid]
                 tid = match[0] if match else (s_input.upper() + ".TW" if s_input.isdigit() else s_input.upper())
+                
                 p, d, cc = get_stock_perf(tid, 0)
                 if p > 0:
                     res = generate_ai_tech_analysis(tid, p, 0)
@@ -340,8 +313,7 @@ with tab_scan:
                                 new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
-                                st.success("交易紀錄已同步存檔")
-                                st.rerun()
+                                st.success("交易紀錄已同步存檔"); st.rerun()
                         with sc2:
                             st.metric("即時股價", p, d)
                             st.success(f"🎯 目標預期: {res['target']}")
@@ -374,6 +346,8 @@ with tab_scan:
                     st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
                     st.rerun()
+
+
 
 # --- [第 7 區：持股監控中心與交易紀錄] ---
 with tab_monitor:
@@ -476,56 +450,61 @@ with tab_history:
     else:
         st.info("目前尚無交易紀錄，請開始進行佈局。")
 
-        
 
-# --- 8. 全球情報 (基於 8.5 強化版：新增中東戰略、全繁體中文優化) ---
+
+# --- 8. 全球情報 (全面喚醒版) ---
 st.divider()
 st.header("🌎 全球 24H 戰略情報中樞")
 
 def fetch_massive_intel(query_list):
-    # 確保連線安全繞過，這是在 8.5 版本中表現最穩定的方式
     ssl._create_default_https_context = ssl._create_unverified_context
     all_entries = []
+    backup_entries = [] # 兜底備份
+    now = datetime.now()
     
     for q in query_list:
-        # 強制指定 hl=zh-TW (繁體中文) 與 gl=TW (台灣區域)，確保直觀觀看
         u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
         try:
             feed = feedparser.parse(u)
-            all_entries.extend(feed.entries)
+            for entry in feed.entries:
+                backup_entries.append(entry)
+                try:
+                    p_time = datetime(*entry.published_parsed[:6])
+                    # 放寬至 120 小時 (確保新聞量充足)
+                    if (now - p_time).total_seconds() < 432000: 
+                        all_entries.append(entry)
+                except:
+                    all_entries.append(entry)
         except:
             continue
             
-    # 去重處理：避免不同關鍵字抓到重複新聞
-    unique_news = {n.link: n for n in all_entries}.values()
-    
-    # 排序並取前 18 則 (維持 8.5 版的高密度)
-    return sorted(list(unique_news), key=lambda x: x.published, reverse=True)[:18]
+    # 如果過濾後沒新聞，就用備份的所有新聞
+    display_list = all_entries if all_entries else backup_entries
+    unique_news = {n.link: n for n in display_list}.values()
+    return sorted(list(unique_news), key=lambda x: getattr(x, 'published', ''), reverse=True)[:15]
 
-# --- 精準戰略關鍵字地圖 (全繁體中文優化) ---
 intel_map = {
-    "🇺🇸 美國戰略": ["川普+馬斯克+華爾街", "輝達+聯準會+降息"],
-    "🇪🇺 歐洲動態": ["歐洲+經濟+烏克蘭局勢", "歐元區+歐洲央行+能源"],
-    "🇮🇱 中東衝突": ["中東戰爭+以色列+伊朗", "紅海+航運+石油價格"],
-    "🇯🇵 亞洲科技": ["台積電+半導體+CoWoS", "日本+日經+科技股"],
-    "🇨🇳 中國觀點": ["中國+經濟+政策+財經 -新華網 -人民網"]
+    "🇺🇸 美國戰略": ["川普 馬斯克", "輝達 聯準會", "美股 走勢"],
+    "🇪🇺 歐洲動態": ["歐洲經濟", "烏克蘭 局勢", "歐盟 政策"],
+    "🇮🇱 中東衝突": ["中東戰爭", "紅海 航運", "石油"],
+    "🇯🇵 亞洲科技": ["台積電 半導體", "日本 股市", "科技 趨勢"],
+    "🇨🇳 中國觀點": ["中國 經濟", "人民幣 政策"]
 }
 
 tabs = st.tabs(list(intel_map.keys()))
-
 for tab, (region, q_list) in zip(tabs, intel_map.items()):
     with tab:
         items = fetch_massive_intel(q_list)
-        if not items:
-            st.warning(f"目前 {region} 暫無最新中文情報，系統持續監控中...")
-        else:
+        if items:
             for n in items:
-                # 樣式採用 8.5 版本的 news-card 結構
                 st.markdown(f"""
                     <div class='news-card'>
-                        🕒 {n.published[5:16]} | 
-                        <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e;'>
+                        🕒 {getattr(n, 'published', '即時')[5:16]} | 
+                        <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-weight:500;'>
                             {n.title}
                         </a>
                     </div>
                 """, unsafe_allow_html=True)
+        else:
+            st.info(f"正在連線全球數據庫，請稍候...")
+
