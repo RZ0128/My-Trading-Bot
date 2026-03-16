@@ -54,9 +54,9 @@ def check_connection():
         return False, f"❌ 連線失敗：分頁名稱不正確或權限未開放"
 
 def load_data():
-    """混合記憶模式：硬核過濾幽靈名單，同時保留所有資料欄位"""
-    # 定義黑名單，防止復活
-    BLACKLIST = ["VIP實戰", "周靖傑", "nan", "None", "Unnamed: 0", ""]
+    """混合記憶模式：硬核過濾幽靈名單，確保名單純淨"""
+    # 定義絕對黑名單
+    BLACKLIST = ["VIP實戰", "周靖傑", "nan", "None", "Unnamed: 0", None]
     
     try:
         # 1. 讀取雲端持股與紀錄
@@ -67,7 +67,7 @@ def load_data():
         client_df = pd.read_csv(get_sheet_url("clients"))
         cloud_clients = []
         if 'name' in client_df.columns:
-            # 只保留有效名稱，濾除 nan 與黑名單
+            # 只保留不在黑名單內且長度大於 0 的名稱
             cloud_clients = [str(n).strip() for n in client_df['name'].dropna() 
                              if str(n).strip() not in BLACKLIST and len(str(n).strip()) > 0]
         
@@ -76,11 +76,10 @@ def load_data():
             st.session_state.client_list = ["Robert"]
             
         combined = list(set(st.session_state.client_list + cloud_clients))
-        # 全面過濾並排序，確保名單純淨
+        # 最後一次全面過濾，確保萬無一失
         st.session_state.client_list = sorted([c for c in combined if c not in BLACKLIST])
             
-    except Exception as e:
-        # 發生錯誤時的保險機制，不減少欄位結構
+    except Exception:
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
         if 'trade_history' not in st.session_state:
@@ -89,8 +88,7 @@ def load_data():
             st.session_state.client_list = ["Robert"]
 
 def save_data():
-    """將變動同步回 Google Sheets 與本地緩存 (維持原有保存邏輯)"""
-    # 這裡保留您原本同步回雲端的 API 呼叫或本地保存代碼
+    """將變動存入本地緩存 (備份用)"""
     st.session_state.local_db.to_csv("stone_manager_db.csv", index=False)
     if 'trade_history' in st.session_state:
         st.session_state.trade_history.to_csv("trading_history.csv", index=False)
