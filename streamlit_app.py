@@ -277,19 +277,18 @@ with st.sidebar:
     c_stocks = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
     st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
 
-
 # --- [大腦運作必需工具函數：補回消失的關鍵邏輯] ---
 def get_stock_perf(tid, retry=0):
     try:
         s = yf.Ticker(tid)
         h = s.history(period="2d")
-        if h.empty: return 0, 0, 0
+        if h.empty: return 0, "0.00 (0.00%)", 0
         cp = h['Close'].iloc[-1]
         lp = h['Close'].iloc[-2]
         diff = cp - lp
         pct = (diff / lp) * 100
         return round(cp, 2), f"{diff:+.2f} ({pct:+.2f}%)", pct
-    except: return 0, 0, 0
+    except: return 0, "0.00 (0.00%)", 0
 
 def get_stock_name(tid):
     for cat in pool_390.values():
@@ -311,7 +310,10 @@ def record_transaction(client, tid, action, shares, price, note):
         st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
     st.session_state.trade_history = pd.concat([st.session_state.trade_history, pd.DataFrame([new_rec])], ignore_index=True)
 
+
+
 # --- [第六區：主畫面佈局 - 戰略掃描 + 完整新聞 + 交易紀錄] ---
+# 這裡定義了三個標籤頁，後續會直接對應這三個變數
 tab_main, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
 
 # --- [第一頁：戰略掃描 + 持股監控] ---
@@ -380,32 +382,27 @@ with tab_main:
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
                     save_data(); st.rerun()
 
-    # 下半部：持股監控 (直接顯示)
-    st.markdown("---")
-    st.subheader(f"💼 持股即時監控中心")
-    my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.get('cur_c', 'Robert')]
-    if not my_h.empty:
-        total_pnl = 0
-        m_cols = st.columns(2)
-        for i, (idx, row) in enumerate(my_h.iterrows()):
-            with m_cols[i % 2]:
+    with col_r:
+        st.subheader(f"💼 持股監控: {st.session_state.cur_c}")
+        my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.cur_c]
+        if not my_h.empty:
+            total_pnl = 0
+            for idx, row in my_h.iterrows():
                 cp, cd, cc = get_stock_perf(row['id'], 0)
-                if cp > 0:
-                    mult = 1000 if row['unit'] == "張" else 1
-                    pnl = (cp - row['buy_price']) * row['shares'] * mult
-                    total_pnl += pnl
-                    with st.container(border=True):
-                        st.markdown(f"#### **{row['name']} ({row['id']})**")
-                        st.write(f"成本: {row['buy_price']} | 現價: {cp}")
-                        pnl_color = "red" if pnl > 0 else "green"
-                        st.markdown(f"損益: <span style='color:{pnl_color}; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
-                        if st.button("📉 平倉", key=f"f_{idx}", use_container_width=True):
-                            record_transaction(st.session_state['cur_c'], row['id'], "平倉", row['shares'], cp, "手動平倉")
-                            st.session_state.local_db = st.session_state.local_db.drop(idx)
-                            save_data(); st.rerun()
-        st.sidebar.metric("📊 帳戶總未實現損益", f"NT$ {total_pnl:,.0f}")
-    else:
-        st.info("目前尚無持有標的。")
+                mult = 1000 if row['unit'] == "張" else 1
+                pnl = (cp - row['buy_price']) * row['shares'] * mult
+                total_pnl += pnl
+                with st.container(border=True):
+                    st.markdown(f"**{row['name']} ({row['id']})**")
+                    pnl_color = "red" if pnl >= 0 else "green"
+                    st.markdown(f"現價: {cp} | 損益: <span style='color:{pnl_color}; font-weight:bold;'>{pnl:,.0f}</span>", unsafe_allow_html=True)
+                    if st.button("📉 平倉", key=f"close_{idx}"):
+                        record_transaction(st.session_state.cur_c, row['id'], "手動平倉", row['shares'], cp, "獲利了結")
+                        st.session_state.local_db = st.session_state.local_db.drop(idx)
+                        save_data(); st.rerun()
+            st.metric("總未實現損益", f"NT$ {total_pnl:,.0f}")
+        else:
+            st.info("尚無持有標的")
 
 # --- [第二頁：全球情報 (原本第八區新聞，完全不簡化搬移)] ---
 with tab_global_news:
@@ -458,18 +455,21 @@ with tab_global_news:
             else:
                 st.info(f"正在連線全球數據庫...")
 
-# --- [第三頁：交易紀錄] ---
+# --- [第三頁：交易紀錄與雲端同步] ---
 with tab_history:
-    st.subheader("📜 交易紀錄與雲端同步")
+    st.subheader("📜 歷史戰略交易紀錄")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
         st.dataframe(st.session_state.trade_history.sort_values(by='date', ascending=False), use_container_width=True)
+        
+        st.divider()
+        col_dl, col_link = st.columns(2)
         csv_hist = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
-        col1, col2 = st.columns(2)
-        col1.download_button("📥 下載交易紀錄", data=csv_hist, file_name=f"history.csv", use_container_width=True)
-        col2.link_button("🔗 開啟 Google Sheets", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
+        with col_dl:
+            st.download_button("📥 下載交易紀錄 (CSV)", data=csv_hist, file_name=f"history.csv", use_container_width=True)
+        with col_link:
+            st.link_button("🔗 開啟雲端 Google Sheets", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
     else:
-        st.info("尚無紀錄。")
-
+        st.info("尚無交易紀錄。")
 
 
 # --- [第 7 區：持股監控中心與交易紀錄] ---
