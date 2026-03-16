@@ -310,18 +310,16 @@ def record_transaction(client, tid, action, shares, price, note):
         st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
     st.session_state.trade_history = pd.concat([st.session_state.trade_history, pd.DataFrame([new_rec])], ignore_index=True)
 
-
-
 # --- [第六區：主畫面佈局 - 戰略掃描 + 完整新聞 + 交易紀錄] ---
-# 定義三個分頁標籤
-tab_main, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
+# 修正重點：將第一個變數名稱改為 tab_monitor 以對應後方代碼
+tab_monitor, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
 
-# --- [第一頁：戰略掃描 + 持股監控 (左右佈局)] ---
-with tab_main:
+# --- [第一頁：戰略掃描 + 持股監控] ---
+# 這裡同步將 with tab_main 改為 with tab_monitor
+with tab_monitor:
     st.title(f"🛡️ 12.5 史詩大腦: [{st.session_state.cur_c}]")
     
-    col_l, col_r = st.columns([1.6, 1.4]) 
-    
+    col_l, col_r = st.columns([1.6, 1.4])     
     # 左側：搜尋與板塊掃描
     with col_l:
         with st.container(border=True):
