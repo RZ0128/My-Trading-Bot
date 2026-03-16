@@ -71,6 +71,10 @@ else:
 
 def load_data():
     """混合記憶模式：確保雲端資料存在，同時保留手動輸入的靈活性"""
+    # [新增核心鎖：防止 Rerun 時覆蓋掉剛存入的資料]
+    if 'initialized' in st.session_state and st.session_state.initialized:
+        return
+
     try:
         # 1. 讀取雲端資料
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
@@ -80,14 +84,15 @@ def load_data():
         client_df = pd.read_csv(get_sheet_url("clients"))
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
         
-        # [核心修正]：不再硬編碼 "周靖傑", "VIP實戰"，改以 Robert 為基石，其餘由資料庫驅動
         if 'client_list' not in st.session_state:
             st.session_state.client_list = ["Robert"]
             
-        # 合併雲端與本地名單（去重並過濾無效值）
         ghosts = ["nan", "None", None]
         combined = list(set(st.session_state.client_list + cloud_clients))
         st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
+        
+        # 標記初始化已完成
+        st.session_state.initialized = True
             
     except Exception:
         if 'local_db' not in st.session_state:
@@ -96,6 +101,7 @@ def load_data():
             st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
         if 'client_list' not in st.session_state:
             st.session_state.client_list = ["Robert"]
+        st.session_state.initialized = True
 
 def save_data():
     """將變動存入本地緩存 (備份用)"""
@@ -104,48 +110,6 @@ def save_data():
         st.session_state.trade_history.to_csv("trading_history.csv", index=False)
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
 
-# --- 核心邏輯：大腦獲取行情與診斷 (完全還原，絕不更動) ---
-def get_stock_name(ticker):
-    if 'pool_390' in globals():
-        for cat in pool_390.values():
-            for tid, name in cat:
-                if tid == ticker: return name
-    return ticker
-
-def get_stock_perf(ticker, dummy=None):
-    if not ticker or not isinstance(ticker, str) or ticker.strip() == "":
-        return 0, "N/A", "grey"
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="5d")
-        if hist.empty or len(hist) < 2: return 0, "N/A", "grey"
-        now_p = round(hist['Close'].iloc[-1], 2)
-        prev_p = hist['Close'].iloc[-2]
-        diff = now_p - prev_p
-        diff_p = (diff / prev_p) * 100
-        color = "red" if diff > 0 else "green" if diff < 0 else "grey"
-        return now_p, f"{diff:+.2f} ({diff_p:+.2f}%)", color
-    except:
-        return 0, "N/A", "grey"
-
-def record_transaction(client, ticker, action, shares, price, note=""):
-    new_trade = {
-        'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
-        'client': client,
-        'id': ticker,
-        'action': action,
-        'shares': shares,
-        'price': price,
-        'note': note
-    }
-    new_df = pd.DataFrame([new_trade])
-    if 'trade_history' not in st.session_state or st.session_state.trade_history.empty:
-        st.session_state.trade_history = new_df
-    else:
-        st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_df], ignore_index=True)
-    save_data()
-
-load_data()
 
 
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
@@ -269,7 +233,7 @@ pool_390 = {
 if 'local_db' not in st.session_state:
     load_data()
 
-# [核心修正]：確保幽靈名單不會在切換時復活 (不可減少原有邏輯)
+# 確保幽靈名單不會在切換時復活
 target_ghosts = ["VIP實戰", "周靖傑", "nan", "None", None, "Unnamed: 0"]
 st.session_state.client_list = [c for c in st.session_state.client_list if c not in target_ghosts and str(c).strip() != ""]
 
@@ -290,18 +254,17 @@ with st.sidebar:
         
         st.markdown("---")
         
-        # 2. 更名功能 (修正連動)
+        # 2. 更名功能
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
         new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
         if st.button("📝 執行更名", use_container_width=True):
             if new_name and new_name != current_idx_name and new_name not in target_ghosts:
                 st.session_state.local_db['client'] = st.session_state.local_db['client'].replace(current_idx_name, new_name)
-                # 同步更新名單陣列
                 st.session_state.client_list = [new_name if x == current_idx_name else x for x in st.session_state.client_list]
                 st.session_state['cur_c'] = new_name
                 save_data(); st.rerun()
 
-    # --- 下拉選單 (加入安全檢查) ---
+    # --- 下拉選單 (照舊不改動) ---
     if st.session_state.get('cur_c') not in st.session_state.client_list:
         st.session_state['cur_c'] = "Robert" if "Robert" in st.session_state.client_list else st.session_state.client_list[0]
 
@@ -324,11 +287,17 @@ with st.sidebar:
             st.error("系統預設客戶 Robert 不可刪除。")
 
     st.markdown("---")
-    c_stocks = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
-    st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
+    # [修正計數：排除 INIT 標記，僅計算真實持股數量]
+    c_stocks = st.session_state.local_db[
+        (st.session_state.local_db['client'] == st.session_state['cur_c']) & 
+        (st.session_state.local_db['id'] != 'INIT')
+    ]
+    st.metric(f"{st.session_state['cur_c']} 的持股總數", len(c_stocks))
 
 
-# --- [第 6 區：主畫面與板塊掃描 - 修正快速佈局存檔邏輯] ---
+# --- [第 6 區：主畫面與板塊掃描 - 完整佈局版] ---
+tab_scan, tab_monitor, tab_history = st.tabs(["🔍 戰略掃描", "💰 持股監控", "📜 交易紀錄"])
+
 with tab_scan:
     st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.cur_c}]")
     
@@ -359,12 +328,19 @@ with tab_scan:
                             u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_main")
                             
                             if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
-                                new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
+                                new_t = pd.DataFrame([{
+                                    'client': st.session_state['cur_c'], 
+                                    'id': tid, 
+                                    'name': get_stock_name(tid), 
+                                    'buy_price': p, 
+                                    'shares': q, 
+                                    'unit': u, 
+                                    'entry_reason': res['msg']
+                                }])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
-                                save_data() # 關鍵修正：確保寫入資料庫
-                                st.success("交易紀錄已同步存檔")
-                                st.rerun()
+                                save_data() # 強制寫入本地備份
+                                st.success("交易紀錄已同步存檔"); st.rerun()
                         with sc2:
                             st.metric("即時股價", p, d)
                             st.success(f"🎯 目標預期: {res['target']}")
@@ -393,16 +369,20 @@ with tab_scan:
                 quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
                 quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
                 if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
-                    # 建立新持股資料
-                    new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
-                    # 合併至主資料庫
+                    new_t = pd.DataFrame([{
+                        'client': st.session_state['cur_c'], 
+                        'id': item['tid'], 
+                        'name': item['tname'], 
+                        'buy_price': item['price'], 
+                        'shares': quick_q, 
+                        'unit': quick_u, 
+                        'entry_reason': item['msg']
+                    }])
                     st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
-                    # 同步紀錄至交易歷史
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
-                    # 關鍵修正：執行數據存檔，確保切換分頁後資料還在
-                    save_data() 
-                    st.toast(f"✅ {item['tname']} 已加入 {st.session_state['cur_c']} 的持股清單")
+                    save_data() # 強制執行存檔
                     st.rerun()
+
 
 
 # --- [第 7 區：持股監控中心與交易紀錄] ---
