@@ -331,11 +331,8 @@ with st.sidebar:
     st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
 
 
-# --- [導航切換邏輯整合] ---
-tab_scan, tab_monitor, tab_history = st.tabs(["📉 板塊掃描與診斷", "💰 持股監控中心", "📜 15年戰略交易史"])
-
 # --- [第 6 區：主畫面與板塊掃描 - 完整佈局版] ---
-tab_scan, tab_monitor, tab_history = st.tabs(["🔍 戰略掃描", "💼 持股監控", "📜 交易紀錄"])
+tab_scan, tab_monitor, tab_history = st.tabs(["🔍 戰略掃描", "💰 持股監控", "📜 交易紀錄"])
 
 with tab_scan:
     st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.cur_c}]")
