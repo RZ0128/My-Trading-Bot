@@ -310,7 +310,7 @@ def record_transaction(client, tid, action, shares, price, note):
 # =================================================================
 # --- [第六區：主畫面佈局 - 戰略掃描 + 全球情報 + 交易紀錄] ---
 # =================================================================
-# 修正：刪除重複定義，確保只有這一行 tabs 定義
+# 修正重點：只保留一組 tabs 定義
 tab_monitor, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
 
 # --- [第一分頁：戰略監控中心] ---
@@ -322,7 +322,7 @@ with tab_monitor:
     with col_l:
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
-            s_input = st.text_input("輸入名稱或代號", placeholder="搜尋全台股標的...", key="global_search_final")
+            s_input = st.text_input("輸入名稱或代號", placeholder="搜尋全台股標的...", key="global_search_final_unique")
             if s_input:
                 all_l = []
                 for l in pool_390.values(): all_l.extend(l)
@@ -339,9 +339,9 @@ with tab_monitor:
                             st.info(f"**診斷:** {res['msg']}")
                             st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{res['sent']}</span>", unsafe_allow_html=True)
                             u_c1, u_c2 = st.columns(2)
-                            q = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_final")
-                            u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_final")
-                            if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
+                            q = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_v125_unique")
+                            u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_v125_unique")
+                            if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True, key="confirm_trade_btn"):
                                 new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
@@ -351,7 +351,7 @@ with tab_monitor:
                             st.success(f"🎯 目標預期: {res['target']}")
 
         st.divider()
-        cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True, key="cat_radio_main")
+        cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True, key="main_cat_radio_v125")
         scored_data = []
         with st.spinner(f"正在掃描 {cat_choice}..."):
             for tid, tname in pool_390[cat_choice]:
@@ -369,9 +369,9 @@ with tab_monitor:
             with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
                 st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
                 k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
-                quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
-                quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
-                if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
+                quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_input_{item['tid']}")
+                quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_select_{item['tid']}")
+                if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"btn_quick_{item['tid']}", use_container_width=True):
                     new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
                     st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
@@ -384,7 +384,6 @@ with tab_monitor:
         
         if not my_h.empty:
             total_pnl = 0
-            # 修正：確保在渲染前計算 PNL，並僅渲染一次
             for idx, row in my_h.iterrows():
                 cp, cd, cc = get_stock_perf(row['id'], 0)
                 if cp > 0:
@@ -398,9 +397,10 @@ with tab_monitor:
                         st.markdown(f"未實現損益: <span style='color:{pnl_color}; font-size:18px; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
                         st.markdown("---")
                         e_c1, e_c2, e_c3 = st.columns([1, 1, 2])
-                        exit_q = e_c1.number_input("減持數量", min_value=1, max_value=int(row['shares']), value=1, key=f"eq_{idx}")
-                        exit_u = e_c2.selectbox("單位", ["張", "股"], key=f"eu_{idx}")
-                        if e_c3.button("📉 部分減持/平倉", key=f"f_{idx}", use_container_width=True):
+                        # 修正：加上 index 確保每個輸入框 key 唯一
+                        exit_q = e_c1.number_input("減持數量", min_value=1, max_value=int(row['shares']), value=1, key=f"exit_qty_{row['id']}_{idx}")
+                        exit_u = e_c2.selectbox("單位", ["張", "股"], key=f"exit_unit_{row['id']}_{idx}")
+                        if e_c3.button("📉 部分減持/平倉", key=f"exit_btn_{row['id']}_{idx}", use_container_width=True):
                             record_transaction(st.session_state['cur_c'], row['id'], "減持/平倉", exit_q, cp, "手動平倉")
                             if exit_q >= row['shares']:
                                 st.session_state.local_db = st.session_state.local_db.drop(idx)
@@ -414,7 +414,7 @@ with tab_monitor:
             csv_inv = st.session_state.local_db.to_csv(index=False).encode('utf-8-sig')
             col_inv_dl, col_inv_link = st.columns(2)
             with col_inv_dl:
-                st.download_button("📥 下載持股監控 (CSV)", data=csv_inv, file_name="inventory.csv", use_container_width=True, key="dl_inv_final_final")
+                st.download_button("📥 下載持股監控 (CSV)", data=csv_inv, file_name="inventory.csv", use_container_width=True, key="inv_dl_btn_v125")
             with col_inv_link:
                 st.link_button("🔗 開啟雲端 (Sheets)", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
         else:
@@ -439,8 +439,7 @@ with tab_global_news:
                         p_time = datetime(*entry.published_parsed[:6])
                         if (now - p_time).total_seconds() < 432000: 
                             all_entries.append(entry)
-                    except:
-                        all_entries.append(entry)
+                    except: all_entries.append(entry)
             except: continue
         display_list = all_entries if all_entries else backup_entries
         unique_news = {n.link: n for n in display_list}.values()
@@ -454,8 +453,9 @@ with tab_global_news:
         "🇨🇳 中國觀點": ["中國 經濟", "人民幣 政策"]
     }
 
-    intel_tabs = st.tabs(list(intel_map.keys()))
-    for tab, (region, q_list) in zip(intel_tabs, intel_map.items()):
+    # 修正：改名避免變數重複
+    news_tabs = st.tabs(list(intel_map.keys()))
+    for tab, (region, q_list) in zip(news_tabs, intel_map.items()):
         with tab:
             items = fetch_massive_intel(q_list)
             if items:
@@ -473,10 +473,10 @@ with tab_history:
         col_h1, col_h2 = st.columns(2)
         csv_hist = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
         with col_h1:
-            st.download_button("📥 下載交易紀錄 (CSV)", data=csv_hist, file_name="trade_history.csv", use_container_width=True, key="dl_hist_final_final")
+            st.download_button("📥 下載交易紀錄 (CSV)", data=csv_hist, file_name="trade_history.csv", use_container_width=True, key="hist_dl_btn_v125")
         with col_h2:
             st.link_button("🔗 開啟雲端保險箱", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
-        if st.button("🗑️ 清空歷史紀錄 (慎用)", use_container_width=True, key="clear_history_btn"):
+        if st.button("🗑️ 清空歷史紀錄 (慎用)", use_container_width=True, key="clear_all_history_v125"):
             st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
             save_data(); st.rerun()
     else:
