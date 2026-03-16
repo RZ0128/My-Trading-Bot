@@ -55,32 +55,20 @@ def check_connection():
 
 def load_data():
     """混合記憶模式：硬核過濾幽靈名單，同時保留所有資料欄位"""
-    # 定義黑名單，防止復活
     BLACKLIST = ["VIP實戰", "周靖傑", "nan", "None", "Unnamed: 0", ""]
-    
     try:
-        # 1. 讀取雲端持股與紀錄
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
         st.session_state.trade_history = pd.read_csv(get_sheet_url("history"))
-        
-        # 2. 讀取客戶名單並執行過濾
         client_df = pd.read_csv(get_sheet_url("clients"))
         cloud_clients = []
         if 'name' in client_df.columns:
-            # 只保留有效名稱，濾除 nan 與黑名單
             cloud_clients = [str(n).strip() for n in client_df['name'].dropna() 
                              if str(n).strip() not in BLACKLIST and len(str(n).strip()) > 0]
-        
-        # 3. 初始化並合併 (以 Robert 為基石)
         if 'client_list' not in st.session_state:
             st.session_state.client_list = ["Robert"]
-            
         combined = list(set(st.session_state.client_list + cloud_clients))
-        # 全面過濾並排序，確保名單純淨
         st.session_state.client_list = sorted([c for c in combined if c not in BLACKLIST])
-            
     except Exception as e:
-        # 發生錯誤時的保險機制，不減少欄位結構
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
         if 'trade_history' not in st.session_state:
@@ -90,91 +78,55 @@ def load_data():
 
 def save_data():
     """將變動同步回 Google Sheets 與本地緩存 (維持原有保存邏輯)"""
-    # 這裡保留您原本同步回雲端的 API 呼叫或本地保存代碼
     st.session_state.local_db.to_csv("stone_manager_db.csv", index=False)
     if 'trade_history' in st.session_state:
         st.session_state.trade_history.to_csv("trading_history.csv", index=False)
-    # 同步名單至本地檔案
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
-
 
 # --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
-    """
-    大腦核心法則：板塊共振/填息基因/短線冷靜 - 法則不變
-    """
     try:
         stock = yf.Ticker(ticker)
-        # 擴展數據抓取
         hist_full = stock.history(period="2y") 
         if len(hist_full) < 250: return None
-        
         hist = hist_full.tail(300)
         c, v, h, l = hist['Close'], hist['Volume'], hist['High'], hist['Low']
-        
-        # [模塊 A: 指標計算]
         ma20 = c.rolling(20).mean().iloc[-1]
         ma60 = c.rolling(60).mean().iloc[-1]
         ma240 = c.rolling(240).mean().iloc[-1]
         v_ma20 = v.rolling(20).mean().iloc[-1]
-        
-        # [模塊 B: 成本與洗盤偵測]
         on_support = (abs(price - ma240) / ma240 < 0.05) or (abs(price - ma60) / ma60 < 0.05)
         vol_dry_out = (v.iloc[-1] < v_ma20 * 0.7)
         low_30 = hist_full['Close'].quantile(0.3)
-        
-        score = 40 # 基礎分
-        
-        # --- 核心 1: 籌碼洗盤與 35年價值發現 ---
-        is_wash_done = False
-        is_value_gem = False
+        score = 40 
+        is_wash_done, is_value_gem = False, False
         sentiment = "散戶進場 (融資增)"
-        
         if on_support and vol_dry_out:
             score += 45
             is_wash_done = True
             sentiment = "大戶收貨 (融資減)"
-        
         if price <= low_30 * 1.05 and on_support and vol_dry_out:
             score += 20 
             is_value_gem = True
             sentiment = "💎 戰略價值區 (大戶長期鎖籌)"
-
-        # --- 進化 1: 板塊熱度共振 Sector Resonance ---
-        if price > ma20 and price > ma60 and v.iloc[-1] > v_ma20:
-            score += 10 
-
-        # --- 核心 2: 均線糾結與暴衝基因 ---
+        if price > ma20 and price > ma60 and v.iloc[-1] > v_ma20: score += 10 
         ma_gap = pd.Series([ma20, ma60, ma240]).std() / price
         if ma_gap < 0.03: score += 20
-        
         surges = hist_full.tail(250).apply(lambda x: (x['Close'] - x['Open'])/x['Open'] > 0.07, axis=1)
         if surges.any(): score += 5 
-            
-        # --- 核心 3: MACD 動能 ---
         exp1, exp2 = c.ewm(span=12).mean(), c.ewm(span=26).mean()
         macd = exp1 - exp2
         if macd.iloc[-1] > macd.iloc[-2]: score += 10
-        
-        # --- 進化 2: 短線乖離強制冷靜 Bias Cooling ---
         bias_20 = (price - ma20) / ma20
         is_overheated = False
         if bias_20 > 0.15: 
             score -= 15
             is_overheated = True
-
-        # --- 核心 4: 長線風險過濾 ---
         bias_240 = (price - ma240) / ma240
         if bias_240 > 0.4: score -= 30 
-
-        # --- 進化 3: 除權息填息基因 Dividend Recovery ---
         is_dividend_king = False
-        if (c.iloc[-1] > c.iloc[-120]) and (c.iloc[-1] > ma240): 
-            is_dividend_king = True
-
+        if (c.iloc[-1] > c.iloc[-120]) and (c.iloc[-1] > ma240): is_dividend_king = True
         total_score = max(0, min(100, score))
-        
-        # --- 最終判定 ---
         rank, msg, target, window = "", "", price * 1.1, ""
         if total_score >= 90:
             rank, msg, target, window = "🔥 SS級:史詩起漲", "將軍級確認：板塊共振強，洗盤極度乾淨。", price * 1.7, "3-6個月"
@@ -184,26 +136,14 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             rank, msg, target, window = "📈 B級:趨勢確認", "趨勢向上，適合穩健佈局。", price * 1.2, "2-4週"
         else:
             rank, msg, target, window = "🔍 C級:短線觀察", "動能不足或位階稍高，僅適短線。", price * 1.08, "3-7天"
-
-        # 將軍級診斷合成
         if is_overheated: msg = "⚠️ 戰鬥力過載，請勿追高，等待洗盤 " + msg
         if is_dividend_king: msg = "🎁 息利雙收標的 (填息基因強) " + msg
         if is_value_gem: msg = "💎 偵測到長線戰略價值位 " + msg
         if is_wash_done and on_support: msg = "🔥 偵測到洗盤完成，準備破新高 " + msg
+        return {"msg": f"[{rank}] {msg}", "sent": sentiment, "score": total_score, "target": round(target, 1), "stop": round(ma20*0.96, 1), "window": window}
+    except Exception as e: return None
 
-        return {
-            "msg": f"[{rank}] {msg}", 
-            "sent": sentiment, 
-            "score": total_score, 
-            "target": round(target, 1), 
-            "stop": round(ma20*0.96, 1), 
-            "window": window
-        }
-    except Exception as e:
-        return None
-
-# --- [第 4 區：390 檔名單 (完整還原)] ---
-# (此處保持 390 檔列表，代碼長度考量在此略過列表文字，請保留您原本的 pool_390 變數)
+# --- [第 4 區：390 檔名單] ---
 pool_390 = {
     "💎 權值/金控 (70)": [("2330.TW","台積電"),("2317.TW","鴻海"),("2454.TW","聯發科"),("2308.TW","台達電"),("2881.TW","富邦金"),("2882.TW","國泰金"),("2303.TW","聯電"),("2886.TW","兆豐金"),("2891.TW","中信金"),("2412.TW","中華電"),("1301.TW","台塑"),("2002.TW","中鋼"),("2884.TW","玉山金"),("5880.TW","合庫金"),("2885.TW","元大金"),("5871.TW","中租-KY"),("2883.TW","開發金"),("2887.TW","台新金"),("2892.TW","第一金"),("2890.TW","永豐金"),("1101.TW","台泥"),("1216.TW","統一"),("2357.TW","華碩"),("2912.TW","統一超"),("2324.TW","仁寶"),("2353.TW","宏碁"),("2382.TW","廣達"),("2409.TW","友達"),("3481.TW","群創"),("2880.TW","華南金"),("1303.TW","南亞"),("1326.TW","台化"),("6505.TW","台塑化"),("2105.TW","正新"),("2207.TW","和泰車"),("2301.TW","光寶科"),("2377.TW","微星"),("2395.TW","研華"),("2408.TW","南亞科"),("2474.TW","可成"),("2603.TW","長榮"),("2609.TW","陽明"),("2610.TW","華航"),("2615.TW","萬海"),("2618.TW","長榮航"),("2801.TW","彰銀"),("2888.TW","新光金"),("2889.TW","國票金"),("2897.TW","王道銀行"),("5876.TW","上海商銀"),("9904.TW","寶成"),("9910.TW","豐泰"),("9921.TW","巨大"),("9945.TW","潤泰新"),("1476.TW","儒星"),("1477.TW","聚陽"),("1503.TW","士電"),("1504.TW","東元"),("1513.TW","中興電"),("1519.TW","華城"),("1605.TW","華新"),("1717.TW","長興"),("1722.TW","台肥"),("1802.TW","台玻"),("2006.TW","東和鋼鐵"),("2014.TW","中鴻"),("2027.TW","大成鋼"),("2106.TW","建大"),("2201.TW","裕隆"),("2204.TW","中華車")],
     "🔬 半導體/IC/設備 (70)": [("3413.TW","京鼎"),("3661.TW","世芯-KY"),("3035.TW","智原"),("6531.TW","愛普*"),("5269.TW","祥碩"),("3443.TW","創意"),("3227.TW","原相"),("3034.TW","聯詠"),("2379.TW","瑞昱"),("6239.TW","力成"),("3711.TW","日月光投控"),("6415.TW","矽力*-KY"),("8046.TW","南電"),("3037.TW","欣興"),("2449.TW","京元電子"),("2344.TW","華邦電"),("6770.TW","力積電"),("8069.TW","元太"),("3105.TW","穩懋"),("3532.TW","台勝科"),("2369.TW","菱生"),("3264.TW","欣銓"),("6147.TW","紘康"),("8150.TW","南茂"),("2401.TW","凌陽"),("3016.TW","嘉晶"),("3529.TW","力旺"),("4966.TW","譜瑞-KY"),("6271.TW","同欣電"),("8299.TW","群聯"),("2337.TW","旺宏"),("2436.TW","偉詮電"),("2458.TW","義隆"),("3006.TW","晶豪科"),("3041.TW","揚智"),("3527.TW","聚積"),("3588.TW","通嘉"),("4919.TW","新唐"),("4961.TW","天鈺"),("5471.TW","松翰"),("6138.TW","茂達"),("6202.TW","盛群"),("6233.TW","旺玖"),("6243.TW","迅杰"),("6411.TW","晶焱"),("6462.TW","神盾"),("6533.TW","晶心科"),("6679.TW","鈺太"),("8016.TW","矽創"),("8028.TW","昇陽半"),("8054.TW","安國"),("8081.TW","致新"),("8261.TW","富鼎"),("8271.TW","宇瞻"),("3131.TW","弘塑"),("3583.TW","齊宣"),("6139.TW","亞博"),("6438.TW","迅得"),("1560.TW","中砂"),("3680.TW","家登"),("6196.TW","帆宣"),("6667.TW","信紘科"),("3374.TW","精材"),("6223.TW","旺矽"),("6515.TW","穎崴"),("6510.TW","精測"),("3587.TW","閎康"),("6683.TW","雍智科技"),("8027.TW","鈦昇"),("6789.TW","采鈺")],
@@ -214,76 +154,48 @@ pool_390 = {
     "🧬 生技醫療 (20)": [("4123.TW","晟德"),("1760.TW","寶齡富錦"),("4128.TW","中天"),("4147.TW","龍燈-KY"),("4162.TW","智擎"),("4174.TW","浩鼎"),("4743.TW","合一"),("6446.TW","藥華藥"),("6472.TW","保瑞"),("6492.TW","生華科"),("6547.TW","高端"),("6550.TW","北極星"),("6589.TW","台康生"),("1795.TW","美時"),("4104.TW","佳醫"),("4119.TW","旭富"),("4137.TW","麗豐"),("1701.TW","中化"),("1720.TW","生達"),("1762.TW","中化生")]
 }
 
-
-# --- [第 5 區：側邊欄管理 - 穩定修正版] ---
-if 'local_db' not in st.session_state:
-    load_data()
-
-# 再次強化過濾，確保側邊欄絕對不會出現幽靈名單
+# --- [第 5 區：側邊欄管理] ---
+if 'local_db' not in st.session_state: load_data()
 GHOST_DATA = ["VIP實戰", "周靖傑", "nan", "None", "Unnamed: 0", ""]
 st.session_state.client_list = [c for c in st.session_state.client_list if c not in GHOST_DATA]
 
 with st.sidebar:
     st.title("👤 大基石 AI 經理人")
-    st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d')}")
-    
-    with st.expander("⚙️ 客戶系統設定 (增/改/刪)", expanded=False):
-        # 1. 新增客戶
+    with st.expander("⚙️ 客戶系統設定", expanded=False):
         new_c = st.text_input("新增客戶姓名", key="add_client_input")
         if st.button("➕ 確認新增"):
             if new_c and new_c not in st.session_state.client_list and new_c not in GHOST_DATA: 
                 st.session_state.client_list.append(new_c)
                 st.session_state['cur_c'] = new_c
                 save_data(); st.rerun()
-        
-        st.markdown("---")
-        
-        # 2. 更名功能
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
         new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
-        if st.button("📝 執行更名", use_container_width=True):
+        if st.button("📝 執行更名"):
             if new_name and new_name != current_idx_name and new_name not in GHOST_DATA:
                 st.session_state.local_db['client'] = st.session_state.local_db['client'].replace(current_idx_name, new_name)
                 st.session_state.client_list = [new_name if x == current_idx_name else x for x in st.session_state.client_list]
                 st.session_state['cur_c'] = new_name
                 save_data(); st.rerun()
-
-    # --- 下拉選單安全鎖 ---
     if st.session_state.get('cur_c') not in st.session_state.client_list:
         st.session_state['cur_c'] = "Robert" if "Robert" in st.session_state.client_list else st.session_state.client_list[0]
-
-    st.session_state['cur_c'] = st.selectbox(
-        "🎯 當前控盤對象", 
-        st.session_state.client_list, 
-        index=st.session_state.client_list.index(st.session_state['cur_c']),
-        key="client_selector_side"
-    )
-    
-    # 3. 刪除功能
-    if st.button("❌ 刪除當前客戶", use_container_width=True):
+    st.session_state['cur_c'] = st.selectbox("🎯 當前控盤對象", st.session_state.client_list, 
+        index=st.session_state.client_list.index(st.session_state['cur_c']), key="client_selector_side")
+    if st.button("❌ 刪除當前客戶"):
         if st.session_state['cur_c'] != "Robert":
             to_del = st.session_state['cur_c']
             st.session_state.client_list.remove(to_del)
             st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != to_del]
             st.session_state['cur_c'] = "Robert"
             save_data(); st.rerun()
-        else:
-            st.error("系統預設客戶 Robert 不可刪除。")
+    st.metric(f"{st.session_state['cur_c']} 的持股", len(st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]))
 
-    st.markdown("---")
-    c_stocks = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
-    st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
-
-# --- [大腦運作必需工具函數：補回消失的關鍵邏輯] ---
-def get_stock_perf(tid, retry=0):
+# --- [工具函數] ---
+def get_stock_perf(tid):
     try:
-        s = yf.Ticker(tid)
-        h = s.history(period="2d")
+        s = yf.Ticker(tid); h = s.history(period="2d")
         if h.empty: return 0, "0.00 (0.00%)", 0
-        cp = h['Close'].iloc[-1]
-        lp = h['Close'].iloc[-2]
-        diff = cp - lp
-        pct = (diff / lp) * 100
+        cp, lp = h['Close'].iloc[-1], h['Close'].iloc[-2]
+        diff = cp - lp; pct = (diff / lp) * 100
         return round(cp, 2), f"{diff:+.2f} ({pct:+.2f}%)", pct
     except: return 0, "0.00 (0.00%)", 0
 
@@ -295,14 +207,11 @@ def get_stock_name(tid):
 
 def record_transaction(client, tid, action, shares, price, note):
     new_rec = {'date': datetime.now().strftime("%m-%d %H:%M"), 'client': client, 'id': tid, 'action': action, 'shares': shares, 'price': price, 'note': note}
-    if 'trade_history' not in st.session_state:
-        st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
     st.session_state.trade_history = pd.concat([st.session_state.trade_history, pd.DataFrame([new_rec])], ignore_index=True)
 
 # =================================================================
-# --- [第六區：主畫面佈局 - 嚴禁重複定義] ---
+# --- [第六區：主畫面佈局] ---
 # =================================================================
-# 這裡保證只定義一次 tabs，解決「兩個持股畫面」的問題
 t_monitor, t_news, t_hist = st.tabs(["🛡️ 戰略監控中心", "🌎 全球情報", "📜 交易紀錄"])
 
 with t_monitor:
@@ -314,7 +223,6 @@ with t_monitor:
             st.subheader("🔍 全球個股搜尋")
             s_in = st.text_input("輸入名稱/代號", key="global_search_unique_v3")
             if s_in:
-                # 快速搜索邏輯
                 all_stocks = []
                 for l in pool_390.values(): all_stocks.extend(l)
                 m = [tid for tid, n in all_stocks if s_in in n or s_in in tid]
@@ -325,7 +233,7 @@ with t_monitor:
                     st.markdown(f"### 🎯 {get_stock_name(tid)} ({tid})")
                     sc1, sc2 = st.columns([2, 1])
                     with sc1:
-                        st.info(f"**AI 診斷:** {res['msg']}")
+                        st.info(f"**AI 診斷:** {res['msg'] if res else '計算中'}")
                         b_q = st.number_input("數量", min_value=1, value=1, key=f"buy_q_{tid}")
                         if st.button(f"🚀 執行佈局", key=f"buy_btn_{tid}", use_container_width=True):
                             new_row = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': b_q, 'unit': "張", 'entry_reason': res['msg']}])
@@ -333,16 +241,16 @@ with t_monitor:
                             record_transaction(st.session_state['cur_c'], tid, "佈局", b_q, p, res['msg'])
                             save_data(); st.rerun()
                     with sc2: st.metric("即時價", p, d)
-
         st.divider()
-        cat = st.radio("板塊掃描", list(pool_390.keys()), horizontal=True, key="scan_radio_unique")
-        for tid, tname in pool_390[cat][:10]: # 限制顯示避免過長
+        cat_select = st.radio("板塊掃描", list(pool_390.keys()), horizontal=True, key="scan_radio_unique")
+        for tid, tname in pool_390[cat_select][:10]:
             with st.expander(f"⭐ {tname} ({tid})"):
                 p, d, cc = get_stock_perf(tid)
                 st.write(f"即時價: {p} ({d})")
                 if st.button(f"快速買入 {tname}", key=f"q_buy_{tid}"):
-                    # 快速買入邏輯
-                    pass
+                    new_row = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': tname, 'buy_price': p, 'shares': 1, 'unit': "張", 'entry_reason': "快速買入"}])
+                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
+                    save_data(); st.rerun()
 
     with c_right:
         st.subheader(f"💼 [{st.session_state.cur_c}] 持股監控")
@@ -353,73 +261,42 @@ with t_monitor:
                     cp, cd, cc = get_stock_perf(row['id'])
                     st.markdown(f"**{row['name']} ({row['id']})**")
                     st.write(f"成本: {row['buy_price']} | 現價: {cp}")
-                    # 修正紅字報錯：key 必須包含 idx 確保絕對唯一
                     e_q = st.number_input("平倉數量", min_value=1, max_value=int(row['shares']), value=1, key=f"exit_val_{idx}_{row['id']}")
                     if st.button("📉 執行平倉", key=f"exit_btn_{idx}_{row['id']}", use_container_width=True):
-                        # 平倉邏輯
                         st.session_state.local_db = st.session_state.local_db.drop(idx)
                         save_data(); st.rerun()
         else:
-            st.info("尚無持有標的"
+            st.info("尚無持有標的")
 
 # --- [第二分頁：全球情報] ---
-with tab_global_news:
+with t_news:
     st.header("🌎 全球 24H 戰略情報中樞")
-
     def fetch_massive_intel(query_list):
         ssl._create_default_https_context = ssl._create_unverified_context
         all_entries = []
-        backup_entries = [] 
-        now = datetime.now()
         for q in query_list:
             u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
             try:
                 feed = feedparser.parse(u)
-                for entry in feed.entries:
-                    backup_entries.append(entry)
-                    try:
-                        p_time = datetime(*entry.published_parsed[:6])
-                        if (now - p_time).total_seconds() < 432000: 
-                            all_entries.append(entry)
-                    except: all_entries.append(entry)
+                all_entries.extend(feed.entries)
             except: continue
-        display_list = all_entries if all_entries else backup_entries
-        unique_news = {n.link: n for n in display_list}.values()
-        return sorted(list(unique_news), key=lambda x: getattr(x, 'published', ''), reverse=True)[:15]
+        unique_news = {n.link: n for n in all_entries}.values()
+        return list(unique_news)[:15]
 
-    intel_map = {
-        "🇺🇸 美國戰略": ["川普 馬斯克", "輝達 聯準會", "美股 走勢"],
-        "🇪🇺 歐洲動態": ["歐洲經濟", "烏克蘭 局勢", "歐盟 政策"],
-        "🇮🇱 中東衝突": ["中東戰爭", "紅海 航運", "石油"],
-        "🇯🇵 亞洲科技": ["台積電 半導體", "日本 股市", "科技 趨勢"],
-        "🇨🇳 中國觀點": ["中國 經濟", "人民幣 政策"]
-    }
-
-    # 修正：改名避免變數重複
+    intel_map = {"🇺🇸 美國": ["川普 輝達", "聯準會 美股"], "🇯🇵 亞洲": ["台積電 半導體", "日本股市"]}
     news_tabs = st.tabs(list(intel_map.keys()))
     for tab, (region, q_list) in zip(news_tabs, intel_map.items()):
         with tab:
             items = fetch_massive_intel(q_list)
-            if items:
-                for n in items:
-                    st.markdown(f"<div class='news-card'>🕒 {getattr(n, 'published', '即時')[5:16]} | <a href='{n.link}' target='_blank'>{n.title}</a></div>", unsafe_allow_html=True)
-            else:
-                st.info(f"正在連線全球數據庫...")
+            for n in items:
+                st.markdown(f"<div class='news-card'>🕒 {n.published[5:16]} | <a href='{n.link}' target='_blank'>{n.title}</a></div>", unsafe_allow_html=True)
             
 # --- [第三分頁：交易紀錄] ---
-with tab_history:
+with t_hist:
     st.subheader("📜 交易紀錄與同步")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
         st.dataframe(st.session_state.trade_history.sort_values(by='date', ascending=False), use_container_width=True)
-        st.divider()
-        col_h1, col_h2 = st.columns(2)
         csv_hist = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
-        with col_h1:
-            st.download_button("📥 下載交易紀錄 (CSV)", data=csv_hist, file_name="trade_history.csv", use_container_width=True, key="hist_dl_btn_v125")
-        with col_h2:
-            st.link_button("🔗 開啟雲端保險箱", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
-        if st.button("🗑️ 清空歷史紀錄 (慎用)", use_container_width=True, key="clear_all_history_v125"):
-            st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-            save_data(); st.rerun()
+        st.download_button("📥 下載紀錄 (CSV)", data=csv_hist, file_name="trade_history.csv")
     else:
         st.info("目前尚無交易紀錄。")
