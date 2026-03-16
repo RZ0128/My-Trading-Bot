@@ -278,19 +278,51 @@ with st.sidebar:
     st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
 
 
-# --- [第 6 區：主畫面佈局重組 - 戰略監控 + 全球情報 + 紀錄] ---
+# --- [大腦運作必需工具函數：補回消失的關鍵邏輯] ---
+def get_stock_perf(tid, retry=0):
+    try:
+        s = yf.Ticker(tid)
+        h = s.history(period="2d")
+        if h.empty: return 0, 0, 0
+        cp = h['Close'].iloc[-1]
+        lp = h['Close'].iloc[-2]
+        diff = cp - lp
+        pct = (diff / lp) * 100
+        return round(cp, 2), f"{diff:+.2f} ({pct:+.2f}%)", pct
+    except: return 0, 0, 0
+
+def get_stock_name(tid):
+    for cat in pool_390.values():
+        for t_id, t_name in cat:
+            if t_id == tid: return t_name
+    return tid
+
+def record_transaction(client, tid, action, shares, price, note):
+    new_rec = {
+        'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
+        'client': client,
+        'id': tid,
+        'action': action,
+        'shares': shares,
+        'price': price,
+        'note': note
+    }
+    if 'trade_history' not in st.session_state:
+        st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
+    st.session_state.trade_history = pd.concat([st.session_state.trade_history, pd.DataFrame([new_rec])], ignore_index=True)
+
+# --- [第六區：主畫面佈局 - 戰略掃描 + 完整新聞 + 交易紀錄] ---
 tab_main, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
 
 # --- [第一頁：戰略掃描 + 持股監控] ---
 with tab_main:
     st.title(f"🛡️ 12.5 史詩大腦: [{st.session_state.cur_c}]")
     
-    # 上半部：戰略搜尋與板塊掃描
-    col_l, col_r_placeholder = st.columns([1.6, 1.4]) 
+    col_l, col_r = st.columns([1.6, 1.4]) 
     with col_l:
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
-            s_input = st.text_input("輸入名稱或代號", placeholder="搜尋全台股標的...", key="global_search")
+            s_input = st.text_input("輸入名稱或代號", placeholder="搜尋全台股標的...", key="global_search_final")
             if s_input:
                 all_l = []
                 for l in pool_390.values(): all_l.extend(l)
@@ -299,7 +331,7 @@ with tab_main:
                 
                 p, d, cc = get_stock_perf(tid, 0)
                 if p > 0:
-                    res = generate_ai_tech_analysis(tid, p, 0)
+                    res = generate_ai_tech_analysis(tid, p, cc)
                     if res:
                         st.markdown(f"### 🎯 戰略診斷: {get_stock_name(tid)} ({tid})")
                         sc1, sc2 = st.columns([1.5, 1])
@@ -309,27 +341,25 @@ with tab_main:
                             st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{res['sent']}</span>", unsafe_allow_html=True)
                             
                             u_c1, u_c2 = st.columns(2)
-                            q = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_main")
-                            u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_main")
+                            q = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_final")
+                            u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_final")
                             
                             if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
                                 new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
-                                save_data() # <-- 確保存檔
-                                st.success("交易紀錄已同步存檔"); st.rerun()
+                                save_data(); st.rerun()
                         with sc2:
                             st.metric("即時股價", p, d)
                             st.success(f"🎯 目標預期: {res['target']}")
 
         st.divider()
         cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True)
-        
         scored_data = []
         with st.spinner(f"正在掃描 {cat_choice}..."):
             for tid, tname in pool_390[cat_choice]:
                 p, d, cc = get_stock_perf(tid, 0)
-                res = generate_ai_tech_analysis(tid, p, 0)
+                res = generate_ai_tech_analysis(tid, p, cc)
                 if res:
                     res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
                     scored_data.append(res)
@@ -341,26 +371,21 @@ with tab_main:
         for item in top_picks:
             with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
                 st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
-                st.markdown("---")
                 k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
                 quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
                 quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
-                # [修復]：新增 save_data() 解決快速佈局無效問題
                 if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
                     new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
                     st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
-                    save_data() # <--- 修正核心：存入本地與準備雲端
-                    st.rerun()
+                    save_data(); st.rerun()
 
-    # 下半部：持股監控 (直接顯示，免換頁)
+    # 下半部：持股監控 (直接顯示)
     st.markdown("---")
     st.subheader(f"💼 持股即時監控中心")
     my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.get('cur_c', 'Robert')]
-    
     if not my_h.empty:
         total_pnl = 0
-        # 建立 3 欄位佈局，讓持股卡片更緊湊
         m_cols = st.columns(2)
         for i, (idx, row) in enumerate(my_h.iterrows()):
             with m_cols[i % 2]:
@@ -372,90 +397,78 @@ with tab_main:
                     with st.container(border=True):
                         st.markdown(f"#### **{row['name']} ({row['id']})**")
                         st.write(f"成本: {row['buy_price']} | 現價: {cp}")
-                        st.write(f"持有: **{row['shares']} {row['unit']}**")
                         pnl_color = "red" if pnl > 0 else "green"
                         st.markdown(f"損益: <span style='color:{pnl_color}; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
-                        
-                        e_c1, e_c2 = st.columns([1, 1])
-                        if e_c2.button("📉 平倉", key=f"f_{idx}", use_container_width=True):
-                            record_transaction(st.session_state['cur_c'], row['id'], "減持/平倉", row['shares'], cp, "手動平倉")
+                        if st.button("📉 平倉", key=f"f_{idx}", use_container_width=True):
+                            record_transaction(st.session_state['cur_c'], row['id'], "平倉", row['shares'], cp, "手動平倉")
                             st.session_state.local_db = st.session_state.local_db.drop(idx)
                             save_data(); st.rerun()
-        
         st.sidebar.metric("📊 帳戶總未實現損益", f"NT$ {total_pnl:,.0f}")
     else:
-        st.info("目前尚無持有標的，請從上方『戰略搜尋』開始。")
+        st.info("目前尚無持有標的。")
 
-# --- [第二頁：全球新聞] ---
-st.divider()
-st.header("🌎 全球 24H 戰略情報中樞")
+# --- [第二頁：全球情報 (原本第八區新聞，完全不簡化搬移)] ---
+with tab_global_news:
+    st.header("🌎 全球 24H 戰略情報中樞")
 
-def fetch_massive_intel(query_list):
-    ssl._create_default_https_context = ssl._create_unverified_context
-    all_entries = []
-    backup_entries = [] # 兜底備份
-    now = datetime.now()
-    
-    for q in query_list:
-        u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
-        try:
-            feed = feedparser.parse(u)
-            for entry in feed.entries:
-                backup_entries.append(entry)
-                try:
-                    p_time = datetime(*entry.published_parsed[:6])
-                    # 放寬至 120 小時 (確保新聞量充足)
-                    if (now - p_time).total_seconds() < 432000: 
+    def fetch_massive_intel(query_list):
+        ssl._create_default_https_context = ssl._create_unverified_context
+        all_entries = []
+        backup_entries = [] 
+        now = datetime.now()
+        for q in query_list:
+            u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+            try:
+                feed = feedparser.parse(u)
+                for entry in feed.entries:
+                    backup_entries.append(entry)
+                    try:
+                        p_time = datetime(*entry.published_parsed[:6])
+                        if (now - p_time).total_seconds() < 432000: 
+                            all_entries.append(entry)
+                    except:
                         all_entries.append(entry)
-                except:
-                    all_entries.append(entry)
-        except:
-            continue
-            
-    # 如果過濾後沒新聞，就用備份的所有新聞
-    display_list = all_entries if all_entries else backup_entries
-    unique_news = {n.link: n for n in display_list}.values()
-    return sorted(list(unique_news), key=lambda x: getattr(x, 'published', ''), reverse=True)[:15]
+            except: continue
+        display_list = all_entries if all_entries else backup_entries
+        unique_news = {n.link: n for n in display_list}.values()
+        return sorted(list(unique_news), key=lambda x: getattr(x, 'published', ''), reverse=True)[:15]
 
-intel_map = {
-    "🇺🇸 美國戰略": ["川普 馬斯克", "輝達 聯準會", "美股 走勢"],
-    "🇪🇺 歐洲動態": ["歐洲經濟", "烏克蘭 局勢", "歐盟 政策"],
-    "🇮🇱 中東衝突": ["中東戰爭", "紅海 航運", "石油"],
-    "🇯🇵 亞洲科技": ["台積電 半導體", "日本 股市", "科技 趨勢"],
-    "🇨🇳 中國觀點": ["中國 經濟", "人民幣 政策"]
-}
+    intel_map = {
+        "🇺🇸 美國戰略": ["川普 馬斯克", "輝達 聯準會", "美股 走勢"],
+        "🇪🇺 歐洲動態": ["歐洲經濟", "烏克蘭 局勢", "歐盟 政策"],
+        "🇮🇱 中東衝突": ["中東戰爭", "紅海 航運", "石油"],
+        "🇯🇵 亞洲科技": ["台積電 半導體", "日本 股市", "科技 趨勢"],
+        "🇨🇳 中國觀點": ["中國 經濟", "人民幣 政策"]
+    }
 
-tabs = st.tabs(list(intel_map.keys()))
-for tab, (region, q_list) in zip(tabs, intel_map.items()):
-    with tab:
-        items = fetch_massive_intel(q_list)
-        if items:
-            for n in items:
-                st.markdown(f"""
-                    <div class='news-card'>
-                        🕒 {getattr(n, 'published', '即時')[5:16]} | 
-                        <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-weight:500;'>
-                            {n.title}
-                        </a>
-                    </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info(f"正在連線全球數據庫，請稍候...")
+    n_tabs = st.tabs(list(intel_map.keys()))
+    for tab, (region, q_list) in zip(n_tabs, intel_map.items()):
+        with tab:
+            items = fetch_massive_intel(q_list)
+            if items:
+                for n in items:
+                    st.markdown(f"""
+                        <div class='news-card'>
+                            🕒 {getattr(n, 'published', '即時')[5:16]} | 
+                            <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-weight:500;'>
+                                {n.title}
+                            </a>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info(f"正在連線全球數據庫...")
 
 # --- [第三頁：交易紀錄] ---
 with tab_history:
     st.subheader("📜 交易紀錄與雲端同步")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
-        display_history = st.session_state.trade_history.sort_values(by='date', ascending=False)
-        st.dataframe(display_history, use_container_width=True)
-        
-        # 雲端同步按鈕
-        col1, col2 = st.columns(2)
+        st.dataframe(st.session_state.trade_history.sort_values(by='date', ascending=False), use_container_width=True)
         csv_hist = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
-        col1.download_button("📥 下載交易紀錄 (CSV)", data=csv_hist, file_name=f"history_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
+        col1, col2 = st.columns(2)
+        col1.download_button("📥 下載交易紀錄", data=csv_hist, file_name=f"history.csv", use_container_width=True)
         col2.link_button("🔗 開啟 Google Sheets", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
     else:
-        st.info("尚無交易紀錄。")
+        st.info("尚無紀錄。")
 
 
 
