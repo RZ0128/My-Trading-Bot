@@ -328,9 +328,7 @@ with st.sidebar:
     st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
 
 
-# --- [第 6 區：主畫面與板塊掃描 - 完整佈局版] ---
-tab_scan, tab_monitor, tab_history = st.tabs(["🔍 戰略掃描", "💰 持股監控", "📜 交易紀錄"])
-
+# --- [第 6 區：主畫面與板塊掃描 - 修正快速佈局存檔邏輯] ---
 with tab_scan:
     st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.cur_c}]")
     
@@ -364,7 +362,9 @@ with tab_scan:
                                 new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': tid, 'name': get_stock_name(tid), 'buy_price': p, 'shares': q, 'unit': u, 'entry_reason': res['msg']}])
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
                                 record_transaction(st.session_state['cur_c'], tid, "佈局(增持)", q, p, res['msg'])
-                                st.success("交易紀錄已同步存檔"); st.rerun()
+                                save_data() # 關鍵修正：確保寫入資料庫
+                                st.success("交易紀錄已同步存檔")
+                                st.rerun()
                         with sc2:
                             st.metric("即時股價", p, d)
                             st.success(f"🎯 目標預期: {res['target']}")
@@ -393,9 +393,15 @@ with tab_scan:
                 quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
                 quick_u = k_c2.selectbox("單位", ["張", "股"], key=f"qu_{item['tid']}")
                 if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
+                    # 建立新持股資料
                     new_t = pd.DataFrame([{'client': st.session_state['cur_c'], 'id': item['tid'], 'name': item['tname'], 'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u, 'entry_reason': item['msg']}])
+                    # 合併至主資料庫
                     st.session_state.local_db = pd.concat([st.session_state.local_db, new_t], ignore_index=True)
+                    # 同步紀錄至交易歷史
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
+                    # 關鍵修正：執行數據存檔，確保切換分頁後資料還在
+                    save_data() 
+                    st.toast(f"✅ {item['tname']} 已加入 {st.session_state['cur_c']} 的持股清單")
                     st.rerun()
 
 
