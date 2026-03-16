@@ -295,6 +295,53 @@ with st.sidebar:
     st.metric(f"{st.session_state['cur_c']} 的持股總數", len(c_stocks))
 
 
+# --- [核心工具函數補完：大基石運作關鍵] ---
+
+def get_stock_name(ticker):
+    """根據代號找名稱，找不到則回傳代號本身"""
+    for cat in pool_390.values():
+        for tid, tname in cat:
+            if tid == ticker: return tname
+    return ticker
+
+def get_stock_perf(ticker, buy_price):
+    """取得即時股價、漲跌與百分比"""
+    try:
+        stock = yf.Ticker(ticker)
+        # 取得今天與昨天的數據
+        hist = stock.history(period="2d")
+        if len(hist) < 2:
+            # 若週一開盤前，抓 5 天確保有數據
+            hist = stock.history(period="5d")
+        
+        current_price = round(hist['Close'].iloc[-1], 2)
+        prev_close = hist['Close'].iloc[-2]
+        diff = round(current_price - prev_close, 2)
+        change_pct = (diff / prev_close) * 100
+        
+        diff_str = f"{diff} ({change_pct:.2f}%)"
+        return current_price, diff_str, change_pct
+    except:
+        return 0, "N/A", 0
+
+def record_transaction(client, tid, action, shares, price, note):
+    """記錄每一筆史詩級交易"""
+    new_record = pd.DataFrame([{
+        'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
+        'client': client,
+        'id': tid,
+        'action': action,
+        'shares': shares,
+        'price': price,
+        'note': note
+    }])
+    if 'trade_history' not in st.session_state:
+        st.session_state.trade_history = new_record
+    else:
+        st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_record], ignore_index=True)
+
+
+
 # --- [第 6 區：主畫面與板塊掃描 - 完整佈局版] ---
 tab_scan, tab_monitor, tab_history = st.tabs(["🔍 戰略掃描", "💰 持股監控", "📜 交易紀錄"])
 
