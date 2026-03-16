@@ -310,17 +310,17 @@ def record_transaction(client, tid, action, shares, price, note):
         st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
     st.session_state.trade_history = pd.concat([st.session_state.trade_history, pd.DataFrame([new_rec])], ignore_index=True)
 
-# --- [第六區：主畫面佈局 - 戰略掃描 + 完整新聞 + 交易紀錄] ---
-# 修正重點：將第一個變數名稱改為 tab_monitor 以對應後方代碼
+# --- [第六區：主畫面佈局 - 戰略掃描 + 全球情報 + 交易紀錄] ---
+# 修正說明：統一變數名稱為 tab_monitor, tab_global_news, tab_history
 tab_monitor, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
 
-# --- [第一頁：戰略掃描 + 持股監控] ---
-# 這裡同步將 with tab_main 改為 with tab_monitor
+# --- [第一分頁：戰略監控中心 (整合左側掃描與右側監控)] ---
 with tab_monitor:
     st.title(f"🛡️ 12.5 史詩大腦: [{st.session_state.cur_c}]")
     
     col_l, col_r = st.columns([1.6, 1.4])     
-    # 左側：搜尋與板塊掃描
+    
+    # --- 左側：搜尋與板塊掃描 ---
     with col_l:
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
@@ -382,10 +382,10 @@ with tab_monitor:
                     record_transaction(st.session_state['cur_c'], item['tid'], "快速佈局", quick_q, item['price'], item['msg'])
                     save_data(); st.rerun()
 
-    # 右側：持股監控 (完整功能恢復，不簡化按鈕)
+    # --- 右側：持股監控 (整合雲端同步功能) ---
     with col_r:
         st.subheader(f"💼 持股即時監控中心")
-        my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.get('cur_c', 'Robert')]
+        my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
         
         if not my_h.empty:
             total_pnl = 0
@@ -401,7 +401,6 @@ with tab_monitor:
                         pnl_color = "red" if pnl > 0 else "green"
                         st.markdown(f"未實現損益: <span style='color:{pnl_color}; font-size:18px; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
                         
-                        # --- 核心關鍵：完整還原減持按鈕佈局 ---
                         st.markdown("---")
                         e_c1, e_c2, e_c3 = st.columns([1, 1, 2])
                         exit_q = e_c1.number_input("減持數量", min_value=1, max_value=int(row['shares']), value=1, key=f"eq_{idx}")
@@ -416,16 +415,18 @@ with tab_monitor:
             
             st.sidebar.metric("📊 帳戶總未實現損益", f"NT$ {total_pnl:,.0f}")
             
-            # 雲端同步按鈕
+            # --- 雲端同步按鈕區 ---
             st.divider()
+            st.markdown("### ☁️ 持股現狀雲端同步")
             col_inv_dl, col_inv_link = st.columns(2)
             csv_inv = st.session_state.local_db.to_csv(index=False).encode('utf-8-sig')
             with col_inv_dl:
-                st.download_button("📥 下載持股監控檔案 (CSV)", data=csv_inv, file_name=f"inventory.csv", use_container_width=True)
+                st.download_button("📥 下載持股監控 (CSV)", data=csv_inv, file_name=f"inventory.csv", use_container_width=True, key="dl_inv_btn")
             with col_inv_link:
-                st.link_button("🔗 開啟雲端 (Google Sheets)", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
+                st.link_button("🔗 開啟雲端 (Sheets)", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit", use_container_width=True)
         else:
             st.info("目前尚無持有標的。")
+
 
 # --- [第二頁：全球情報 (原本第八區新聞)] ---
 with tab_global_news:
