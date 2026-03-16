@@ -228,18 +228,17 @@ with st.sidebar:
     st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d')}")
     
     with st.expander("⚙️ 客戶系統設定 (增/改/刪)", expanded=False):
-        # 1. 新增客戶 (維持原佈局)
+        # 1. 新增客戶
         new_c = st.text_input("新增客戶姓名", key="add_client_input")
         if st.button("➕ 確認新增"):
             if new_c and new_c not in st.session_state.client_list and new_c not in GHOST_DATA: 
                 st.session_state.client_list.append(new_c)
-                # 為新客戶建立初始空白行以防錯誤
                 st.session_state['cur_c'] = new_c
                 save_data(); st.rerun()
         
         st.markdown("---")
         
-        # 2. 更名功能 (維持原佈局)
+        # 2. 更名功能
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
         new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
         if st.button("📝 執行更名", use_container_width=True):
@@ -249,11 +248,10 @@ with st.sidebar:
                 st.session_state['cur_c'] = new_name
                 save_data(); st.rerun()
 
-    # --- 下拉選單安全鎖 (確保 cur_c 永遠在名單內) ---
+    # --- 下拉選單安全鎖 ---
     if st.session_state.get('cur_c') not in st.session_state.client_list:
         st.session_state['cur_c'] = "Robert" if "Robert" in st.session_state.client_list else st.session_state.client_list[0]
 
-    # [關鍵修復]：下拉選單選中後立即存入 st.session_state['cur_c']
     st.session_state['cur_c'] = st.selectbox(
         "🎯 當前控盤對象", 
         st.session_state.client_list, 
@@ -261,7 +259,7 @@ with st.sidebar:
         key="client_selector_side"
     )
     
-    # 3. 刪除功能 (維持原佈局)
+    # 3. 刪除功能
     if st.button("❌ 刪除當前客戶", use_container_width=True):
         if st.session_state['cur_c'] != "Robert":
             to_del = st.session_state['cur_c']
@@ -273,7 +271,6 @@ with st.sidebar:
             st.error("系統預設客戶 Robert 不可刪除。")
 
     st.markdown("---")
-    # 這裡確保持股顯示數量是根據「當前選中」的客戶
     c_stocks = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state['cur_c']]
     st.metric(f"{st.session_state['cur_c']} 的持股", len(c_stocks))
 
@@ -313,6 +310,7 @@ def record_transaction(client, tid, action, shares, price, note):
 # =================================================================
 # --- [第六區：主畫面佈局 - 戰略掃描 + 全球情報 + 交易紀錄] ---
 # =================================================================
+# 修正：刪除重複定義，確保只有這一行 tabs 定義
 tab_monitor, tab_global_news, tab_history = st.tabs(["🛡️ 戰略監控中心", "🌎 全球戰略情報", "📜 交易紀錄"])
 
 # --- [第一分頁：戰略監控中心] ---
@@ -386,6 +384,7 @@ with tab_monitor:
         
         if not my_h.empty:
             total_pnl = 0
+            # 修正：確保在渲染前計算 PNL，並僅渲染一次
             for idx, row in my_h.iterrows():
                 cp, cd, cc = get_stock_perf(row['id'], 0)
                 if cp > 0:
