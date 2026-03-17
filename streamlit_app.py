@@ -8,36 +8,25 @@ from datetime import datetime, timedelta
 import urllib.parse
 import numpy as np
 
-# --- [第 1 區：核心配置與 CSS 樣式 - 升級 12.5 史詩將軍級] ---
-st.set_page_config(page_title="大基石-12.5史詩將軍級", layout="wide")
+# --- [第 1 區：核心配置與 CSS - 增加新聞特效] ---
+st.set_page_config(page_title="大基石-15.0史詩進化版", layout="wide")
 
-# 自動刷新機制
-try:
-    from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=60 * 1000, key="v125_general_refresh")
-except:
-    pass
-
-# CSS 樣式表 (保留所有佈局與特別優化)
 st.markdown("""
     <style>
+    /* 保持您原本的樣式 ... */
     html, body, [class*="css"] { font-size: 13px !important; color: #1e1e1e; }
-    .stButton>button { 
-        height: 32px !important; 
-        padding: 0px 15px !important; 
-        font-size: 13px !important; 
-        border-radius: 6px !important;
-        font-weight: bold !important;
-    }
-    .news-card { border-left: 4px solid #cc0000; padding-left: 12px; margin-bottom: 8px; font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-    .rank-tag { background: #ff4b4b; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 5px; }
-    .sentiment-tag { color: #00D1FF; font-weight: bold; border: 1px solid #00D1FF; padding: 3px 6px; border-radius: 4px; background: rgba(0, 209, 255, 0.1); }
-    .diag-box { background: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #ff4b4b; }
-    .status-bar { padding: 8px 15px; border-radius: 10px; margin-bottom: 15px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
-    .status-on { background-color: #e6fffa; color: #2c7a7b; border: 1px solid #81e6d9; }
-    .status-off { background-color: #fff5f5; color: #c53030; border: 1px solid #feb2b2; }
+    .stButton>button { height: 32px !important; font-size: 13px !important; border-radius: 6px !important; font-weight: bold !important; }
+    
+    /* 新增：新聞方磚卡片樣式 */
+    .bento-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #f0f0f0; margin-bottom: 12px; }
+    .ai-brief { background: #f0f7ff; color: #0056b3; padding: 8px; border-radius: 6px; font-size: 11px; margin-top: 10px; border-left: 3px solid #00D1FF; }
+    
+    /* 新增：閃爍動畫 (2小時內新聞用) */
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    .hot-blink { animation: blink 1.5s infinite; color: #FF4B4B; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
+
 
 # --- [第 2 區：雲端保險箱核心連線 - 執行狀態監控] ---
 SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
