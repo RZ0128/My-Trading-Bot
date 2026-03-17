@@ -535,58 +535,103 @@ with tab_history:
 
         
 
-# --- 8. 全球情報 (全面喚醒版) ---
+# --- [第 8 區：全球戰略情報中樞 V14.0 - 台灣地緣戰略強化版] ---
 st.divider()
-st.header("🌎 全球 24H 戰略情報中樞")
+st.header("🌎 全球戰略情報大腦 (台美日中四方連動)")
 
-def fetch_massive_intel(query_list):
-    ssl._create_default_https_context = ssl._create_unverified_context
-    all_entries = []
-    backup_entries = [] # 兜底備份
-    now = datetime.now()
+def fetch_and_score_intel():
+    import collections
+    import re
     
-    for q in query_list:
-        u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
-        try:
+    # 擴展搜尋地圖：加入台灣地緣與產業鏈維度
+    strategic_map = {
+        "🇹🇼 台美日中戰略": [
+            "台海+美日+軍事+部署", "台灣+中國+貿易+限制", 
+            "美日台+半導體聯盟+晶片法案", "日本+台灣+經貿+合作",
+            "兩岸+協議+變動", "台灣+外交+突破"
+        ],
+        "💻 核心產業動態": [
+            "台積電+產能+配置", "AI伺服器+供應鏈+台廠", 
+            "散熱+半導體設備+營收", "CoWoS+擴產+進度",
+            "鴻海+低軌衛星+車用", "聯發科+旗艦晶片"
+        ],
+        "🎙️ 領袖與政策": ["Jerome Powell", "Trump", "Musk", "Nvidia Jensen", "央行+政策"],
+        "⚓ 戰略門戶": ["半導體+禁令", "航運+中斷", "能源+供應", "地緣政治+摩擦"],
+        "💰 金融與資源": ["匯率+波動", "美債+殖利率", "金價+避險", "關鍵礦產+限制"]
+    }
+    
+    all_raw_entries = []
+    
+    # 第一步：海量抓取 (擴大雷達範圍)
+    for cat, queries in strategic_map.items():
+        for q in queries:
+            u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
             feed = feedparser.parse(u)
-            for entry in feed.entries:
-                backup_entries.append(entry)
-                try:
-                    p_time = datetime(*entry.published_parsed[:6])
-                    # 放寬至 120 小時 (確保新聞量充足)
-                    if (now - p_time).total_seconds() < 432000: 
-                        all_entries.append(entry)
-                except:
-                    all_entries.append(entry)
-        except:
-            continue
-            
-    # 如果過濾後沒新聞，就用備份的所有新聞
-    display_list = all_entries if all_entries else backup_entries
-    unique_news = {n.link: n for n in display_list}.values()
-    return sorted(list(unique_news), key=lambda x: getattr(x, 'published', ''), reverse=True)[:15]
+            for e in feed.entries:
+                e.category = cat 
+                all_raw_entries.append(e)
 
-intel_map = {
-    "🇺🇸 美國戰略": ["川普 馬斯克", "輝達 聯準會", "美股 走勢"],
-    "🇪🇺 歐洲動態": ["歐洲經濟", "烏克蘭 局勢", "歐盟 政策"],
-    "🇮🇱 中東衝突": ["中東戰爭", "紅海 航運", "石油"],
-    "🇯🇵 亞洲科技": ["台積電 半導體", "日本 股市", "科技 趨勢"],
-    "🇨🇳 中國觀點": ["中國 經濟", "人民幣 政策"]
-}
+    # 第二步：動態詞頻分析
+    all_titles = " ".join([e.title for e in all_raw_entries])
+    words = re.findall(r'[\u4e00-\u9fa5]{2,4}', all_titles)
+    word_counts = collections.Counter(words)
+    top_hot_words = [word for word, count in word_counts.most_common(12)] 
 
-tabs = st.tabs(list(intel_map.keys()))
-for tab, (region, q_list) in zip(tabs, intel_map.items()):
-    with tab:
-        items = fetch_massive_intel(q_list)
-        if items:
-            for n in items:
-                st.markdown(f"""
-                    <div class='news-card'>
-                        🕒 {getattr(n, 'published', '即時')[5:16]} | 
-                        <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-weight:500;'>
-                            {n.title}
-                        </a>
-                    </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info(f"正在連線全球數據庫，請稍候...")
+    # 第三步：四方連動多維度權重計算
+    scored_results = []
+    seen_links = set()
+    
+    # 強化關鍵字：針對台美日中衝突與產業鏈
+    geopolitics_boost = ["制裁", "演習", "斷鏈", "禁令", "加稅", "撤資", "合併", "突破"]
+    industry_boost = ["台積電", "TSMC", "輝達", "NVIDIA", "蘋果", "庫存", "毛利", "訂單"]
+
+    for e in all_raw_entries:
+        if e.link in seen_links: continue
+        
+        score = 0
+        title = e.title.upper()
+        
+        # A. 地緣政治權重 (針對台美日中敏感詞)
+        if any(w in title for w in geopolitics_boost): score += 35
+        # B. 核心產業權重 (針對重點權值股與供應鏈)
+        if any(w in title for w in industry_boost): score += 30
+        # C. 當下動態熱詞權重
+        if any(w in title for w in top_hot_words): score += 15
+        # D. 領袖權重 (新增黃仁勳、馬斯克等)
+        if any(w in title for w in ["鮑爾", "馬斯克", "黃仁勳", "川普", "岸田", "拜登"]): score += 20
+        
+        scored_results.append({'data': e, 'score': score})
+        seen_links.add(e.link)
+
+    return sorted(scored_results, key=lambda x: x['score'], reverse=True), top_hot_words
+
+# 執行
+news_list, current_trends = fetch_and_score_intel()
+
+# 顯示動態趨勢
+st.write("🔥 **當前戰略熱點：** " + " ".join([f"`{w}`" for w in current_trends[:8]]))
+
+# 渲染 (優化顯示分類與標籤)
+for item in news_list[:30]: 
+    n = item['data']
+    score = item['score']
+    
+    # 風格設定
+    label = "💎 核心戰略" if score >= 80 else "🚨 緊急關注" if score >= 60 else "🔍 戰略情報"
+    color = "#FFD700" if score >= 80 else "#FF4B4B" if score >= 60 else "#00D1FF"
+    
+    st.markdown(f"""
+        <div style='border-left:5px solid {color}; padding:12px; margin-bottom:15px; background:white; border-radius:8px; box-shadow: 2px 2px 8px rgba(0,0,0,0.05);'>
+            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;'>
+                <span style='background:{color}; color:{"black" if score>=80 else "white"}; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:bold;'>{label}</span>
+                <small style='color:grey;'>{n.published[5:16]}</small>
+            </div>
+            <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-size:15px; font-weight:bold; line-height:1.4;'>
+                {n.title}
+            </a>
+            <div style='margin-top:8px; display:flex; gap:10px;'>
+                <span style='font-size:11px; color:grey;'>領域: <b>{n.category}</b></span>
+                <span style='font-size:11px; color:grey;'>影響權重: <b>{score}</b></span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
