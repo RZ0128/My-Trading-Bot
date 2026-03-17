@@ -287,40 +287,41 @@ def get_stock_perf(ticker, buy_price):
         return current_price, f"{diff} ({change_pct:.2f}%)", change_pct
     except: return 0, "N/A", 0
 
-# --- [第 6, 7, 8 區：左右佈局實體化] ---
+# --- [第 6, 7, 8 區：左右佈局實體化 - 修正語法錯誤版] ---
 tab_main, tab_intel, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "📜 交易紀錄"])
 
 with tab_main:
+    # 建立 6:4 比例的左右欄位
     col_l, col_r = st.columns([1.6, 1.4])
     
-    with col_l: # 修正縮排
-        st.subheader(f"🔍 戰略掃描: [{st.session_state.cur_c}]")
+    with col_l:
+        st.subheader(f"🔍 戰略掃描: [{st.session_state.get('cur_c', 'Robert')}]")
+        # 搜尋功能
+        s_input = st.text_input("搜尋代號或名稱", placeholder="搜尋全台股標的...", key="main_search_box")
         
-        # 搜尋邏輯
-        s_input = st.text_input("搜尋代號或名稱", placeholder="輸入如 2330...", key="global_search")
+        # 板塊切換
+        cat_list = list(pool_390.keys())
+        cat_choice = st.radio("產業板塊掃描", cat_list, horizontal=True, key="cat_radio")
         
-        cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True)
-        
-        # 過濾顯示名單
+        # 過濾邏輯
         display_list = []
         if s_input:
-            for cat_name, stocks in pool_390.items():
+            for c_name, stocks in pool_390.items():
                 for tid, tname in stocks:
                     if s_input.lower() in tid.lower() or s_input in tname:
-                        display_list.append((tid, tname, cat_name))
+                        display_list.append((tid, tname, c_name))
         else:
-            for tid, tname in pool_390[cat_choice]:
-                display_list.append((tid, tname, cat_choice))
+            display_list = [(tid, tname, cat_choice) for tid, tname in pool_390[cat_choice]]
 
-        # 渲染 Top Picks 卡片
         st.write(f"📡 偵測到 {len(display_list)} 檔關鍵標的")
+        
+        # 顯示標的卡片 (3欄佈局)
         grid_cols = st.columns(3)
         for i, (tid, tname, tcat) in enumerate(display_list):
             with grid_cols[i % 3]:
                 with st.container(border=True):
                     st.caption(f"#{tcat}")
                     st.markdown(f"**{tname}**\n`{tid}`")
-                    
                     if st.button(f"➕ 佈局", key=f"add_{tid}_{i}"):
                         new_row = pd.DataFrame([{
                             'client': st.session_state['cur_c'],
@@ -329,92 +330,85 @@ with tab_main:
                             'buy_price': 0.0,
                             'shares': 0,
                             'unit': '股',
-                            'entry_reason': '掃描新增'
+                            'entry_reason': '系統新增'
                         }])
                         st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
                         save_data()
-                        st.toast(f"已將 {tname} 加入監控清單")
+                        st.toast(f"已新增 {tname}")
                         st.rerun()
 
-    with col_r: # 修正縮排
+    with col_r:
         st.subheader("💼 持股監控")
-        
-        my_holdings = st.session_state.local_db[
-            (st.session_state.local_db['client'] == st.session_state['cur_c']) & 
+        # 顯示當前客戶持股
+        curr_client = st.session_state.get('cur_c', 'Robert')
+        my_h = st.session_state.local_db[
+            (st.session_state.local_db['client'] == curr_client) & 
             (st.session_state.local_db['id'] != 'INIT')
         ]
         
-        if my_holdings.empty:
-            st.info("目前尚無持股，請從左側掃描區新增標的。")
+        if my_h.empty:
+            st.info("目前清單空空如也，請從左側點擊 ➕ 佈局。")
         else:
-            for index, row in my_holdings.iterrows():
+            for idx, row in my_h.iterrows():
                 with st.container(border=True):
-                    c1, c2 = st.columns([2, 1])
-                    cur_p, diff_s, pct = get_stock_perf(row['id'], row['buy_price'])
-                    
-                    with c1:
+                    cl1, cl2 = st.columns([2, 1])
+                    c_p, d_s, p_c = get_stock_perf(row['id'], row['buy_price'])
+                    with cl1:
                         st.markdown(f"**{row['name']}** `{row['id']}`")
-                        st.write(f"現價: **{cur_p}** ({diff_s})")
-                        pnl = (cur_p - row['buy_price']) * row['shares'] if row['buy_price'] > 0 else 0
-                        st.caption(f"持有: {row['shares']} {row['unit']} | 成本: {row['buy_price']}")
-                    
-                    with c2:
-                        if st.button("❌ 減持", key=f"del_{row['id']}_{index}"):
-                            record_transaction(st.session_state['cur_c'], row['id'], "減持/清倉", row['shares'], cur_p, "手動移除")
-                            st.session_state.local_db = st.session_state.local_db.drop(index)
+                        st.write(f"現價: **{c_p}** ({d_s})")
+                    with cl2:
+                        if st.button("❌ 移除", key=f"del_{row['id']}_{idx}"):
+                            record_transaction(curr_client, row['id'], "移除標的", 0, c_p, "手動移除")
+                            st.session_state.local_db = st.session_state.local_db.drop(idx)
                             save_data()
                             st.rerun()
-                    
-                    if row['buy_price'] > 0:
-                        pnl_color = "red" if pct > 0 else "green"
-                        st.markdown(f"<div style='height:3px; background:{pnl_color}; width:{min(abs(pct)*5, 100)}%;'></div>", unsafe_allow_html=True)
 
 with tab_intel:
     st.subheader("🌎 全球情報中心 (20H 極速)")
-    
-    n_col1, n_col2 = st.columns(2)
-    if n_col1.button("🇹🇼 台美日中・周邊情勢", use_container_width=True, key="btn_news_tw"): 
+    # 新聞分類切換
+    n_c1, n_c2 = st.columns(2)
+    if n_c1.button("🇹🇼 台美日中・周邊情勢", use_container_width=True, key="nw_tw"):
         st.session_state.news_mode = "🇹🇼 台美日中 (地緣)"
-    if n_col2.button("🌐 國際戰略・全球動態", use_container_width=True, key="btn_news_gl"): 
+    if n_c2.button("🌐 國際戰略・全球動態", use_container_width=True, key="nw_gl"):
         st.session_state.news_mode = "🌐 國際戰略 (全球)"
     
     current_mode = st.session_state.get('news_mode', "🇹🇼 台美日中 (地緣)")
-    news_list, hot_trends = fetch_and_score_intel()
+    news_data, hot_words = fetch_and_score_intel()
     
-    st.write(f"🔥 **當前熱點：** " + " ".join([f"`{w}`" for w in hot_trends[:6]]))
+    st.write(f"🔥 **當前熱點：** {' '.join([f'`{w}`' for w in hot_words[:6]])}")
     
+    # 渲染新聞方磚
     nl, nr = st.columns(2)
-    filtered_news = [x for x in news_list if x['cat'] == current_mode]
+    filtered = [x for x in news_data if x['cat'] == current_mode]
     
-    for idx, item in enumerate(filtered_news):
+    for i, item in enumerate(filtered):
         n = item['data']
-        bg_color = "#FFF5F5" if item['score'] > 80 else "white"
-        time_blink = "hot-blink" if "小時" in n['time'] and int(n['time'].split("小時")[0]) < 2 else ""
-        
+        # 視覺樣式
+        bg = "#FFF5F5" if item['score'] > 80 else "#FFFFFF"
+        # 渲染 HTML
         card_html = f"""
-        <div class="bento-card" style="background-color: {bg_color}; border-left: 5px solid {item['color']};">
-            <div style="display: flex; justify-content: space-between;">
-                <span style="font-size: 10px; color: #666;">{n['source']}</span>
-                <span class="{time_blink}" style="font-size: 10px;">{n['time']}</span>
+        <div class="bento-card" style="background:{bg}; border-left:5px solid {item['color']}; padding:15px; border-radius:10px; margin-bottom:10px; border:1px solid #eee;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;">
+                <span>{n['source']}</span><span>{n['time']}</span>
             </div>
-            <div style="font-weight: bold; font-size: 14px; margin: 8px 0;">{n['title']}</div>
-            <div class="ai-brief">
+            <div style="font-weight:bold; font-size:15px; margin:8px 0; color:#1e1e1e;">{n['title']}</div>
+            <div style="background:#f0f7ff; padding:8px; border-radius:5px; font-size:12px; color:#0056b3;">
                 <b>💡 AI 戰略簡評：</b><br>{item['ai_note']}
             </div>
         </div>
         """
-        if idx % 2 == 0: nl.markdown(card_html, unsafe_allow_html=True)
+        if i % 2 == 0: nl.markdown(card_html, unsafe_allow_html=True)
         else: nr.markdown(card_html, unsafe_allow_html=True)
 
 with tab_history:
     st.subheader("📜 歷史成交詳情")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
-        c_history = st.session_state.trade_history[st.session_state.trade_history['client'] == st.session_state['cur_c']]
-        if c_history.empty:
-            st.write(f"目前尚無 {st.session_state['cur_c']} 的成交紀錄。")
+        history_df = st.session_state.trade_history[st.session_state.trade_history['client'] == st.session_state.get('cur_c', 'Robert')]
+        if not history_df.empty:
+            st.dataframe(history_df.sort_index(ascending=False), use_container_width=True)
+            csv_data = history_df.to_csv(index=False).encode('utf-8-sig')
+            st.download_button("📥 下載紀錄", csv_data, "history.csv", "text/csv")
         else:
-            st.dataframe(c_history.sort_index(ascending=False), use_container_width=True)
-            csv = c_history.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("📥 下載歷史紀錄 (CSV)", csv, f"trade_{st.session_state['cur_c']}.csv", "text/csv")
+            st.info("該客戶尚無交易紀錄。")
     else:
-        st.info("系統尚無任何交易紀錄。
+        st.info("系統尚無任何交易紀錄。")
