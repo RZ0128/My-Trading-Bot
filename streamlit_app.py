@@ -216,16 +216,15 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
 
 def fetch_and_score_intel():
     """將軍級情報掃描：抓取 RSS 並根據市場熱點評分"""
-    # 建立 SSL 忽略環境（避免某些 RSS 來源報錯）
     if hasattr(ssl, '_create_unverified_context'):
         ssl._create_default_https_context = ssl._create_unverified_context
         
+    # --- 統一 Key 名稱，移除可能出錯的特殊空白 ---
     feeds = {
-        "🇹🇼 台美日中 (地緣)": "https://tw.news.yahoo.com/rss/finance",
-        "🌐 國際戰略 (全球)": "https://tw.news.yahoo.com/rss/world"
+        "TAIWAN": "https://tw.news.yahoo.com/rss/finance",
+        "GLOBAL": "https://tw.news.yahoo.com/rss/world"
     }
     
-    # 史詩級熱點關鍵字（權重加分）
     hot_keywords = {
         "台積電": 25, "半導體": 20, "AI": 20, "輝達": 20, "通膨": 15, 
         "降息": 15, "戰爭": 10, "斷鏈": 15, "電動車": 10, "美債": 10
@@ -237,33 +236,28 @@ def fetch_and_score_intel():
     for cat_name, url in feeds.items():
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:15]: # 每類抓 15 則
-                # 基礎評分系統
+            for entry in feed.entries[:15]:
                 score = 50 
                 for kw, pts in hot_keywords.items():
                     if kw in entry.title:
                         score += pts
                         trend_tracker.append(kw)
                 
-                # 隨機噪聲（模擬 AI 微調，也讓評分不那麼死板）
                 score += (len(entry.title) % 10) 
-                score = min(99, score) # 最高 99 分
+                score = min(99, score)
                 
                 all_news.append({
-                    "cat": cat_name,
+                    "cat": cat_name, # 這裡存入的是 "TAIWAN" 或 "GLOBAL"
                     "data": entry,
                     "score": score
                 })
         except:
             continue
 
-    # 取得出現頻率最高的前 8 個關鍵字作為熱點
     common_trends = sorted(set(trend_tracker), key=trend_tracker.count, reverse=True)
     if not common_trends: common_trends = ["穩定市場", "科技連動", "地緣觀測"]
     
-    # 按照評分排序
-    all_news = sorted(all_news, key=lambda x: x['score'], reverse=True)
-    return all_news, common_trends
+    return sorted(all_news, key=lambda x: x['score'], reverse=True), common_trends
 
 
 # --- [第 4 區：390 檔名單 (完整還原)] ---
@@ -484,48 +478,46 @@ with tab_scan:
         else:
             st.info("目前尚無持有標的。")
 
-# --- [第 7 區：全球情報 (原第 8 區搬移至 Tab 2)] ---
+# --- [第 7 區：全球情報] ---
 with tab_intel:
     st.subheader("🌐 全球戰略情報大腦 (20H 極速更新)")
     
-    # 初始化 news_mode，防止初次載入報錯
+    # 預設初始化為 TAIWAN
     if 'news_mode' not in st.session_state:
-        st.session_state.news_mode = "🇹🇼 台美日中 (地緣)"
+        st.session_state.news_mode = "TAIWAN"
 
-    # 模式切換按鈕
+    # 模式切換按鈕 (顯示文字 vs 背後邏輯值)
     col_btn1, col_btn2 = st.columns(2)
     if col_btn1.button("🇹🇼 台美日中・周邊情勢", use_container_width=True):
-        st.session_state.news_mode = "🇹🇼 台美日中 (地緣)"
+        st.session_state.news_mode = "TAIWAN"
         st.rerun()
     if col_btn2.button("🌐 國際戰略・全球動態", use_container_width=True):
-        st.session_state.news_mode = "🌐 國際戰略 (全球)"
+        st.session_state.news_mode = "GLOBAL"
         st.rerun()
 
-    # 執行情報抓取
     with st.spinner("正在接入全球衛星鏈結..."):
         news_list, current_trends = fetch_and_score_intel()
     
     st.markdown(f"🔥 **當前戰略熱點：** " + " ".join([f"`{w}`" for w in current_trends[:8]]))
     st.divider()
     
-    # 獲取當前模式
     target_cat = st.session_state.news_mode
-    st.info(f"📡 當前情報源：{target_cat}")
+    # 顯示人性化的標題
+    display_title = "🇹🇼 台美日中 (地緣)" if target_cat == "TAIWAN" else "🌐 國際戰略 (全球)"
+    st.info(f"📡 當前情報源：{display_title}")
 
-    # 優化佈局：改為雙欄顯示
     nl, nr = st.columns(2)
+    # 這裡的 x['cat'] 現在會正確匹配 "TAIWAN" 或 "GLOBAL"
     filtered_news = [x for x in news_list if x['cat'] == target_cat]
     
     if not filtered_news:
-        st.warning("暫時無法取得情報，請檢查網路連線或稍後再試。")
+        st.warning(f"目前 {display_title} 暫無最新情報，請稍後再試。")
     else:
         for i, item in enumerate(filtered_news):
+            # ... 這裡保持你原本的卡片 HTML 代碼不變 ...
             n = item['data']
             score = item['score']
-            # 將軍級配色：高分金黃，中分紅，低分藍
             color = "#FFD700" if score >= 85 else "#FF4B4B" if score >= 70 else "#00D1FF"
-            
-            # 建立 HTML 卡片樣式
             card_html = f"""
                 <div style='border-left:5px solid {color}; padding:12px; margin-bottom:12px; 
                             background-color:#ffffff; border-radius:8px; 
@@ -539,12 +531,8 @@ with tab_intel:
                     </a>
                 </div>
             """
-            
-            # 交替放入左右兩欄
-            if i % 2 == 0:
-                nl.markdown(card_html, unsafe_allow_html=True)
-            else:
-                nr.markdown(card_html, unsafe_allow_html=True)
+            if i % 2 == 0: nl.markdown(card_html, unsafe_allow_html=True)
+            else: nr.markdown(card_html, unsafe_allow_html=True)
 
 # --- [第 8 區：交易紀錄 (原第 7 區底部搬移至 Tab 3)] ---
 with tab_history:
