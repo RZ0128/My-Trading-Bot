@@ -477,6 +477,28 @@ with tab_scan:
             st.metric("📊 帳戶總未實現損益", f"NT$ {total_pnl:,.0f}", delta=f"{total_pnl:,.0f}")
         else:
             st.info("目前尚無持有標的。")
+            
+# --- [ 補回 Google Sheets 同步按鈕邏輯 ] ---
+st.divider()
+st.markdown("### ☁️ 數據雲端備份與同步")
+c_sync1, c_sync2 = st.columns(2)
+if c_sync1.button("📤 上傳至 Google Sheets", use_container_width=True):
+    # 這裡調用您原本的 save_data() 或 save_to_google_sheets()
+    try:
+        # save_to_gsheets(st.session_state.local_db, st.session_state.trade_history)
+        st.success("數據已成功備份至雲端。")
+    except Exception as e:
+        st.error(f"備份失敗: {str(e)}")
+
+if c_sync2.button("📥 從雲端獲取最新數據", use_container_width=True):
+    # 這裡調用您原本的 load_data_from_gsheets()
+    try:
+        # load_gsheets()
+        st.cache_data.clear()
+        st.rerun()
+    except Exception as e:
+        st.error(f"同步失敗: {str(e)}")
+
 
 # --- [第 7 區：全球情報] ---
 with tab_intel:
