@@ -215,49 +215,42 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         return None
 
 def fetch_and_score_intel():
-    """將軍級情報掃描：抓取 RSS 並根據市場熱點評分"""
+    """強化版將軍情報大腦：具備 Yahoo & Google 雙鏈結備援"""
     if hasattr(ssl, '_create_unverified_context'):
         ssl._create_default_https_context = ssl._create_unverified_context
-        
-    # --- 統一 Key 名稱，移除可能出錯的特殊空白 ---
+    
     feeds = {
-        "TAIWAN": "https://tw.news.yahoo.com/rss/finance",
-        "GLOBAL": "https://tw.news.yahoo.com/rss/world"
+        "TAIWAN": [
+            "https://tw.news.yahoo.com/rss/finance",
+            "https://news.google.com/rss/search?q=台灣財經&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+        ],
+        "GLOBAL": [
+            "https://tw.news.yahoo.com/rss/world",
+            "https://news.google.com/rss/search?q=Global+Strategy+Finance&hl=en-US&gl=US&ceid=US:en"
+        ]
     }
     
-    hot_keywords = {
-        "台積電": 25, "半導體": 20, "AI": 20, "輝達": 20, "通膨": 15, 
-        "降息": 15, "戰爭": 10, "斷鏈": 15, "電動車": 10, "美債": 10
-    }
+    hot_keywords = {"台積電": 25, "AI": 20, "輝達": 20, "降息": 15, "戰爭": 15, "美債": 10}
+    all_news, trend_tracker = [], []
+
+    for cat_key, urls in feeds.items():
+        for url in urls: 
+            try:
+                feed = feedparser.parse(url)
+                if len(feed.entries) > 0:
+                    for entry in feed.entries[:12]:
+                        score = 50 
+                        for kw, pts in hot_keywords.items():
+                            if kw in entry.title:
+                                score += pts
+                                trend_tracker.append(kw)
+                        score += (len(entry.title) % 10)
+                        all_news.append({"cat": cat_key, "data": entry, "score": min(99, score)})
+                    break 
+            except: continue
     
-    all_news = []
-    trend_tracker = []
-
-    for cat_name, url in feeds.items():
-        try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries[:15]:
-                score = 50 
-                for kw, pts in hot_keywords.items():
-                    if kw in entry.title:
-                        score += pts
-                        trend_tracker.append(kw)
-                
-                score += (len(entry.title) % 10) 
-                score = min(99, score)
-                
-                all_news.append({
-                    "cat": cat_name, # 這裡存入的是 "TAIWAN" 或 "GLOBAL"
-                    "data": entry,
-                    "score": score
-                })
-        except:
-            continue
-
     common_trends = sorted(set(trend_tracker), key=trend_tracker.count, reverse=True)
-    if not common_trends: common_trends = ["穩定市場", "科技連動", "地緣觀測"]
-    
-    return sorted(all_news, key=lambda x: x['score'], reverse=True), common_trends
+    return sorted(all_news, key=lambda x: x['score'], reverse=True), (common_trends if common_trends else ["全球局勢"])
 
 
 # --- [第 4 區：390 檔名單 (完整還原)] ---
