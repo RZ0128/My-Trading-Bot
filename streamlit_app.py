@@ -216,21 +216,23 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
 
 def fetch_and_score_intel():
     """
-    大基石 12.7 強化大腦：24H 全球戰略情報網 (含中東/美中/地緣政治)
+    大基石 12.8 史詩大腦：海量繁體中文情報網 (單區 30 則目標)
     """
     if hasattr(ssl, '_create_unverified_context'):
         ssl._create_default_https_context = ssl._create_unverified_context
 
-    # 嚴格篩選關鍵字：確保 24 小時內 (when:24h)
+    # 擴充搜索陣列，使用多組關鍵字併發抓取以確保數量
     search_queries = {
         "TAIWAN": [
-            "https://news.google.com/rss/search?q=台海局勢+OR+半導體戰爭+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-            "https://news.google.com/rss/search?q=US-China+Tech+War+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+            "https://news.google.com/rss/search?q=台股+OR+台海局勢+OR+半導體+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+            "https://news.google.com/rss/search?q=兩岸關係+OR+中共軍演+OR+國防部+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+            "https://news.google.com/rss/search?q=台積電+OR+輝達+OR+AI供應鏈+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
         ],
         "GLOBAL": [
-            "https://news.google.com/rss/search?q=Middle+East+Conflict+OR+Israel+Iran+War+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-            "https://news.google.com/rss/search?q=Fed+Interest+Rate+OR+US+Economy+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-            "https://news.google.com/rss/search?q=Global+Strategy+News+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+            "https://news.google.com/rss/search?q=中東衝突+OR+以色列+OR+伊朗+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+            "https://news.google.com/rss/search?q=美聯儲+OR+美股+OR+降息+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+            "https://news.google.com/rss/search?q=國際局勢+OR+俄烏戰爭+OR+地緣政治+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+            "https://news.google.com/rss/search?q=美國大選+OR+川普+OR+拜登+戰略+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
         ]
     }
     
@@ -238,12 +240,19 @@ def fetch_and_score_intel():
     now = datetime.now()
 
     for cat_key, urls in search_queries.items():
+        count_per_cat = 0
         for url in urls:
             try:
                 feed = feedparser.parse(url)
-                for entry in feed.entries[:20]: # 增加抓取數量
+                # 每個子來源抓取更多，直到滿足 30 則或抓完為止
+                for entry in feed.entries:
                     if entry.title in seen_titles: continue
                     
+                    # 檢查是否含有英文標題 (過濾機制)
+                    # 簡單檢查標題是否包含過多英文字母，若超過 50% 則過濾，確保繁體中文品質
+                    latin_chars = len([c for c in entry.title if c.isalpha()])
+                    if latin_chars > len(entry.title) * 0.5: continue
+
                     # 嚴格 24H 過濾
                     is_recent = False
                     if hasattr(entry, 'published_parsed'):
@@ -252,11 +261,11 @@ def fetch_and_score_intel():
                             is_recent = True
                     
                     if is_recent:
-                        # 戰略價值權重計算
-                        score = 60
-                        high_value = ["戰爭", "衝突", "斷供", "制裁", "降息", "美聯儲", "飛彈", "中東"]
-                        for kw in high_value:
-                            if kw in entry.title: score += 15
+                        # 戰略價值加權邏輯
+                        score = 65 
+                        high_impact = ["戰爭", "衝突", "斷供", "制裁", "降息", "美聯儲", "彈道", "演習", "突發"]
+                        for kw in high_impact:
+                            if kw in entry.title: score += 12
                         
                         news_list.append({
                             "cat": cat_key, 
@@ -264,9 +273,11 @@ def fetch_and_score_intel():
                             "score": min(99, score)
                         })
                         seen_titles.add(entry.title)
+                        count_per_cat += 1
             except: continue
     
-    hot_words = ["中東戰爭", "台海局勢", "美聯儲降息", "輝達財報", "地緣政治風險"]
+    hot_words = ["中東火藥桶", "台海警戒", "美聯儲動態", "AI 戰略對峙", "全球通膨"]
+    # 最終排序，確保最高價值的在前
     return sorted(news_list, key=lambda x: x['score'], reverse=True), hot_words
 
 
@@ -522,58 +533,58 @@ with tab_scan:
 
 # --- [第 7 區：全球情報] ---
 with tab_intel:
-    st.subheader("🌐 全球戰略情報大腦 (24H 極速更新)")
+    st.subheader("🌐 全球戰略情報大腦 (24H 繁體中文極速更新)")
     
     if 'news_mode' not in st.session_state:
         st.session_state.news_mode = "GLOBAL"
 
-    # 模式切換按鈕
+    # 模式切換
     col_btn1, col_btn2 = st.columns(2)
-    if col_btn1.button("🇹🇼 台美日中・周邊情勢", use_container_width=True):
+    if col_btn1.button("🇹🇼 台海局勢・產業情報 (24H)", use_container_width=True):
         st.session_state.news_mode = "TAIWAN"
         st.rerun()
-    if col_btn2.button("🌍 國際戰略・中東要聞", use_container_width=True):
+    if col_btn2.button("🌍 全球衝突・中東要聞 (24H)", use_container_width=True):
         st.session_state.news_mode = "GLOBAL"
         st.rerun()
 
-    with st.spinner("正在接入全球衛星鏈結，過濾 24H 內要聞..."):
+    with st.spinner("正在掃描全球 24H 繁體中文情報網..."):
         news_list, current_trends = fetch_and_score_intel()
     
-    st.markdown(f"🔥 **當前戰略熱點：** " + " ".join([f"`{w}`" for w in current_trends]))
-    st.divider()
+    st.markdown(f"🔥 **今日戰略熱點：** " + " ".join([f"`{w}`" for w in current_trends]))
     
     target_cat = st.session_state.news_mode
-    display_title = "區域防衛情報" if target_cat == "TAIWAN" else "全球衝突與戰略要聞"
-    st.info(f"📡 分類：{display_title}")
-
-    nl, nr = st.columns(2)
     filtered_news = [x for x in news_list if x['cat'] == target_cat]
     
+    st.write(f"📊 目前已獲取 **{len(filtered_news)}** 則重磅情報")
+    st.divider()
+
     if not filtered_news:
-        st.warning(f"目前 {display_title} 暫無 24H 內之重磅消息。")
+        st.warning("目前此分類暫無 24H 內繁體中文情報，請稍後再試。")
     else:
+        # 使用兩欄佈局展示大量新聞
+        nl, nr = st.columns(2)
         for i, item in enumerate(filtered_news):
             n = item['data']
             score = item['score']
-            # 根據分數決定顏色與標題前綴
             color = "#FF4B4B" if score >= 85 else "#FFD700" if score >= 70 else "#00D1FF"
-            prefix = "🔴 重大" if score >= 85 else "🟡 關注"
+            prefix = "🚨 特報" if score >= 85 else "📌 要聞"
             
             card_html = f"""
-                <div style='border-left:5px solid {color}; padding:12px; margin-bottom:12px; 
-                            background-color:#ffffff; border-radius:8px; 
-                            box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
-                    <div style='font-size:11px; color:#666; margin-bottom:5px;'>
+                <div style='border-left:5px solid {color}; padding:10px; margin-bottom:10px; 
+                            background-color:#ffffff; border-radius:6px; 
+                            box-shadow: 1px 1px 3px rgba(0,0,0,0.05); min-height:80px;'>
+                    <div style='font-size:10px; color:#666; margin-bottom:3px;'>
                         📅 {n.published[5:16] if hasattr(n, 'published') else '最新'} | 
-                        <span style='color:{color}; font-weight:bold;'>戰略價值: {score}</span>
+                        <span style='color:{color}; font-weight:bold;'>價值: {score}</span>
                     </div>
-                    <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-size:14px; font-weight:bold;'>
+                    <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-size:13px; font-weight:bold; line-height:1.4;'>
                         {prefix} | {n.title}
                     </a>
                 </div>
             """
             if i % 2 == 0: nl.markdown(card_html, unsafe_allow_html=True)
             else: nr.markdown(card_html, unsafe_allow_html=True)
+
 
 # --- [第 8 區：交易紀錄] ---
 with tab_history:
