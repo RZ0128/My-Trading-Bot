@@ -409,12 +409,24 @@ with tab_scan:
                             st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
                             st.info(f"**診斷:** {res['msg']}")
                             st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{res['sent']}</span>", unsafe_allow_html=True)
+                            
+                            # --- 補回：下單佈局 ---
                             u_c1, u_c2 = st.columns(2)
-                            q = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_main")
-                            u = u_c2.selectbox("佈局單位", ["張", "股"], key="su_main")
+                            q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_main_qty")
+                            u_val = u_c2.radio("佈局單位", ["張", "股"], key="su_main_unit", horizontal=True)
+                            
                             if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
-                                # ... 此處保留您原本的買入邏輯 ...
-                                pass
+                                # 執行買入邏輯
+                                new_entry = pd.DataFrame([{
+                                    'client': st.session_state.cur_c, 'id': tid, 'name': get_stock_name(tid),
+                                    'buy_price': p, 'shares': q_val, 'unit': u_val,
+                                    'entry_reason': res['msg'], 'current_score': res['score'], 'last_diag': datetime.now().strftime("%m-%d")
+                                }])
+                                st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                record_transaction(st.session_state.cur_c, tid, "BUY", q_val, p, "AI 戰略佈局")
+                                save_data()
+                                st.success(f"已成功佈局 {get_stock_name(tid)}")
+                                st.rerun()
                         with sc2:
                             st.metric("即時股價", p, d)
                             st.success(f"🎯 目標預期: {res['target']}")
@@ -429,13 +441,25 @@ with tab_scan:
                 res.update({'tid': tid, 'tname': tname, 'price': p, 'diff': d})
                 scored_data.append(res)
         
-        top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:10]
+        # --- 修正：推薦名單增加至 15 檔 ---
+        top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
         for item in top_picks:
             with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']} ({item['diff']})"):
                 st.markdown(f"**🧠 AI 診斷:** {item['msg']}")
-                k_c1, k_c2, k_c3 = st.columns([1, 1, 2])
+                # --- 補回：快速佈局按鈕與單位選擇 ---
+                k_c1, k_c2, k_c3 = st.columns([1, 1.2, 1.8])
+                quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"qq_{item['tid']}")
+                quick_u = k_c2.radio("單位", ["張", "股"], key=f"qu_{item['tid']}", horizontal=True)
                 if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
-                    pass
+                    new_entry = pd.DataFrame([{
+                        'client': st.session_state.cur_c, 'id': item['tid'], 'name': item['tname'],
+                        'buy_price': item['price'], 'shares': quick_q, 'unit': quick_u,
+                        'entry_reason': item['msg'], 'current_score': item['score'], 'last_diag': datetime.now().strftime("%m-%d")
+                    }])
+                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                    record_transaction(st.session_state.cur_c, item['tid'], "BUY", quick_q, item['price'], "板塊掃描快速進場")
+                    save_data()
+                    st.rerun()
 
     # --- [右側：持股監控] ---
     with col_r:
@@ -455,13 +479,24 @@ with tab_scan:
                     st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {row['buy_price']}")
                     pnl_color = "red" if pnl >= 0 else "green"
                     st.markdown(f"損益: <span style='color:{pnl_color}; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
+                    
+                    # --- 補回：減持功能佈局 ---
+                    e_c1, e_c2 = st.columns([1, 1.2])
+                    exit_q = e_c1.number_input("減持數量", min_value=1, max_value=int(row['shares']), value=1, key=f"eq_{idx}")
+                    if e_c2.button(f"❌ 執行減持", key=f"f_{idx}", use_container_width=True):
+                        if exit_q >= row['shares']:
+                            st.session_state.local_db = st.session_state.local_db.drop(idx)
+                        else:
+                            st.session_state.local_db.at[idx, 'shares'] -= exit_q
+                        record_transaction(st.session_state.cur_c, row['id'], "SELL", exit_q, cp, "手動減持")
+                        save_data(); st.rerun()
             
             st.divider()
             st.metric("📊 帳戶總未實現損益", f"NT$ {total_pnl:,.0f}", delta=f"{total_pnl:,.0f}")
         else:
             st.info("目前尚無持有標的。")
 
-        # --- [ 修正點 A：同步按鈕放在 col_r 內部底部 ] ---
+        # --- 同步按鈕 (確保在 col_r 內部) ---
         st.divider()
         st.markdown("### ☁️ 數據雲端備份與同步")
         c_sync1, c_sync2 = st.columns(2)
@@ -516,7 +551,6 @@ with tab_history:
     else:
         st.info("尚無紀錄。")
         
-    # --- [ 修正點 B：同步按鈕放在 tab_history 底部 ] ---
     st.divider()
     st.markdown("### ☁️ 交易紀錄同步備份")
     h_sync1, h_sync2 = st.columns(2)
