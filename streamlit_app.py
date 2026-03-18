@@ -216,68 +216,75 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
 
 def fetch_and_score_intel():
     """
-    大基石 12.8 史詩大腦：海量繁體中文情報網 (單區 30 則目標)
+    大基石 15.0 核心大腦：海量繁體中文情報抓取 (對接新版介面)
     """
+    import ssl
+    import collections
+    import re
+    import urllib.parse
+    from datetime import datetime, timedelta
+    import time
+
     if hasattr(ssl, '_create_unverified_context'):
         ssl._create_default_https_context = ssl._create_unverified_context
 
-    # 擴充搜索陣列，使用多組關鍵字併發抓取以確保數量
-    search_queries = {
-        "TAIWAN": [
-            "https://news.google.com/rss/search?q=台股+OR+台海局勢+OR+半導體+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-            "https://news.google.com/rss/search?q=兩岸關係+OR+中共軍演+OR+國防部+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-            "https://news.google.com/rss/search?q=台積電+OR+輝達+OR+AI供應鏈+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+    # 1. 擴展搜索矩陣：確保單區能抓到 30 則以上
+    strategic_map = {
+        "🇹🇼 台美日中 (地緣)": [
+            "台海局勢 when:24h", "中共軍演 when:24h", "台積電 晶片禁令 when:24h", 
+            "兩岸關係 when:24h", "美國對台軍售 when:24h", "南海衝突 when:24h",
+            "半導體戰爭 when:24h", "台灣 國防部 特報 when:24h"
         ],
-        "GLOBAL": [
-            "https://news.google.com/rss/search?q=中東衝突+OR+以色列+OR+伊朗+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-            "https://news.google.com/rss/search?q=美聯儲+OR+美股+OR+降息+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-            "https://news.google.com/rss/search?q=國際局勢+OR+俄烏戰爭+OR+地緣政治+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-            "https://news.google.com/rss/search?q=美國大選+OR+川普+OR+拜登+戰略+when:24h&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+        "🌐 國際戰略 (全球)": [
+            "中東戰爭 以色列 伊朗 when:24h", "美聯儲 利率 鮑爾 when:24h", "川普 關稅 政策 when:24h", 
+            "俄烏戰爭 戰況 when:24h", "紅海 航運 中斷 when:24h", "全球經濟 崩盤 when:24h",
+            "蘇伊士運河 危機 when:24h", "黃仁勳 NVIDIA 財報 when:24h", "美國大選 地緣政治 when:24h"
         ]
     }
     
-    news_list, seen_titles = [], set()
-    now = datetime.now()
-
-    for cat_key, urls in search_queries.items():
-        count_per_cat = 0
-        for url in urls:
+    news_list, seen_links = [], set()
+    
+    # 2. 多來源並發抓取
+    for cat_name, queries in strategic_map.items():
+        for q in queries:
+            # 強制鎖定繁體中文 hl=zh-TW
+            u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
             try:
-                feed = feedparser.parse(url)
-                # 每個子來源抓取更多，直到滿足 30 則或抓完為止
-                for entry in feed.entries:
-                    if entry.title in seen_titles: continue
-                    
-                    # 檢查是否含有英文標題 (過濾機制)
-                    # 簡單檢查標題是否包含過多英文字母，若超過 50% 則過濾，確保繁體中文品質
-                    latin_chars = len([c for c in entry.title if c.isalpha()])
-                    if latin_chars > len(entry.title) * 0.5: continue
-
-                    # 嚴格 24H 過濾
-                    is_recent = False
-                    if hasattr(entry, 'published_parsed'):
-                        pub_time = datetime(*entry.published_parsed[:6])
-                        if (now - pub_time) <= timedelta(hours=24):
-                            is_recent = True
-                    
-                    if is_recent:
-                        # 戰略價值加權邏輯
-                        score = 65 
-                        high_impact = ["戰爭", "衝突", "斷供", "制裁", "降息", "美聯儲", "彈道", "演習", "突發"]
-                        for kw in high_impact:
-                            if kw in entry.title: score += 12
+                feed = feedparser.parse(u)
+                for e in feed.entries[:20]: # 增加單項掃描深度
+                    if e.link not in seen_links:
+                        # 檢查標題：過濾掉過多英文字符的非繁中標題 (超過60%英文字則跳過)
+                        eng_chars = len(re.findall(r'[a-zA-Z]', e.title))
+                        if eng_chars > len(e.title) * 0.6: continue
+                        
+                        e.category = cat_name 
+                        # 處理發布時間格式
+                        pub_tag = "24H 內"
+                        if hasattr(e, 'published'):
+                            pub_tag = e.published[5:16]
+                            
+                        # 計算權重分數
+                        score = 55
+                        title = e.title.upper()
+                        if any(w in title for w in ["戰爭", "衝突", "爆炸", "制裁", "斷鏈", "降息", "加息", "突發"]): score += 30
+                        if any(w in title for w in ["台積電", "NVIDIA", "川普", "習近平", "鮑爾"]): score += 15
                         
                         news_list.append({
-                            "cat": cat_key, 
-                            "data": entry, 
-                            "score": min(99, score)
+                            'data': e, 
+                            'score': min(99, score), 
+                            'cat': cat_name,
+                            'time': pub_tag
                         })
-                        seen_titles.add(entry.title)
-                        count_per_cat += 1
-            except: continue
-    
-    hot_words = ["中東火藥桶", "台海警戒", "美聯儲動態", "AI 戰略對峙", "全球通膨"]
-    # 最終排序，確保最高價值的在前
+                        seen_links.add(e.link)
+            except:
+                continue
+
+    # 3. 提取熱門關鍵字
+    all_titles = " ".join([item['data'].title for item in news_list])
+    words = re.findall(r'[\u4e00-\u9fa5]{2,4}', all_titles)
+    hot_words = [w for w, c in collections.Counter(words).most_common(12)] 
+
+    # 最終排序：分數越高（越重要）的排在前面
     return sorted(news_list, key=lambda x: x['score'], reverse=True), hot_words
 
 
