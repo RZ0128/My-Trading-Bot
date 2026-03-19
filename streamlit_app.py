@@ -697,9 +697,17 @@ with tab_intel:
 with tab_history:
     st.subheader("📜 歷史交易紀錄")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
-        st.dataframe(st.session_state.trade_history.sort_values(by='date', ascending=False), use_container_width=True)
+    
+    if not st.session_state.trade_history.empty:
+        # 強制檢查是否有 date 欄位，若無則不排序避免報錯
+        if 'date' in st.session_state.trade_history.columns:
+            display_df = st.session_state.trade_history.sort_values(by='date', ascending=False)
+        else:
+            display_df = st.session_state.trade_history
+        st.dataframe(display_df, use_container_width=True)
     else:
-        st.info("尚無紀錄。")
+        st.info("尚無交易紀錄")
+
         
     st.divider()
     st.markdown("### ☁️ 交易紀錄同步備份")
