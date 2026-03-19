@@ -529,14 +529,32 @@ with tab_scan:
 
         # --- 同步按鈕 (確保在 col_r 內部) ---
         st.divider()
-        st.markdown("### ☁️ 數據雲端備份與同步")
+        st.markdown("### ☁️ 持股數據同步")
+        
+        # 1. 準備下載用的 CSV 數據
+        csv_inventory = st.session_state.local_db.to_csv(index=False).encode('utf-8-sig')
+        
         c_sync1, c_sync2 = st.columns(2)
-        if c_sync1.button("📤 上傳至 Google Sheets", key="up_scan", use_container_width=True):
-            save_data()
-            st.success("數據已備份。")
-        if c_sync2.button("📥 從雲端獲取最新數據", key="dl_scan", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
+        with c_sync1:
+            if st.button("💾 存至本地緩存", key="up_scan", use_container_width=True):
+                save_data()
+                st.success("已存至本地 stone_manager_db.csv")
+            
+            # --- 下載按鈕 ---
+            st.download_button(
+                label="📥 下載最新持股 (CSV)",
+                data=csv_inventory,
+                file_name=f"inventory_{datetime.now().strftime('%m%d_%H%M')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+
+        with c_sync2:
+            if st.button("🔄 從雲端重新獲取", key="dl_scan", use_container_width=True):
+                st.cache_data.clear()
+                st.session_state.initialized = False 
+                st.rerun()
+
 
 with tab_intel:
     # --- [第 7 區：全球戰略情報中樞 V15.0 史詩強化版] ---
@@ -674,7 +692,8 @@ with tab_intel:
     if len(filtered_list) == 0:
         st.warning("⚠️ 24H 內暫無匹配之重磅情報，請嘗試切換頻道。")
 
-# --- [第 8 區：交易紀錄] ---
+
+# --- [第 8 區：交易紀錄 - 強化同步版] ---
 with tab_history:
     st.subheader("📜 歷史交易紀錄")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
@@ -684,9 +703,26 @@ with tab_history:
         
     st.divider()
     st.markdown("### ☁️ 交易紀錄同步備份")
+    
+    # 準備下載用的交易紀錄數據
+    csv_history = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
+    
     h_sync1, h_sync2 = st.columns(2)
-    if h_sync1.button("📤 上傳紀錄", key="up_hist", use_container_width=True):
-        save_data()
-        st.success("紀錄已存檔。")
-    if h_sync2.button("📥 重新整理", key="dl_hist", use_container_width=True):
-        st.rerun()
+    with h_sync1:
+        if st.button("💾 存至本地紀錄", key="up_hist", use_container_width=True):
+            save_data()
+            st.success("紀錄已存檔至本地 trading_history.csv")
+        
+        # --- 新增：下載紀錄按鈕 ---
+        st.download_button(
+            label="📥 下載歷史紀錄 (CSV)",
+            data=csv_history,
+            file_name=f"history_{datetime.now().strftime('%m%d_%H%M')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+    with h_sync2:
+        if st.button("🔄 刷新雲端連線", key="dl_hist", use_container_width=True):
+            st.rerun()
+
