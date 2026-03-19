@@ -693,44 +693,59 @@ with tab_intel:
         st.warning("⚠️ 24H 內暫無匹配之重磅情報，請嘗試切換頻道。")
 
 
-# --- [第 8 區：交易紀錄 - 強化同步版] ---
+# --- [第 8 區：交易紀錄 - 強化同步防錯版] ---
 with tab_history:
     st.subheader("📜 歷史交易紀錄")
-    if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
     
-    if not st.session_state.trade_history.empty:
-        # 強制檢查是否有 date 欄位，若無則不排序避免報錯
-        if 'date' in st.session_state.trade_history.columns:
-            display_df = st.session_state.trade_history.sort_values(by='date', ascending=False)
-        else:
-            display_df = st.session_state.trade_history
-        st.dataframe(display_df, use_container_width=True)
+    # 檢查是否有資料
+    if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
+        try:
+            # 防錯機制：檢查 'date' 欄位是否存在
+            if 'date' in st.session_state.trade_history.columns:
+                # 排除空白的日期行再進行排序，避免崩潰
+                df_to_show = st.session_state.trade_history.copy()
+                # 強制轉換日期格式，不合法的轉為 NaT
+                df_to_show['date'] = pd.to_datetime(df_to_show['date'], errors='coerce')
+                display_df = df_to_show.sort_values(by='date', ascending=False)
+            else:
+                # 如果沒有 date 欄位，就直接顯示原始資料不排序
+                display_df = st.session_state.trade_history
+            
+            st.dataframe(display_df, use_container_width=True)
+        except Exception as e:
+            # 如果排序還是失敗，顯示原始資料並提示
+            st.warning(f"⚠️ 排序功能暫時失效 (格式偏移)，改為原始顯示模式")
+            st.dataframe(st.session_state.trade_history, use_container_width=True)
     else:
-        st.info("尚無交易紀錄")
-
+        st.info("💡 目前尚無交易紀錄，或雲端連線中...")
         
     st.divider()
     st.markdown("### ☁️ 交易紀錄同步備份")
     
-    # 準備下載用的交易紀錄數據
-    csv_history = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
-    
+    # 準備下載用的 CSV 數據
+    if 'trade_history' in st.session_state:
+        csv_history = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
+    else:
+        csv_history = b""
+
     h_sync1, h_sync2 = st.columns(2)
     with h_sync1:
         if st.button("💾 存至本地紀錄", key="up_hist", use_container_width=True):
             save_data()
-            st.success("紀錄已存檔至本地 trading_history.csv")
+            st.success("✅ 紀錄已存檔至本地緩存")
         
-        # --- 新增：下載紀錄按鈕 ---
+        # --- 下載紀錄按鈕 ---
         st.download_button(
             label="📥 下載歷史紀錄 (CSV)",
             data=csv_history,
             file_name=f"history_{datetime.now().strftime('%m%d_%H%M')}.csv",
             mime="text/csv",
-            use_container_width=True
+            use_container_width=True,
+            help="將此檔案下載後，上傳至 Google Sheets 的 history 分頁"
         )
 
     with h_sync2:
         if st.button("🔄 刷新雲端連線", key="dl_hist", use_container_width=True):
+            st.cache_data.clear()
+            st.session_state.initialized = False
             st.rerun()
-
