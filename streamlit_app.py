@@ -515,7 +515,7 @@ with st.sidebar:
 
 def get_stock_name(ticker):
     """根據代號找名稱，找不到則回傳代號本身"""
-    for cat in pool_425.values():
+    for cat in pool_500.values():
         for tid, tname in cat:
             if tid == ticker: return tname
     return ticker
@@ -573,7 +573,7 @@ with tab_scan:
             
             # --- [核心邏輯 A：全域字典去重與正規化] ---
             unique_pool = {}
-            for cat, stocks in pool_425.items():
+            for cat, stocks in pool_500.items():
                 for tid, tname in stocks:
                     unique_pool[tid] = tname
 
@@ -612,7 +612,7 @@ with tab_scan:
                         target_id = st.session_state.get('active_tid', matches[0][0])
                         target_name = st.session_state.get('active_name', matches[0][1])
                 else:
-                    st.warning("⚠️ 450 檔名單中無匹配項。")
+                    st.warning("⚠️ 500 檔名單中無匹配項。")
 
             # --- [核心邏輯 C：自動診斷與下單呈現] ---
             if target_id:
