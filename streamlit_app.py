@@ -561,42 +561,44 @@ with tab_scan:
     st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.cur_c}]")
     col_l, col_r = st.columns([1.6, 1.4]) 
     
-           # --- [左側：戰略掃描 - 修正診斷對接邏輯] ---
+               # --- [左側：戰略掃描 - 12.6 精確對接版] ---
     with col_l:
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
             # 1. 搜尋輸入框
             s_input = st.text_input("輸入名稱或代號", placeholder="例如：順達、鈊象 或 3211", key="global_search")
             
-            # 初始化搜尋目標變數
+            # 初始化目標
             target_id = None
             target_name = ""
 
             if s_input:
-                found_match = []
+                found_match_raw = []
                 for category, stocks in pool_425.items():
                     for tid, tname in stocks:
-                        # 優化比對：去掉 .TW 且不分大小寫
                         if s_input.lower() in tid.lower().replace(".tw","") or s_input in tname:
-                            found_match.append((tid, tname, category))
+                            found_match_raw.append((tid, tname))
+                
+                # --- [關鍵修正 A: 使用 set 去重，防止找到兩個相同的標的] ---
+                found_match = sorted(list(set(found_match_raw))) 
                 
                 if found_match:
                     st.write(f"🎯 找到 {len(found_match)} 檔相關標的：")
-                    cols = st.columns(3) # 改為三欄增加空間
-                    for idx, (tid, tname, cat) in enumerate(found_match):
+                    cols = st.columns(3)
+                    for idx, (tid, tname) in enumerate(found_match):
                         with cols[idx % 3]:
-                            # 點擊按鈕後直接存入 session_state
-                            if st.button(f"{tname}", key=f"btn_{tid}_{idx}", use_container_width=True):
+                            # --- [關鍵修正 B: 增加 idx 確保 key 唯一，防止 DuplicateElementKey 報錯] ---
+                            if st.button(f"🎯 診斷: {tname}", key=f"btn_search_{tid}_{idx}", use_container_width=True):
                                 st.session_state['active_tid'] = tid
                                 st.session_state['active_name'] = tname
                     
-                    # 關鍵修正：優先從 session_state 抓取點擊的目標，若無則抓搜尋的第一筆
-                    target_id = st.session_state.get('active_tid', found_match[0][0])
-                    target_name = st.session_state.get('active_name', found_match[0][1])
+                    # 獲取當前要診斷的目標
+                    target_id = st.session_state.get('active_tid')
+                    target_name = st.session_state.get('active_name')
                 else:
                     st.warning("⚠️ 在 425 檔名單中找不到此標的。")
 
-            # 2. 執行診斷顯示邏輯 (獨立於 if s_input 外，確保點擊後不會消失)
+            # --- [關鍵修正 C: 診斷結果呈現區 (獨立出來確保按鈕點擊後能觸發)] ---
             if target_id:
                 p, d, cc = get_stock_perf(target_id, 0)
                 if p > 0:
@@ -610,12 +612,11 @@ with tab_scan:
                             st.info(f"**診斷:** {res['msg']}")
                             st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{res['sent']}</span>", unsafe_allow_html=True)
                             
-                            # 佈局下單區
                             u_c1, u_c2 = st.columns(2)
-                            q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_input_{target_id}")
-                            u_val = u_c2.radio("佈局單位", ["張", "股"], key=f"u_radio_{target_id}", horizontal=True)
+                            q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_search_{target_id}")
+                            u_val = u_c2.radio("佈局單位", ["張", "股"], key=f"u_search_{target_id}", horizontal=True)
                             
-                            if st.button(f"🚀 確認執行佈局 {target_name}", key=f"confirm_{target_id}", use_container_width=True):
+                            if st.button(f"🚀 確認執行佈局 {target_name}", key=f"confirm_search_{target_id}", use_container_width=True):
                                 new_entry = pd.DataFrame([{
                                     'client': st.session_state.cur_c, 'id': target_id, 'name': target_name,
                                     'buy_price': p, 'shares': q_val, 'unit': u_val,
@@ -630,9 +631,6 @@ with tab_scan:
                             st.metric("即時股價", p, d)
                             st.success(f"🎯 目標預期: {res['target']}")
                             st.warning(f"🛡️ 防守位: {res['stop']}")
-
-        st.divider()
-        # 下方接原本的 radio 分類掃描...
 
 
 
