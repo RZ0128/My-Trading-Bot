@@ -41,11 +41,13 @@ st.markdown("""
 SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
 
 def get_sheet_url(sheet_name):
+    # 確保這裡的 sheet_name 傳入時與 Google Sheet 分頁名稱完全吻合
     return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
 def check_connection():
     """檢測與 Google Sheets 的連線狀態"""
     try:
+        # 以 history 作為連線測試標的
         test_df = pd.read_csv(get_sheet_url("history"), nrows=1)
         return True, "✅ 雲端同步中：已成功連結 StoneManager_DB"
     except Exception as e:
@@ -65,20 +67,21 @@ if is_connected:
     st.markdown(f'<div class="status-bar status-on">🌐 {status_text}</div>', unsafe_allow_html=True)
 else:
     st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
-    st.info("💡 提示：請確保 Google Sheets 已改名為 history/inventory/clients 並已『發布到網路』。")
+    st.info("💡 提示：請確保 Google Sheets 已改名為 inventory/history/clients 並已『發布到網路』。")
 
 def load_data():
-    """混合記憶模式：確保雲端資料存在，同時保留手動輸入的靈活性"""
-    # [新增核心鎖：防止 Rerun 時覆蓋掉剛存入的資料]
+    """混合記憶模式：修正排序為 inventory -> history -> clients"""
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
 
     try:
-        # 1. 讀取雲端資料
+        # 1. 讀取庫存 (第一頁)
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
+        
+        # 2. 讀取歷史 (第二頁)
         st.session_state.trade_history = pd.read_csv(get_sheet_url("history"))
         
-        # 2. 讀取客戶名單
+        # 3. 讀取客戶 (第三頁)
         client_df = pd.read_csv(get_sheet_url("clients"))
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
         
@@ -93,6 +96,7 @@ def load_data():
         st.session_state.initialized = True
             
     except Exception:
+        # 備援機制：如果雲端讀取失敗，初始化空白架構
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
         if 'trade_history' not in st.session_state:
