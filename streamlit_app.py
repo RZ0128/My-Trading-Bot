@@ -512,7 +512,7 @@ with st.sidebar:
 
 def get_stock_name(ticker):
     """根據代號找名稱，找不到則回傳代號本身"""
-    for cat in pool_390.values():
+    for cat in pool_425.values():
         for tid, tname in cat:
             if tid == ticker: return tname
     return ticker
@@ -568,7 +568,7 @@ with tab_scan:
             s_input = st.text_input("輸入名稱或代號", placeholder="搜尋全台股標的...", key="global_search")
             if s_input:
                 all_l = []
-                for l in pool_390.values(): all_l.extend(l)
+                for l in pool_425.values(): all_l.extend(l)
                 match = [tid for tid, name in all_l if s_input in name or s_input in tid]
                 tid = match[0] if match else (s_input.upper() + ".TW" if s_input.isdigit() else s_input.upper())
                 p, d, cc = get_stock_perf(tid, 0)
@@ -606,7 +606,7 @@ with tab_scan:
         st.divider()
         cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True)
         scored_data = []
-        for tid, tname in pool_390[cat_choice]:
+        for tid, tname in pool_425[cat_choice]:
             p, d, cc = get_stock_perf(tid, 0)
             res = generate_ai_tech_analysis(tid, p, 0)
             if res:
