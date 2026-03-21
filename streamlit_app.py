@@ -561,47 +561,67 @@ with tab_scan:
     st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.cur_c}]")
     col_l, col_r = st.columns([1.6, 1.4]) 
     
-    # --- [左側：戰略掃描] ---
+       # --- [左側：戰略掃描] ---
     with col_l:
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
-            s_input = st.text_input("輸入名稱或代號", placeholder="搜尋全台股標的...", key="global_search")
+            # 1. 搜尋輸入框
+            s_input = st.text_input("輸入名稱或代號", placeholder="例如：順達、鈊象 或 3211", key="global_search")
+            
             if s_input:
-                all_l = []
-                for l in pool_425.values(): all_l.extend(l)
-                match = [tid for tid, name in all_l if s_input in name or s_input in tid]
-                tid = match[0] if match else (s_input.upper() + ".TW" if s_input.isdigit() else s_input.upper())
-                p, d, cc = get_stock_perf(tid, 0)
-                if p > 0:
-                    res = generate_ai_tech_analysis(tid, p, 0)
-                    if res:
-                        st.markdown(f"### 🎯 戰略診斷: {get_stock_name(tid)} ({tid})")
-                        sc1, sc2 = st.columns([1.5, 1])
-                        with sc1:
-                            st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
-                            st.info(f"**診斷:** {res['msg']}")
-                            st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{res['sent']}</span>", unsafe_allow_html=True)
-                            
-                            # --- 補回：下單佈局 ---
-                            u_c1, u_c2 = st.columns(2)
-                            q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key="sq_main_qty")
-                            u_val = u_c2.radio("佈局單位", ["張", "股"], key="su_main_unit", horizontal=True)
-                            
-                            if st.button(f"🚀 確認執行佈局 {get_stock_name(tid)}", use_container_width=True):
-                                # 執行買入邏輯
-                                new_entry = pd.DataFrame([{
-                                    'client': st.session_state.cur_c, 'id': tid, 'name': get_stock_name(tid),
-                                    'buy_price': p, 'shares': q_val, 'unit': u_val,
-                                    'entry_reason': res['msg'], 'current_score': res['score'], 'last_diag': datetime.now().strftime("%m-%d")
-                                }])
-                                st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
-                                record_transaction(st.session_state.cur_c, tid, "BUY", q_val, p, "AI 戰略佈局")
-                                save_data()
-                                st.success(f"已成功佈局 {get_stock_name(tid)}")
-                                st.rerun()
-                        with sc2:
-                            st.metric("即時股價", p, d)
-                            st.success(f"🎯 目標預期: {res['target']}")
+                found_match = []
+                # 遍歷大基石 425 檔名單的所有產業與股票
+                for category, stocks in pool_425.items():
+                    for tid, tname in stocks:
+                        # 同時比對代號(不含.TW)與名稱
+                        if s_input.lower() in tid.lower().replace(".tw","") or s_input in tname:
+                            found_match.append((tid, tname, category))
+                
+                if found_match:
+                    # 如果找到多檔，顯示選擇按鈕 (例如搜尋「長榮」會出現航運與航太)
+                    st.write(f"共找到 {len(found_match)} 檔相關標的：")
+                    cols = st.columns(2)
+                    for idx, (tid, tname, cat) in enumerate(found_match):
+                        with cols[idx % 2]:
+                            if st.button(f"🎯 診斷: {tname} ({tid})", key=f"btn_{tid}"):
+                                st.session_state['active_tid'] = tid
+                                st.session_state['active_name'] = tname
+                    
+                    # 執行診斷顯示邏輯
+                    target_id = st.session_state.get('active_tid', found_match[0][0])
+                    target_name = st.session_state.get('active_name', found_match[0][1])
+                    
+                    p, d, cc = get_stock_perf(target_id, 0)
+                    if p > 0:
+                        res = generate_ai_tech_analysis(target_id, p, 0)
+                        if res:
+                            st.markdown(f"### 🎯 戰略診斷: {target_name} ({target_id})")
+                            sc1, sc2 = st.columns([1.5, 1])
+                            with sc1:
+                                st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
+                                st.info(f"**診斷:** {res['msg']}")
+                                st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{res['sent']}</span>", unsafe_allow_html=True)
+                                
+                                # 佈局下單區
+                                u_c1, u_c2 = st.columns(2)
+                                q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_{target_id}")
+                                u_val = u_c2.radio("佈局單位", ["張", "股"], key=f"u_{target_id}", horizontal=True)
+                                
+                                if st.button(f"🚀 確認執行佈局 {target_name}", use_container_width=True):
+                                    new_entry = pd.DataFrame([{
+                                        'client': st.session_state.cur_c, 'id': target_id, 'name': target_name,
+                                        'buy_price': p, 'shares': q_val, 'unit': u_val,
+                                        'entry_reason': res['msg'], 'current_score': res['score'], 'last_diag': datetime.now().strftime("%m-%d")
+                                    }])
+                                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                    record_transaction(st.session_state.cur_c, target_id, "BUY", q_val, p, "AI 搜尋佈局")
+                                    save_data(); st.success(f"已成功佈局 {target_name}"); st.rerun()
+                            with sc2:
+                                st.metric("即時股價", p, d)
+                                st.success(f"🎯 目標預期: {res['target']}")
+                else:
+                    st.warning("⚠️ 在 425 檔名單中找不到此標的。")
+
 
         st.divider()
         cat_choice = st.radio("產業板塊掃描 (共振偵測)", list(pool_390.keys()), horizontal=True)
