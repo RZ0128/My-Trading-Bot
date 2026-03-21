@@ -561,16 +561,15 @@ with tab_scan:
     st.title(f"🛡️ 12.5 史詩大腦整合版: [{st.session_state.cur_c}]")
     col_l, col_r = st.columns([1.6, 1.4]) 
     
-               # --- [左側：戰略掃描 - 12.6 精確對接版] ---
+                   # --- [左側：戰略掃描] ---
     with col_l:
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
             # 1. 搜尋輸入框
             s_input = st.text_input("輸入名稱或代號", placeholder="例如：順達、鈊象 或 3211", key="global_search")
             
-            # 初始化目標
-            target_id = None
-            target_name = ""
+            # 建立一個暫存變數來決定是否要顯示診斷
+            show_diag = False
 
             if s_input:
                 found_match_raw = []
@@ -579,59 +578,67 @@ with tab_scan:
                         if s_input.lower() in tid.lower().replace(".tw","") or s_input in tname:
                             found_match_raw.append((tid, tname))
                 
-                # --- [關鍵修正 A: 使用 set 去重，防止找到兩個相同的標的] ---
+                # 去重
                 found_match = sorted(list(set(found_match_raw))) 
                 
                 if found_match:
                     st.write(f"🎯 找到 {len(found_match)} 檔相關標的：")
-                    cols = st.columns(3)
+                    cols = st.columns(2)
                     for idx, (tid, tname) in enumerate(found_match):
-                        with cols[idx % 3]:
-                            # --- [關鍵修正 B: 增加 idx 確保 key 唯一，防止 DuplicateElementKey 報錯] ---
+                        with cols[idx % 2]:
+                            # 點擊時強制更新 session_state 並標記顯示
                             if st.button(f"🎯 診斷: {tname}", key=f"btn_search_{tid}_{idx}", use_container_width=True):
                                 st.session_state['active_tid'] = tid
                                 st.session_state['active_name'] = tname
-                    
-                    # 獲取當前要診斷的目標
-                    target_id = st.session_state.get('active_tid')
-                    target_name = st.session_state.get('active_name')
+                                st.session_state['trigger_diag'] = True # 強制鎖定狀態
                 else:
                     st.warning("⚠️ 在 425 檔名單中找不到此標的。")
 
-            # --- [關鍵修正 C: 診斷結果呈現區 (獨立出來確保按鈕點擊後能觸發)] ---
-            if target_id:
-                p, d, cc = get_stock_perf(target_id, 0)
+            # --- [關鍵：診斷呈現邏輯區] ---
+            # 只要 session_state 有值就顯示，不論搜尋框內容如何
+            active_tid = st.session_state.get('active_tid')
+            active_name = st.session_state.get('active_name')
+
+            if active_tid and st.session_state.get('trigger_diag'):
+                p, d, cc = get_stock_perf(active_tid, 0)
                 if p > 0:
-                    res = generate_ai_tech_analysis(target_id, p, 0)
+                    res = generate_ai_tech_analysis(active_tid, p, 0)
                     if res:
                         st.markdown("---")
-                        st.markdown(f"### 🎯 戰略診斷: {target_name} ({target_id})")
-                        sc1, sc2 = st.columns([1.5, 1])
-                        with sc1:
-                            st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
-                            st.info(f"**診斷:** {res['msg']}")
-                            st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{res['sent']}</span>", unsafe_allow_html=True)
-                            
-                            u_c1, u_c2 = st.columns(2)
-                            q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_search_{target_id}")
-                            u_val = u_c2.radio("佈局單位", ["張", "股"], key=f"u_search_{target_id}", horizontal=True)
-                            
-                            if st.button(f"🚀 確認執行佈局 {target_name}", key=f"confirm_search_{target_id}", use_container_width=True):
-                                new_entry = pd.DataFrame([{
-                                    'client': st.session_state.cur_c, 'id': target_id, 'name': target_name,
-                                    'buy_price': p, 'shares': q_val, 'unit': u_val,
-                                    'entry_reason': res['msg'], 'current_score': res['score'], 'last_diag': datetime.now().strftime("%m-%d")
-                                }])
-                                st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
-                                record_transaction(st.session_state.cur_c, target_id, "BUY", q_val, p, "AI 搜尋佈局")
-                                save_data()
-                                st.success(f"✅ 已成功佈局 {target_name}")
-                                st.rerun()
-                        with sc2:
-                            st.metric("即時股價", p, d)
-                            st.success(f"🎯 目標預期: {res['target']}")
-                            st.warning(f"🛡️ 防守位: {res['stop']}")
-
+                        st.markdown(f"### 🎯 戰略診斷: {active_name} ({active_tid})")
+                        
+                        # 診斷內容框
+                        with st.container(border=True):
+                            sc1, sc2 = st.columns([1.5, 1])
+                            with sc1:
+                                st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
+                                st.info(f"**診斷:** {res['msg']}")
+                                st.markdown(f"**籌碼狀態:** <span class='sentiment-tag'>{res['sent']}</span>", unsafe_allow_html=True)
+                                
+                                # 下單區域
+                                st.write("---")
+                                u_c1, u_c2 = st.columns(2)
+                                q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_order_{active_tid}")
+                                u_val = u_c2.radio("佈局單位", ["張", "股"], key=f"u_order_{active_tid}", horizontal=True)
+                                
+                                if st.button(f"🚀 確認執行佈局 {active_name}", key=f"conf_buy_{active_tid}", use_container_width=True):
+                                    new_entry = pd.DataFrame([{
+                                        'client': st.session_state.cur_c, 'id': active_tid, 'name': active_name,
+                                        'buy_price': p, 'shares': q_val, 'unit': u_val,
+                                        'entry_reason': res['msg'], 'current_score': res['score'], 'last_diag': datetime.now().strftime("%m-%d")
+                                    }])
+                                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                    record_transaction(st.session_state.cur_c, active_tid, "BUY", q_val, p, "AI 搜尋佈局")
+                                    save_data()
+                                    # 清除診斷狀態防止重複觸發
+                                    st.session_state['trigger_diag'] = False
+                                    st.success(f"✅ 已成功佈局 {active_name}")
+                                    st.rerun()
+                            with sc2:
+                                st.metric("即時股價", p, d)
+                                st.success(f"🎯 目標預期: {res['target']}")
+                                st.warning(f"🛡️ 防守位: {res['stop']}")
+                                st.write(f"⏳ 預期週期: {res['window']}")
 
 
         st.divider()
