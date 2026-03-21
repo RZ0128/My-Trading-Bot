@@ -110,14 +110,14 @@ def save_data():
 
 
 
-# --- [第 3 區：史詩將軍級超強大腦 V12.5 (板塊共振/填息基因/短線冷靜)] ---
+# --- [第 3 區：史詩將軍級超強大腦 V12.6 (戰略擴張/轉型偵測/洗盤完成)] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
-    大腦核心法則：板塊共振/填息基因/短線冷靜 - 法則不變
+    大腦核心法則：板塊共振/填息基因/短線冷靜 + 2026 戰略轉型邏輯
     """
     try:
         stock = yf.Ticker(ticker)
-        # 擴展數據抓取
+        # 擴展數據抓取：2年歷史以計算長線高點
         hist_full = stock.history(period="2y") 
         if len(hist_full) < 250: return None
         
@@ -137,20 +137,30 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         
         score = 40 # 基礎分
         
-        # --- 核心 1: 籌碼洗盤與 35年價值發現 ---
+        # --- 核心 1: 籌碼洗盤與 35年價值發現 (融資洗盤邏輯) ---
         is_wash_done = False
         is_value_gem = False
         sentiment = "散戶進場 (融資增)"
         
+        # 偵測洗盤完成：回檔至關鍵均線且成交量極縮
         if on_support and vol_dry_out:
             score += 45
             is_wash_done = True
-            sentiment = "大戶收貨 (融資減)"
+            sentiment = "大戶收貨 (融資減)" # AI 判定洗盤完成後的籌碼位格
         
         if price <= low_30 * 1.05 and on_support and vol_dry_out:
             score += 20 
             is_value_gem = True
             sentiment = "💎 戰略價值區 (大戶長期鎖籌)"
+
+        # --- [新增] 核心 1.5: 戰略轉型與突破偵測 (適合 3211, 3293) ---
+        # 邏輯：股價挑戰 2 年新高且位階在均線之上，代表產業結構改變 (Re-rating)
+        high_2y = hist_full['Close'].max()
+        is_strategic_pivot = False
+        if price >= high_2y * 0.96 and price > ma60:
+            score += 20 # 給予強大的轉型溢價分
+            is_strategic_pivot = True
+            sentiment = "🔥 大戶瘋狂掃貨 (產業轉型確認)"
 
         # --- 進化 1: 板塊熱度共振 Sector Resonance ---
         if price > ma20 and price > ma60 and v.iloc[-1] > v_ma20:
@@ -171,13 +181,15 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         # --- 進化 2: 短線乖離強制冷靜 Bias Cooling ---
         bias_20 = (price - ma20) / ma20
         is_overheated = False
-        if bias_20 > 0.15: 
+        # 修正：如果是「戰略突破股」，乖離容忍度稍微提高
+        cool_limit = 0.18 if is_strategic_pivot else 0.15
+        if bias_20 > cool_limit: 
             score -= 15
             is_overheated = True
 
         # --- 核心 4: 長線風險過濾 ---
         bias_240 = (price - ma240) / ma240
-        if bias_240 > 0.4: score -= 30 
+        if bias_240 > 0.5: score -= 30 # 高檔修正風險
 
         # --- 進化 3: 除權息填息基因 Dividend Recovery ---
         is_dividend_king = False
@@ -199,6 +211,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
 
         # 將軍級診斷合成
         if is_overheated: msg = "⚠️ 戰鬥力過載，請勿追高，等待洗盤 " + msg
+        if is_strategic_pivot: msg = "🔥 偵測到轉型利基題材，分析師強推標的 " + msg
         if is_dividend_king: msg = "🎁 息利雙收標的 (填息基因強) " + msg
         if is_value_gem: msg = "💎 偵測到長線戰略價值位 " + msg
         if is_wash_done and on_support: msg = "🔥 偵測到洗盤完成，準備破新高 " + msg
@@ -213,6 +226,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         }
     except Exception as e:
         return None
+
 
 def fetch_and_score_intel():
     """
