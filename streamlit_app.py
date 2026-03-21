@@ -69,19 +69,28 @@ else:
     st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
     st.info("💡 提示：請確保 Google Sheets 已改名為 inventory/history/clients 並已『發布到網路』。")
 
+# --- [第 2 區：修正後的載入邏輯 - 強化容錯版] ---
+
 def load_data():
-    """混合記憶模式：修正排序為 inventory -> history -> clients"""
+    """混合記憶模式：修正排序並加強欄位容錯，確保不因空值崩潰"""
+    # 核心鎖：防止 Streamlit 重複執行初始化
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
 
     try:
-        # 1. 讀取庫存 (第一頁)
+        # 1. 讀取庫存 (第一頁: inventory)
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
         
-        # 2. 讀取歷史 (第二頁)
-        st.session_state.trade_history = pd.read_csv(get_sheet_url("history"))
+        # 2. 讀取歷史 (第二頁: history)
+        df_hist = pd.read_csv(get_sheet_url("history"))
         
-        # 3. 讀取客戶 (第三頁)
+        # 【超級防禦機制】：即便雲端試算表是空的或標題不對，也強制補上 date 欄位防止後續報錯
+        if df_hist.empty or 'date' not in df_hist.columns:
+            df_hist = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
+        
+        st.session_state.trade_history = df_hist
+        
+        # 3. 讀取客戶 (第三頁: clients)
         client_df = pd.read_csv(get_sheet_url("clients"))
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
         
@@ -92,11 +101,11 @@ def load_data():
         combined = list(set(st.session_state.client_list + cloud_clients))
         st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
         
-        # 標記初始化已完成
+        # 標記初始化成功
         st.session_state.initialized = True
             
-    except Exception:
-        # 備援機制：如果雲端讀取失敗，初始化空白架構
+    except Exception as e:
+        # 最終備援：如果連線完全斷路，建立空白 DataFrame 確保 UI 能顯示
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
         if 'trade_history' not in st.session_state:
