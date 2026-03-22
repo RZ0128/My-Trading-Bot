@@ -720,48 +720,52 @@ with tab_scan:
                 st.rerun()
 
 
+# ==============================================================================
+# 第七區：全球戰略情報中樞 V15.0 史詩強化版 (修正雙重 with 與縮排)
+# ==============================================================================
 with tab_intel:
-    # --- [第 7 區：全球戰略情報中樞 V15.0 史詩強化版] ---
-    with tab_intel:
     st.header("🌎 全球戰略情報大腦 (24H 繁體深度更新)")
 
     # 1. 頻道切換按鈕
     if 'news_mode' not in st.session_state:
         st.session_state.news_mode = "🇹🇼 台美日中 (地緣)"
 
-    c1, c2 = st.columns(2)
-    if c1.button("🇹🇼 台美日中・周邊情勢", use_container_width=True):
+    c_n1, c_n2 = st.columns(2)
+    if c_n1.button("🇹🇼 台美日中・周邊情勢", use_container_width=True, key="btn_tw_news"):
         st.session_state.news_mode = "🇹🇼 台美日中 (地緣)"
-    if c2.button("🌐 國際戰略・全球動態", use_container_width=True):
+    if c_n2.button("🌐 國際戰略・全球動態", use_container_width=True, key="btn_global_news"):
         st.session_state.news_mode = "🌐 國際戰略 (全球)"
 
-    # 2. 呼叫上方定義好的大腦
-    with st.spinner("📡 正在接入全球衛星情報網..."):
-        all_news, trends = fetch_and_score_intel()
-        st.write(f"🔥 **今日戰略焦熱點：** " + " ".join([f"`{w}`" for w in trends[:10]]))
+    # 2. 執行情報抓取 (確保此函數已定義在代碼上方或工具函數區)
+    try:
+        with st.spinner("📡 正在接入全球衛星情報網..."):
+            all_news, trends = fetch_and_score_intel()
+            st.write(f"🔥 **今日戰略焦熱點：** " + " ".join([f"`{w}`" for w in trends[:10]]))
 
-        target_cat = st.session_state.news_mode
-        filtered = [item for item in all_news if item['cat'] == target_cat]
+            target_cat = st.session_state.news_mode
+            filtered = [item for item in all_news if item['cat'] == target_cat]
 
-        # 3. 兩欄式精緻排版 (保留分級標籤)
-        nl, nr = st.columns(2)
-        for i, item in enumerate(filtered):
-            n = item['data']
-            score = item['score']
-            color = "#FF4B4B" if score >= 80 else ("#FFD700" if score >= 70 else "#00D1FF")
-            label = "⚡ 重大戰略" if score >= 80 else ("🚨 深度關注" if score >= 70 else "🔍 即時情報")
+            # 3. 兩欄式精緻排版
+            nl, nr = st.columns(2)
+            for i, item in enumerate(filtered):
+                n = item['data']
+                score = item['score']
+                color = "#FF4B4B" if score >= 80 else ("#FFD700" if score >= 70 else "#00D1FF")
+                label = "⚡ 重大戰略" if score >= 80 else ("🚨 深度關注" if score >= 70 else "🔍 即時情報")
 
-            card = f"""
-                <div style='border-left:5px solid {color}; padding:15px; margin-bottom:15px; background:white; border-radius:10px; border:1px solid #eee; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
-                    <div style='display:flex; justify-content:space-between; margin-bottom:5px;'>
-                        <span style='background:{color}; color:{"white" if score>=80 else "black"}; padding:2px 8px; border-radius:5px; font-size:10px; font-weight:bold;'>{label}</span>
-                        <span style='color:grey; font-size:10px;'>🕒 {item['time']}</span>
+                card = f"""
+                    <div style='border-left:5px solid {color}; padding:15px; margin-bottom:15px; background:white; border-radius:10px; border:1px solid #eee; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
+                        <div style='display:flex; justify-content:space-between; margin-bottom:5px;'>
+                            <span style='background:{color}; color:{"white" if score>=80 else "black"}; padding:2px 8px; border-radius:5px; font-size:10px; font-weight:bold;'>{label}</span>
+                            <span style='color:grey; font-size:10px;'>🕒 {item['time']}</span>
+                        </div>
+                        <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-size:14px; font-weight:bold;'>{n.title}</a>
                     </div>
-                    <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-size:14px; font-weight:bold;'>{n.title}</a>
-                </div>
-            """
-            if i % 2 == 0: nl.markdown(card, unsafe_allow_html=True)
-            else: nr.markdown(card, unsafe_allow_html=True)
+                """
+                if i % 2 == 0: nl.markdown(card, unsafe_allow_html=True)
+                else: nr.markdown(card, unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"📡 情報聯結暫時中斷，請確認 fetch_and_score_intel 函數位置。錯誤: {e}")
 
 
 
