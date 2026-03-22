@@ -242,25 +242,14 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
 
 
 def fetch_and_score_intel():
-    """大基石 15.0 戰略情報引擎：全中文、分級、24H 即時"""
-    import ssl
-    import collections
-    import re
-    import urllib.parse
-
+    """大腦核心：全中文戰略情報引擎"""
+    import ssl, collections, re, urllib.parse
     if hasattr(ssl, '_create_unverified_context'):
         ssl._create_default_https_context = ssl._create_unverified_context
 
-    # 完整戰略矩陣：確保台美日中與國際戰略全覆蓋
     strategic_map = {
-        "🇹🇼 台美日中 (地緣)": [
-            "台海局勢 when:24h", "中共軍演 when:24h", "台積電 晶片禁令 when:24h", 
-            "美台關係 when:24h", "南海衝突 when:24h", "半導體戰爭 when:24h"
-        ],
-        "🌐 國際戰略 (全球)": [
-            "中東戰爭 以色列 伊朗 when:24h", "美聯儲 利率 鮑爾 when:24h", "川普 關稅 when:24h", 
-            "俄烏戰爭 戰況 when:24h", "紅海 航運 when:24h", "全球經濟 崩盤 when:24h"
-        ]
+        "🇹🇼 台美日中 (地緣)": ["台海局勢 when:24h", "中共軍演 when:24h", "台積電 when:24h", "美台關係 when:24h"],
+        "🌐 國際戰略 (全球)": ["中東戰爭 when:24h", "美聯儲 when:24h", "川普 關稅 when:24h", "全球經濟 when:24h"]
     }
     
     news_list, seen_links = [], set()
@@ -269,25 +258,17 @@ def fetch_and_score_intel():
             u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
             try:
                 feed = feedparser.parse(u)
-                for e in feed.entries[:15]:
+                for e in feed.entries[:8]:
                     if e.link not in seen_links:
-                        # 權重分級計算
                         score = 55
-                        title = e.title.upper()
-                        if any(w in title for w in ["戰爭", "衝突", "爆炸", "制裁", "斷鏈", "降息", "加息"]): score += 30
-                        if any(w in title for w in ["台積電", "NVIDIA", "川普", "習近平"]): score += 15
-                        
-                        pub_tag = "24H 內"
-                        if hasattr(e, 'published'): pub_tag = e.published[5:16]
-                            
-                        news_list.append({'data': e, 'score': min(99, score), 'cat': cat_name, 'time': pub_tag})
+                        if any(w in e.title for w in ["戰爭", "衝突", "斷鏈", "降息"]): score += 30
+                        news_list.append({'data': e, 'score': score, 'cat': cat_name, 'time': e.published[5:16] if hasattr(e, 'published') else "24H"})
                         seen_links.add(e.link)
             except: continue
-
-    # 提取熱門戰略詞
+    
     all_titles = " ".join([item['data'].title for item in news_list])
     words = re.findall(r'[\u4e00-\u9fa5]{2,4}', all_titles)
-    hot_words = [w for w, c in collections.Counter(words).most_common(12)] 
+    hot_words = [w for w, c in collections.Counter(words).most_common(10)] 
     return sorted(news_list, key=lambda x: x['score'], reverse=True), hot_words
 
 
