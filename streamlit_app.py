@@ -673,50 +673,43 @@ with tab_intel:
             else: nr.markdown(card, unsafe_allow_html=True)
     except Exception as e:
         st.error("📡 情報連線中...")
-
-with tab_history: # 或者你可以新建一個 tab_ai_brain
+# --- [第 7.5 區：AI 大腦思維日誌 - 專屬分頁] ---
+with tab_brain: 
     st.header("🧠 大基石：AI 進化思維日誌")
     st.write("---")
     
     if 'ai_memory' in st.session_state and st.session_state.ai_memory:
-        for m in reversed(st.session_state.ai_memory[-10:]): # 顯示最近 10 條
+        # 顯示最近 10 條紀錄
+        for m in reversed(st.session_state.ai_memory[-10:]):
             with st.container(border=True):
                 c1, c2 = st.columns([1, 3])
                 c1.metric("診斷標的", m['ticker'])
                 with c2:
-                    st.markdown(f"**預測權重:** `{m['prediction']}`")
+                    st.markdown(f"**預測評分:** `{m['prediction']}`")
                     st.markdown(f"**核心邏輯:** {m['logic']}")
                     st.caption(f"📅 紀錄時間: {m['timestamp']}")
-                    # 未來這裡會顯示: 「學習反饋：歷史共振度校對中...」
     else:
         st.info("💡 目前尚無思維紀錄，請開始進行個股戰略診斷，AI 將啟動自我學習。")
 
 
-# --- [第 8 區：交易紀錄 - 強化同步防錯版] ---
+# --- [第 8 區：交易紀錄 - 獨立分頁] ---
 with tab_history:
     st.subheader("📜 歷史交易紀錄")
     
-    # 檢查是否有資料
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
         try:
-            # 防錯機制：檢查 'date' 欄位是否存在
-            if 'date' in st.session_state.trade_history.columns:
-                # 排除空白的日期行再進行排序，避免崩潰
-                df_to_show = st.session_state.trade_history.copy()
-                # 強制轉換日期格式，不合法的轉為 NaT
+            df_to_show = st.session_state.trade_history.copy()
+            if 'date' in df_to_show.columns:
                 df_to_show['date'] = pd.to_datetime(df_to_show['date'], errors='coerce')
                 display_df = df_to_show.sort_values(by='date', ascending=False)
             else:
-                # 如果沒有 date 欄位，就直接顯示原始資料不排序
-                display_df = st.session_state.trade_history
-            
+                display_df = df_to_show
             st.dataframe(display_df, use_container_width=True)
         except Exception as e:
-            # 如果排序還是失敗，顯示原始資料並提示
-            st.warning(f"⚠️ 排序功能暫時失效 (格式偏移)，改為原始顯示模式")
             st.dataframe(st.session_state.trade_history, use_container_width=True)
     else:
         st.info("💡 目前尚無交易紀錄，或雲端連線中...")
+        
         
     st.divider()
     st.markdown("### ☁️ 交易紀錄同步備份")
