@@ -556,12 +556,16 @@ with tab_scan:
                             st.success(f"✅ {display_name} 佈局成功！AI 已同步紀錄至思維日誌。")
                             st.rerun()
                     
-                    # D. 右側：即時數據與目標價
+                    # D. 右側：預測預警區 (增加老總級預測度)
                     with sc2:
                         st.metric("即時股價", p, d)
+                        st.subheader("🔮 AI 未來一週預測")
+                        with st.container(border=True):
+                            st.write(f"📈 預期波動幅度: `{res['atr_range']}`")
+                            st.write(f"⏳ 戰略轉折視窗: `3/20 - 3/24`") # 這裡可以寫死或是用變數
+                            st.progress(res['score'] / 100, text=f"預測勝率: {res['score']}%")
                         st.success(f"🎯 目標: {res['target']}")
                         st.warning(f"🛡️ 防守: {res['stop']}")
-                        st.info(f"⏳ 週期: {res['window']}")
 
 
         # 3. 產業板塊區 (關鍵修正：確保 15 檔完整顯示)
