@@ -520,39 +520,74 @@ with tab_scan:
                                 st.session_state.selected_stock = m_sid if "." in m_sid else (f"{m_sid}.TW")
                                 st.rerun()
 
-            # 2. 診斷呈現 (保留所有細節：Sentiment, 洗盤文字, 顏色)
-            sel_sid = st.session_state.get('selected_stock')
-            if sel_sid:
-                p, d, cc = get_stock_perf(sel_sid, 0)
-                res = generate_ai_tech_analysis(sel_sid, p, 0)
-                if res:
-                    display_name = STOCK_MAP.get(sel_sid.split('.')[0], '標的')
-                    st.markdown(f"### 🎯 戰略診斷: {display_name} ({sel_sid})")
-                    with st.container(border=True):
-                        sc1, sc2 = st.columns([1.5, 1])
-                        with sc1:
-                            st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
-                            # 🔥 融入你的洗盤偵測邏輯
-                            if "洗盤" in res['msg']:
-                                st.error(f"🔥 {res['msg']}")
-                            else:
-                                st.info(f"**診斷:** {res['msg']}")
+                    # --- 2. 診斷呈現區：AI 個股深度分析 (內含記憶功能) ---
+        sel_sid = st.session_state.get('selected_stock')
+        if sel_sid:
+            # A. 抓取數據與 AI 分析
+            p, d, cc = get_stock_perf(sel_sid, 0)
+            res = generate_ai_tech_analysis(sel_sid, p, 0)
+            
+            if res:
+                display_name = STOCK_MAP.get(sel_sid.split('.')[0], '標的')
+                
+                # 【大基石核心：AI 學習觸發】將診斷結果餵給思維日誌
+                update_ai_thought_log(display_name, res['score'], res['msg'])
+                
+                # B. UI 標題顯示
+                st.markdown(f"### 🎯 戰略診斷: {display_name} ({sel_sid})")
+                
+                with st.container(border=True):
+                    sc1, sc2 = st.columns([1.5, 1])
+                    
+                    # C. 左側：評分、洗盤狀態與佈局控制
+                    with sc1:
+                        st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
+                        
+                        # 顯示洗盤偵測 (高亮紅色) 或 一般診斷
+                        if "洗盤" in res['msg']:
+                            st.error(f"🔥 {res['msg']}")
+                        else:
+                            st.info(f"**診斷:** {res['msg']}")
+                        
+                        # 顯示籌碼狀態 (Sentiment)
+                        st.markdown(f"**📊 籌碼狀態:** `{res.get('sent', '大戶收貨 (融資減)')}`")
+                        st.write("---")
+                        
+                        # 佈局數量設定
+                        u_c1, u_c2 = st.columns(2)
+                        q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_buy_{sel_sid}")
+                        u_val = u_c2.radio("單位", ["張", "股"], key=f"u_buy_{sel_sid}", horizontal=True)
+                        
+                        # 執行按鈕：按下後會同時存入「庫存」與「交易紀錄」
+                        if st.button(f"🚀 執行戰略佈局", key=f"cf_buy_{sel_sid}", use_container_width=True):
+                            # 1. 存入當前客戶庫存
+                            new_entry = pd.DataFrame([{
+                                'client': st.session_state.cur_c, 
+                                'id': sel_sid, 
+                                'name': display_name, 
+                                'buy_price': p, 
+                                'shares': q_val, 
+                                'unit': u_val, 
+                                'entry_reason': res['msg'], 
+                                'current_score': res['score'], 
+                                'last_diag': datetime.now().strftime("%m-%d")
+                            }])
+                            st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
                             
-                            st.markdown(f"**📊 籌碼狀態:** `{res.get('sent', '大戶收貨 (融資減)')}`")
-                            st.write("---")
-                            # 佈局按鍵區：張/股還原
-                            u_c1, u_c2 = st.columns(2)
-                            q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_buy_{sel_sid}_main")
-                            u_val = u_c2.radio("佈局單位", ["張", "股"], key=f"u_buy_{sel_sid}_main", horizontal=True)
-                            if st.button(f"🚀 確認執行佈局", key=f"cf_buy_{sel_sid}_main", use_container_width=True):
-                                # 存入本地
-                                new_entry = pd.DataFrame([{'client': st.session_state.cur_c, 'id': sel_sid, 'name': display_name, 'buy_price': p, 'shares': q_val, 'unit': u_val, 'entry_reason': res['msg'], 'current_score': res['score'], 'last_diag': datetime.now().strftime("%m-%d")}])
-                                st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
-                                save_data(); st.success(f"✅ {display_name} 已加入持股"); st.rerun()
-                        with sc2:
-                            st.metric("即時股價", p, d)
-                            st.success(f"🎯 目標: {res['target']}")
-                            st.warning(f"🛡️ 防守: {res['stop']}")
+                            # 2. 同步寫入交易流水帳 (Record Transaction)
+                            record_transaction(st.session_state.cur_c, sel_sid, "買入", q_val, p, f"AI評分:{res['score']} | {res['msg']}")
+                            
+                            save_data()
+                            st.success(f"✅ {display_name} 佈局成功！AI 已同步紀錄至思維日誌。")
+                            st.rerun()
+                    
+                    # D. 右側：即時數據與目標價
+                    with sc2:
+                        st.metric("即時股價", p, d)
+                        st.success(f"🎯 目標: {res['target']}")
+                        st.warning(f"🛡️ 防守: {res['stop']}")
+                        st.info(f"⏳ 週期: {res['window']}")
+
 
         # 3. 產業板塊區 (關鍵修正：確保 15 檔完整顯示)
         st.divider()
