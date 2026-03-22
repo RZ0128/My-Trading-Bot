@@ -585,6 +585,8 @@ with tab_scan:
                         st.subheader("🔮 AI 未來一週預測")
                         with st.container(border=True):
                             st.write(f"📈 預期波動幅度: `{res['atr_range']}`")
+                            st.markdown(f"**🎯 AI 預期目標：** `NT$ {res['target']}`")
+                            st.markdown(f"**🛡️ 建議防守：** `NT$ {res['stop']}`")
                             st.write(f"⏳ 戰略轉折視窗: `3/20 - 3/24`") # 這裡可以寫死或是用變數
                             st.progress(res['score'] / 100, text=f"預測勝率: {res['score']}%")
                         st.success(f"🎯 目標: {res['target']}")
