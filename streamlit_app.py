@@ -671,6 +671,23 @@ with tab_intel:
     except Exception as e:
         st.error("📡 情報連線中...")
 
+with tab_history: # 或者你可以新建一個 tab_ai_brain
+    st.header("🧠 大基石：AI 進化思維日誌")
+    st.write("---")
+    
+    if 'ai_memory' in st.session_state and st.session_state.ai_memory:
+        for m in reversed(st.session_state.ai_memory[-10:]): # 顯示最近 10 條
+            with st.container(border=True):
+                c1, c2 = st.columns([1, 3])
+                c1.metric("診斷標的", m['ticker'])
+                with c2:
+                    st.markdown(f"**預測權重:** `{m['prediction']}`")
+                    st.markdown(f"**核心邏輯:** {m['logic']}")
+                    st.caption(f"📅 紀錄時間: {m['timestamp']}")
+                    # 未來這裡會顯示: 「學習反饋：歷史共振度校對中...」
+    else:
+        st.info("💡 目前尚無思維紀錄，請開始進行個股戰略診斷，AI 將啟動自我學習。")
+
 
 # --- [第 8 區：交易紀錄 - 強化同步防錯版] ---
 with tab_history:
