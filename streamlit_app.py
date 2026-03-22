@@ -122,15 +122,14 @@ def save_data():
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
 
 
-
-# --- [第 3 區：大基石史詩級強大腦 V12.9 (全邏輯+預測機合體)] ---
+# --- [第 3 區：大基石史詩級強大腦v12.9 - 全邏輯＋預測機合體版] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
-    大腦核心：融合【洗盤偵測】、【產業轉型】、【歷史共振】與【ATR 波動預測】
+    大腦核心 V12.9：融合【洗盤偵測】、【產業轉型】、【歷史共振】與【ATR 波動預測】
     """
     try:
         stock = yf.Ticker(ticker)
-        # 抓取 2 年數據確保長線指標準確
+        # 抓取 2 年數據確保長線指標準確 (年線 ma240 需求)
         hist_full = stock.history(period="2y") 
         if len(hist_full) < 250: return None
         
@@ -138,7 +137,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         c, v, h, l = hist['Close'], hist['Volume'], hist['High'], hist['Low']
         
         # --- [A. 核心指標計算] ---
-        # 1. 均線系統
+        # 1. 均線系統 (5/20/60/240)
         ma5 = c.rolling(5).mean().iloc[-1]
         ma20 = c.rolling(20).mean().iloc[-1]
         ma60 = c.rolling(60).mean().iloc[-1]
@@ -147,67 +146,68 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         # 2. ATR 波動率 (計算一週震盪空間)
         tr = pd.concat([h-l, (h-c.shift()).abs(), (l-c.shift()).abs()], axis=1).max(axis=1)
         atr = tr.rolling(14).mean().iloc[-1]
-        expected_range = round(atr * 1.618, 1) # 使用黃金比例擴張
+        # 使用黃金比例 1.618 預估一週最大波動
+        expected_range = round(atr * 1.618, 1) 
         
         # 3. 籌碼量能與位階
         v_ma20 = v.rolling(20).mean().iloc[-1]
         high_2y = hist_full['Close'].max()
         low_30_pct = hist_full['Close'].quantile(0.3)
         
-        # --- [B. 評分邏輯開跑] ---
-        score = 50 # 基礎分
+        # --- [B. 評分邏輯與多元解說] ---
+        score = 50 
         logic_tags = []
-        
-        # 1. 偵測洗盤完成 (關鍵邏輯)
+        sentiment = "🔍 散戶進場 (籌碼換手中)" # 預設
+
+        # 1. 偵測洗盤完成 (關鍵邏輯：縮量回踩均線)
         on_support = (abs(price - ma240) / ma240 < 0.05) or (abs(price - ma60) / ma60 < 0.05)
         vol_dry_out = (v.iloc[-1] < v_ma20 * 0.7)
         
         if on_support and vol_dry_out:
-            score += 20
+            score += 25
             logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
             sentiment = "💎 大戶收貨 (浮額清除)"
         elif price > ma5 > ma20 > ma60:
             score += 15
+            logic_tags.append("🚀 趨勢主升浪啟動")
             sentiment = "🔥 強勢主升 (大戶鎖籌)"
-        else:
-            sentiment = "🔍 散戶進場 (籌碼換手中)" # 預設狀態
 
-        # 2. 戰略轉型偵測 (3211, 3293 專用)
-        if price >= high_2y * 0.96 and price > ma60:
+        # 2. 戰略轉型偵測 (Re-rating 邏輯)
+        if price >= high_2y * 0.95 and price > ma60:
             score += 20
-            logic_tags.append("🔥 偵測到轉型利基題材，分析師強推")
+            logic_tags.append("🔥 偵測到轉型利基題材，產業位階重估")
             sentiment = "🚀 產業轉型 (法人重估價)"
 
         # 3. 價值區與填息基因
         if price <= low_30_pct * 1.05 and vol_dry_out:
             score += 10
-            logic_tags.append("💎 偵測到長線戰略價值位")
-            sentiment = "🛡️ 價值區 (大戶長期鎖籌)"
+            logic_tags.append("💎 進入長線戰略價值區")
+            sentiment = "🛡️ 價值區 (底部放量前夕)"
         
         if (c.iloc[-1] > c.iloc[-120]) and (c.iloc[-1] > ma240):
-            logic_tags.append("🎁 息利雙收標的 (填息基因強)")
+            logic_tags.append("🎁 具備填息基因")
 
-        # 4. 風險過濾 (老總級提醒)
+        # 4. 風險過濾 (過熱預警)
         bias_20 = (price - ma20) / ma20
         if bias_20 > 0.15:
             score -= 20
-            logic_tags.append("⚠️ 戰鬥力過載，請勿追高")
+            logic_tags.append("⚠️ 戰鬥力過載，不宜追高")
             sentiment = "⚠️ 短線過熱 (恐有震盪)"
 
-        # --- [C. 最終診斷合成] ---
+        # --- [C. 預測輸出] ---
         total_score = max(0, min(100, score))
         rank = "SS級" if total_score >= 90 else ("A級" if total_score >= 75 else "B級")
-        final_msg = " | ".join(logic_tags) if logic_tags else "趨勢盤整，靜待方向。"
+        final_msg = " | ".join(logic_tags) if logic_tags else "趨勢整固中，靜待量能共振。"
         
-        # 轉折預測 (模仿老總 3/20 邏輯)
-        pivot_info = "3/20 週五轉折點" if datetime.now() < datetime(2026, 3, 20) else "尋找下一轉折窗"
+        # 轉折預測 (對標老總 3/20 邏輯)
+        pivot_info = "3/20 週五轉折窗" if datetime.now() < datetime(2026, 3, 20) else "觀測下一變盤點"
 
         return {
             "msg": f"[{rank}] {final_msg}",
             "sent": sentiment,
             "score": total_score,
             "target": round(price + expected_range, 1),
-            "stop": round(ma20 * 0.96, 1),
+            "stop": round(ma20 * 0.95, 1),
             "window": "5-10 個交易日",
             "atr_range": f"±{expected_range}",
             "pivot": pivot_info
