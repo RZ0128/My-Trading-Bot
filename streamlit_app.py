@@ -638,8 +638,10 @@ with tab_scan:
             with st.expander(f"⭐ {item['tname']} | 評分: {item['score']} | 價: {item['price']}"):
                 st.write(f"🧠 AI: {item['msg']}")
                 k_c1, k_c2, k_c3 = st.columns([1, 1.2, 1.8])
-                quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"scan_qty_{item['tid']}_{i}"
-                quick_u = k_c2.radio("單位", ["張", "股"], key=f"qu_{item['tid']}", horizontal=True)
+                # 這裡補上了結尾的 )，並確保 key 唯一
+quick_q = k_c1.number_input("數量", min_value=1, value=1, key=f"scan_qty_{item['tid']}_{cat_choice}")
+quick_u = k_c2.radio("單位", ["張", "股"], key=f"qu_{item['tid']}", horizontal=True)
+
                 if k_c3.button(f"🚀 快速佈局 {item['tname']}", key=f"bp_{item['tid']}", use_container_width=True):
                     new_entry = pd.DataFrame([{
                         'client': st.session_state.cur_c, 
