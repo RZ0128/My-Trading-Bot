@@ -745,13 +745,6 @@ with tab_intel:
     # --- [第 7 區：全球戰略情報中樞 V15.0 史詩強化版] ---
     st.header("🌎 全球戰略情報大腦 (24H 繁體深度更新)")
 
-    def fetch_and_score_intel():
-        import collections
-        import re
-        from datetime import datetime, timedelta
-        import time
-        import urllib.parse
-
         # 1. 定義海量搜索矩陣 (確保數量與質量)
         strategic_map = {
             "🇹🇼 台美日中 (地緣)": [
