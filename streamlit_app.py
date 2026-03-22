@@ -131,7 +131,14 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         stock = yf.Ticker(ticker)
         # 抓取 2 年數據確保長線指標準確 (年線 ma240 需求)
         hist_full = stock.history(period="2y") 
-        if len(hist_full) < 250: return None
+        if len(hist_full) < 60: return None # 只要有季線數據就能跑基礎分析
+        
+        # 修正年線計算防止崩潰
+        if len(hist_full) >= 240:
+            ma240 = hist_full['Close'].rolling(240).mean().iloc[-1]
+        else:
+            ma240 = hist_full['Close'].mean() # 數據不夠時用總平均代替年線
+
         
         hist = hist_full.tail(60) 
         c, v, h, l = hist['Close'], hist['Volume'], hist['High'], hist['Low']
