@@ -627,6 +627,7 @@ with tab_scan:
                 with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | 價: {item['price']}"):
                     st.markdown(f"**🧠 AI 診斷：** `{item['msg']}`")
                     st.markdown(f"**📊 籌碼：** `{item.get('sent', '觀測中')}` | **🔮 波動：** `{item.get('atr_range', '±0')}`")
+                    st.markdown(f"**🎯 AI 預期目標：** `NT$ {item['target']}` | **🛡️ 建議防守：** `NT$ {item['stop']}`")
                     
                     k_c1, k_c2, k_c3 = st.columns([1, 1.2, 1.8])
                     q_val_s = k_c1.number_input("數量", min_value=1, value=1, key=f"sq_v129_{item['tid']}_{idx}_{cat_choice}")
