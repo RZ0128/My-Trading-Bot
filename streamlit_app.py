@@ -672,7 +672,6 @@ with tab_intel:
         st.error("📡 情報連線中...")
 
 
-
 # --- [第 8 區：交易紀錄 - 強化同步防錯版] ---
 with tab_history:
     st.subheader("📜 歷史交易紀錄")
