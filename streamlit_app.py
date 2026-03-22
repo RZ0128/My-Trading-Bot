@@ -122,93 +122,102 @@ def save_data():
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
 
 
-# --- [第 3 區：大基石史詩級強大腦v12.9 - 全邏輯＋預測機合體版] ---
+# --- [第 3 區：大基石史詩級強大腦v13.0 - 老總三位一體完全體] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
-    大腦核心 V12.9：融合【洗盤偵測】、【產業轉型】、【歷史共振】與【ATR 波動預測】
+    大腦核心 V13.0：
+    1. 整合老總三線系統 (60分/日/週) 
+    2. 偵測三線糾結 + 三角收斂 (洗盤尾聲)
+    3. 高低位爆量警報
     """
     try:
         stock = yf.Ticker(ticker)
-        # 抓取 2 年數據確保長線指標準確 (年線 ma240 需求)
-        # 💡 小建議：若 Yahoo 頻繁報錯，可將 period 改為 "1y"，目前維持您要求的 "2y"
-        hist_full = stock.history(period="2y") 
-        if len(hist_full) < 40: return None # 只要有基本數據就能跑基礎分析
+        # 抓取不同時區數據
+        h_full = stock.history(period="2y") # 日線 (20/60/124/248)
+        h_60m = stock.history(interval="60m", period="1mo") # 60分線 (5/35/200)
+        h_week = stock.history(interval="1wk", period="2y") # 週線 (5/35/200)
         
-        # --- [A. 核心指標計算 - 強化穩定性] ---
-        # 1. 均線系統與防崩潰處理
-        # 💡 這裡將修正後的 ma240 邏輯整合進來，避免後續重複定義導致報錯
-        if len(hist_full) >= 240:
-            ma240 = hist_full['Close'].rolling(240).mean().iloc[-1]
+        if len(h_full) < 60: return None 
+        
+        # --- [A. 核心指標計算 - 老總級別三線系統] ---
+        # 1. 日線系統 (20/60/124/248)
+        c, v, hi, lo = h_full['Close'], h_full['Volume'], h_full['High'], h_full['Low']
+        ma20, ma60 = c.rolling(20).mean().iloc[-1], c.rolling(60).mean().iloc[-1]
+        ma124 = h_full['Close'].rolling(124).mean().iloc[-1] if len(h_full) >= 124 else h_full['Close'].mean()
+        ma248 = h_full['Close'].rolling(248).mean().iloc[-1] if len(h_full) >= 248 else h_full['Close'].mean()
+        
+        # 2. 60分鐘線系統 (5/35/200)
+        if not h_60m.empty and len(h_60m) >= 35:
+            ma5_60 = h_60m['Close'].rolling(5).mean().iloc[-1]
+            ma35_60 = h_60m['Close'].rolling(35).mean().iloc[-1]
+            m60_status = "翻揚" if ma5_60 > ma35_60 else "轉弱"
         else:
-            ma240 = hist_full['Close'].mean() # 數據不夠時用總平均代替年線
+            m60_status = "觀測中"
 
-        hist = hist_full.tail(60) 
-        c, v, h, l = hist['Close'], hist['Volume'], hist['High'], hist['Low']
-        
-        ma5 = c.rolling(5).mean().iloc[-1]
-        ma20 = c.rolling(20).mean().iloc[-1]
-        ma60 = c.rolling(60).mean().iloc[-1]
-        # (原本重複定義 ma240 的錯誤行已移除)
-        
-        # 2. ATR 波動率 (計算一週震盪空間)
-        tr = pd.concat([h-l, (h-c.shift()).abs(), (l-c.shift()).abs()], axis=1).max(axis=1)
-        # 💡 加入 min_periods=1 防止數據較少時回傳 NaN
+        # 3. 週線系統 (5/35) - 判斷大局
+        ma5_w = h_week['Close'].rolling(5).mean().iloc[-1]
+        ma35_w = h_week['Close'].rolling(35).mean().iloc[-1]
+        week_trend = "波段看多" if ma5_w > ma35_w else "波段修正"
+
+        # 4. ATR 與 波動壓縮 (老總三角形)
+        tr = pd.concat([hi-lo, (hi-c.shift()).abs(), (lo-c.shift()).abs()], axis=1).max(axis=1)
         atr = tr.rolling(14, min_periods=1).mean().iloc[-1]
-        expected_range = round(atr * 1.618, 1) 
+        expected_range = round(atr * 1.618, 1)
+        # 波動壓縮偵測 (近10日震幅)
+        volatility_comp = (hi.tail(10).max() - lo.tail(10).min()) / price
         
-        # 3. 籌碼量能與位階
-        v_ma20 = v.rolling(20).mean().iloc[-1]
-        high_2y = hist_full['Close'].max()
-        low_30_pct = hist_full['Close'].quantile(0.3)
-        
-        # --- [B. 評分邏輯與多元解說 - 完整保留大基石架構] ---
+        # --- [B. 評分邏輯 - 注入老總操盤靈魂] ---
         score = 50 
         logic_tags = []
-        sentiment = "🔍 散戶進場 (籌碼換手中)" 
+        sentiment = "🔍 籌碼換手中"
+        v_ma20 = v.rolling(20).mean().iloc[-1]
+        vol_dry_out = (v.iloc[-1] < v_ma20 * 0.75)
+        high_2y = h_full['Close'].max()
+        low_30_pct = h_full['Close'].quantile(0.3)
 
-        # 1. 偵測洗盤完成 (關鍵邏輯：縮量回踩均線)
-        on_support = (abs(price - ma240) / ma240 < 0.05) or (abs(price - ma60) / ma60 < 0.05)
-        vol_dry_out = (v.iloc[-1] < v_ma20 * 0.75) # 稍微放寬洗盤縮量標準，提高偵測靈敏度
+        # 1. 老總絕學：三線糾結 + 三角收斂 + 前段趨勢往下
+        ma_gaps = [abs(ma20-ma60)/ma60, abs(ma60-ma124)/ma124, abs(ma20-ma124)/ma124]
+        is_converged = max(ma_gaps) < 0.04 # 均線糾結度 4% 內
+        is_downward = c.iloc[-60] > c.iloc[-10] # 前期趨勢往下
         
-        if on_support and vol_dry_out:
+        if is_converged and volatility_comp < 0.08 and is_downward and vol_dry_out:
+            score += 35
+            logic_tags.append("🔥 偵測到三線糾結+三角收斂，洗盤尾聲等待噴發")
+            sentiment = "💎 黎明前夕 (最後洗盤)"
+
+        # 2. 爆量警報：高檔脫手 vs 低檔支撐
+        if v.iloc[-1] > v_ma20 * 2.5:
+            if price > high_2y * 0.9:
+                score -= 30
+                logic_tags.append("⚠️ 偵測到高檔異常巨量，大戶恐在脫手！")
+                sentiment = "🚨 高檔派發 (準備下跌)"
+            elif price < low_30_pct * 1.1:
+                score += 20
+                logic_tags.append("🛡️ 底部爆量支撐，成本區浮現")
+                sentiment = "🛡️ 大戶建倉 (底部支撐)"
+
+        # 3. 洗盤偵測 (原 V12.9 核心)
+        on_support = (abs(price - ma248) / ma248 < 0.05) or (abs(price - ma60) / ma60 < 0.05)
+        if on_support and vol_dry_out and not is_converged: # 避免與糾結標籤重複
             score += 25
             logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
             sentiment = "💎 大戶收貨 (浮額清除)"
-        elif price > ma5 > ma20 > ma60:
-            score += 15
-            logic_tags.append("🚀 趨勢主升浪啟動")
-            sentiment = "🔥 強勢主升 (大戶鎖籌)"
-
-        # 2. 戰略轉型偵測 (Re-rating 邏輯)
-        if price >= high_2y * 0.95 and price > ma60:
-            score += 20
-            logic_tags.append("🔥 偵測到轉型利基題材，產業位階重估")
-            sentiment = "🚀 產業轉型 (法人重估價)"
-
-        # 3. 價值區與填息基因
-        if price <= low_30_pct * 1.05 and vol_dry_out:
-            score += 10
-            logic_tags.append("💎 進入長線戰略價值區")
-            sentiment = "🛡️ 價值區 (底部放量前夕)"
         
-        # 修正填息基因判斷長度
-        hist_len = len(hist_full)
-        if hist_len > 120 and (c.iloc[-1] > hist_full['Close'].iloc[-120]) and (c.iloc[-1] > ma240):
+        # 4. 戰略轉型與填息 (保留舊邏輯)
+        if price >= high_2y * 0.95 and price > ma60:
+            score += 15
+            logic_tags.append("🔥 產業位階重估")
+            sentiment = "🚀 法人重估價"
+        if len(h_full) > 120 and (c.iloc[-1] > h_full['Close'].iloc[-120]) and (c.iloc[-1] > ma248):
             logic_tags.append("🎁 具備填息基因")
 
-        # 4. 風險過濾 (過熱預警)
-        bias_20 = (price - ma20) / ma20
-        if bias_20 > 0.15:
-            score -= 20
-            logic_tags.append("⚠️ 戰鬥力過載，不宜追高")
-            sentiment = "⚠️ 短線過熱 (恐有震盪)"
-
-        # --- [C. 預測輸出] ---
+        # --- [C. 最終輸出] ---
+        # 整合 60分與週線狀態到評語
+        m60_info = f" | 60M:{m60_status}"
+        final_msg = f"[{week_trend}] " + (" | ".join(logic_tags) if logic_tags else "趨勢整固中。") + m60_info
+        
         total_score = max(0, min(100, score))
         rank = "SS級" if total_score >= 90 else ("A級" if total_score >= 75 else "B級")
-        final_msg = " | ".join(logic_tags) if logic_tags else "趨勢整固中，靜待量能共振。"
-        
-        pivot_info = "3/20 週五轉折窗" if datetime.now() < datetime(2026, 3, 20) else "觀測下一變盤點"
 
         return {
             "msg": f"[{rank}] {final_msg}",
@@ -218,19 +227,10 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             "stop": round(ma20 * 0.95, 1),
             "window": "5-10 個交易日",
             "atr_range": f"±{expected_range}",
-            "pivot": pivot_info
+            "pivot": "3/20 週五轉折窗" if datetime.now() < datetime(2026, 3, 20) else "觀測下週變盤"
         }
     except Exception as e:
-        # 💡 修改此處：當真的發生意外錯誤時，保留基本診斷資訊，減少「數據不穩」的出現感
-        return {
-            "msg": "[B級] 正在進行深度演算，請嘗試點擊刷新",
-            "sent": "🔍 觀測中",
-            "score": 55,
-            "target": round(price * 1.08, 1),
-            "stop": round(price * 0.94, 1),
-            "atr_range": "±計算中",
-            "pivot": "數據同步中"
-        }
+        return {"msg": "[B級] 正在進行深度演算...", "sent": "🔍 觀測中", "score": 55, "target": price, "stop": price, "atr_range": "±--", "pivot": "同步中"}
 
 
 
