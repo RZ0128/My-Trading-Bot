@@ -123,119 +123,94 @@ def save_data():
 
 
 
-# --- [第 3 區：史詩將軍級超強大腦 V12.6 (戰略擴張/轉型偵測/洗盤完成)] ---
+# --- [第 3 區：大基石史詩級強大腦 V12.9 (全邏輯+預測機合體)] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
-    大腦核心法則：板塊共振/填息基因/短線冷靜 + 2026 戰略轉型邏輯
+    大腦核心：融合【洗盤偵測】、【產業轉型】、【歷史共振】與【ATR 波動預測】
     """
     try:
         stock = yf.Ticker(ticker)
-        # 擴展數據抓取：2年歷史以計算長線高點
+        # 抓取 2 年數據確保長線指標準確
         hist_full = stock.history(period="2y") 
         if len(hist_full) < 250: return None
         
-        hist = hist_full.tail(300)
+        hist = hist_full.tail(60) 
         c, v, h, l = hist['Close'], hist['Volume'], hist['High'], hist['Low']
         
-        # [模塊 A: 指標計算]
+        # --- [A. 核心指標計算] ---
+        # 1. 均線系統
+        ma5 = c.rolling(5).mean().iloc[-1]
         ma20 = c.rolling(20).mean().iloc[-1]
         ma60 = c.rolling(60).mean().iloc[-1]
-        ma240 = c.rolling(240).mean().iloc[-1]
-        v_ma20 = v.rolling(20).mean().iloc[-1]
+        ma240 = hist_full['Close'].rolling(240).mean().iloc[-1]
         
-        # [模塊 B: 成本與洗盤偵測]
+        # 2. ATR 波動率 (計算一週震盪空間)
+        tr = pd.concat([h-l, (h-c.shift()).abs(), (l-c.shift()).abs()], axis=1).max(axis=1)
+        atr = tr.rolling(14).mean().iloc[-1]
+        expected_range = round(atr * 1.618, 1) # 使用黃金比例擴張
+        
+        # 3. 籌碼量能與位階
+        v_ma20 = v.rolling(20).mean().iloc[-1]
+        high_2y = hist_full['Close'].max()
+        low_30_pct = hist_full['Close'].quantile(0.3)
+        
+        # --- [B. 評分邏輯開跑] ---
+        score = 50 # 基礎分
+        logic_tags = []
+        
+        # 1. 偵測洗盤完成 (關鍵邏輯)
         on_support = (abs(price - ma240) / ma240 < 0.05) or (abs(price - ma60) / ma60 < 0.05)
         vol_dry_out = (v.iloc[-1] < v_ma20 * 0.7)
-        low_30 = hist_full['Close'].quantile(0.3)
         
-        score = 40 # 基礎分
-        
-        # --- 核心 1: 籌碼洗盤與 35年價值發現 (融資洗盤邏輯) ---
-        is_wash_done = False
-        is_value_gem = False
-        sentiment = "散戶進場 (融資增)"
-        
-        # 偵測洗盤完成：回檔至關鍵均線且成交量極縮
         if on_support and vol_dry_out:
-            score += 45
-            is_wash_done = True
-            sentiment = "大戶收貨 (融資減)" # AI 判定洗盤完成後的籌碼位格
-        
-        if price <= low_30 * 1.05 and on_support and vol_dry_out:
-            score += 20 
-            is_value_gem = True
-            sentiment = "💎 戰略價值區 (大戶長期鎖籌)"
-
-        # --- [新增] 核心 1.5: 戰略轉型與突破偵測 (適合 3211, 3293) ---
-        # 邏輯：股價挑戰 2 年新高且位階在均線之上，代表產業結構改變 (Re-rating)
-        high_2y = hist_full['Close'].max()
-        is_strategic_pivot = False
-        if price >= high_2y * 0.96 and price > ma60:
-            score += 20 # 給予強大的轉型溢價分
-            is_strategic_pivot = True
-            sentiment = "🔥 大戶瘋狂掃貨 (產業轉型確認)"
-
-        # --- 進化 1: 板塊熱度共振 Sector Resonance ---
-        if price > ma20 and price > ma60 and v.iloc[-1] > v_ma20:
-            score += 10 
-
-        # --- 核心 2: 均線糾結與暴衝基因 ---
-        ma_gap = pd.Series([ma20, ma60, ma240]).std() / price
-        if ma_gap < 0.03: score += 20
-        
-        surges = hist_full.tail(250).apply(lambda x: (x['Close'] - x['Open'])/x['Open'] > 0.07, axis=1)
-        if surges.any(): score += 5 
-            
-        # --- 核心 3: MACD 動能 ---
-        exp1, exp2 = c.ewm(span=12).mean(), c.ewm(span=26).mean()
-        macd = exp1 - exp2
-        if macd.iloc[-1] > macd.iloc[-2]: score += 10
-        
-        # --- 進化 2: 短線乖離強制冷靜 Bias Cooling ---
-        bias_20 = (price - ma20) / ma20
-        is_overheated = False
-        # 修正：如果是「戰略突破股」，乖離容忍度稍微提高
-        cool_limit = 0.18 if is_strategic_pivot else 0.15
-        if bias_20 > cool_limit: 
-            score -= 15
-            is_overheated = True
-
-        # --- 核心 4: 長線風險過濾 ---
-        bias_240 = (price - ma240) / ma240
-        if bias_240 > 0.5: score -= 30 # 高檔修正風險
-
-        # --- 進化 3: 除權息填息基因 Dividend Recovery ---
-        is_dividend_king = False
-        if (c.iloc[-1] > c.iloc[-120]) and (c.iloc[-1] > ma240): 
-            is_dividend_king = True
-
-        total_score = max(0, min(100, score))
-        
-        # --- 最終判定 ---
-        rank, msg, target, window = "", "", price * 1.1, ""
-        if total_score >= 90:
-            rank, msg, target, window = "🔥 SS級:史詩起漲", "將軍級確認：板塊共振強，洗盤極度乾淨。", price * 1.7, "3-6個月"
-        elif total_score >= 75:
-            rank, msg, target, window = "🚀 A級:波段主升", "動能配合完美，進入主升浪軌道。", price * 1.4, "1-3個月"
-        elif total_score >= 60:
-            rank, msg, target, window = "📈 B級:趨勢確認", "趨勢向上，適合穩健佈局。", price * 1.2, "2-4週"
+            score += 20
+            logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
+            sentiment = "💎 大戶收貨 (浮額清除)"
+        elif price > ma5 > ma20 > ma60:
+            score += 15
+            sentiment = "🔥 強勢主升 (大戶鎖籌)"
         else:
-            rank, msg, target, window = "🔍 C級:短線觀察", "動能不足或位階稍高，僅適短線。", price * 1.08, "3-7天"
+            sentiment = "🔍 散戶進場 (籌碼換手中)" # 預設狀態
 
-        # 將軍級診斷合成
-        if is_overheated: msg = "⚠️ 戰鬥力過載，請勿追高，等待洗盤 " + msg
-        if is_strategic_pivot: msg = "🔥 偵測到轉型利基題材，分析師強推標的 " + msg
-        if is_dividend_king: msg = "🎁 息利雙收標的 (填息基因強) " + msg
-        if is_value_gem: msg = "💎 偵測到長線戰略價值位 " + msg
-        if is_wash_done and on_support: msg = "🔥 偵測到洗盤完成，準備破新高 " + msg
+        # 2. 戰略轉型偵測 (3211, 3293 專用)
+        if price >= high_2y * 0.96 and price > ma60:
+            score += 20
+            logic_tags.append("🔥 偵測到轉型利基題材，分析師強推")
+            sentiment = "🚀 產業轉型 (法人重估價)"
+
+        # 3. 價值區與填息基因
+        if price <= low_30_pct * 1.05 and vol_dry_out:
+            score += 10
+            logic_tags.append("💎 偵測到長線戰略價值位")
+            sentiment = "🛡️ 價值區 (大戶長期鎖籌)"
+        
+        if (c.iloc[-1] > c.iloc[-120]) and (c.iloc[-1] > ma240):
+            logic_tags.append("🎁 息利雙收標的 (填息基因強)")
+
+        # 4. 風險過濾 (老總級提醒)
+        bias_20 = (price - ma20) / ma20
+        if bias_20 > 0.15:
+            score -= 20
+            logic_tags.append("⚠️ 戰鬥力過載，請勿追高")
+            sentiment = "⚠️ 短線過熱 (恐有震盪)"
+
+        # --- [C. 最終診斷合成] ---
+        total_score = max(0, min(100, score))
+        rank = "SS級" if total_score >= 90 else ("A級" if total_score >= 75 else "B級")
+        final_msg = " | ".join(logic_tags) if logic_tags else "趨勢盤整，靜待方向。"
+        
+        # 轉折預測 (模仿老總 3/20 邏輯)
+        pivot_info = "3/20 週五轉折點" if datetime.now() < datetime(2026, 3, 20) else "尋找下一轉折窗"
 
         return {
-            "msg": f"[{rank}] {msg}", 
-            "sent": sentiment, 
-            "score": total_score, 
-            "target": round(target, 1), 
-            "stop": round(ma20*0.96, 1), 
-            "window": window
+            "msg": f"[{rank}] {final_msg}",
+            "sent": sentiment,
+            "score": total_score,
+            "target": round(price + expected_range, 1),
+            "stop": round(ma20 * 0.96, 1),
+            "window": "5-10 個交易日",
+            "atr_range": f"±{expected_range}",
+            "pivot": pivot_info
         }
     except Exception as e:
         return None
