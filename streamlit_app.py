@@ -363,6 +363,20 @@ for cat_list in pool_500.values():
 
 # --- [工具函數區：確保搜尋與轉換不報錯] ---
 
+def update_ai_thought_log(ticker, pred_score, reason):
+    """大基石：AI 學習記憶體 - 紀錄診斷當下的思維"""
+    if 'ai_memory' not in st.session_state:
+        st.session_state.ai_memory = []
+    log_entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "ticker": ticker,
+        "prediction": pred_score,
+        "logic": reason,
+        "actual_move": None
+    }
+    st.session_state.ai_memory.append(log_entry)
+    
+
 def get_full_ticker(tid):
     """【修正補件】自動判斷上市(.TW)或上櫃(.TWO)，解決 3211 等代號搜尋失敗問題"""
     if "." in tid: return tid
