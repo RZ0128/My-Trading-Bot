@@ -403,6 +403,58 @@ for cat_list in pool_500.values():
         STOCK_MAP[tid.split(".")[0]] = sname # 支援輸入 2330
         STOCK_MAP[tid] = sname               # 支援輸入 2330.TW
 
+# --- [工具函數區：確保搜尋與轉換不報錯] ---
+
+def get_full_ticker(tid):
+    """【修正補件】自動判斷上市(.TW)或上櫃(.TWO)，解決 3211 等代號搜尋失敗問題"""
+    if "." in tid: return tid
+    # 根據大基石慣例：判斷開頭代號
+    otc_list = ["31","32","33","34","35","36","41","49","52","53","54","61","62","64","65","66","80","82"]
+    return f"{tid}.TWO" if any(tid.startswith(p) for p in otc_list) else f"{tid}.TW"
+
+def get_stock_name(ticker):
+    """根據代號找名稱，確保 UI 顯示正確中文"""
+    # 移除點後綴進行比對
+    base_id = ticker.split(".")[0]
+    for cat in pool_500.values():
+        for tid, tname in cat:
+            if tid.split(".")[0] == base_id: return tname
+    return ticker
+
+def get_stock_perf(ticker, buy_price):
+    """取得即時股價、漲跌與百分比 (補強容錯版)"""
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="5d")
+        if len(hist) < 2: return 0, "N/A", 0
+        
+        current_price = round(hist['Close'].iloc[-1], 2)
+        prev_close = hist['Close'].iloc[-2]
+        diff = round(current_price - prev_close, 2)
+        change_pct = (diff / prev_close) * 100
+        
+        diff_str = f"{diff} ({change_pct:.2f}%)"
+        return current_price, diff_str, change_pct
+    except:
+        return 0, "N/A", 0
+
+def record_transaction(client, tid, action, shares, price, note):
+    """記錄每一筆史詩級交易 (確保 trade_history 存在)"""
+    new_record = pd.DataFrame([{
+        'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
+        'client': client,
+        'id': tid,
+        'action': action,
+        'shares': shares,
+        'price': price,
+        'note': note
+    }])
+    if 'trade_history' not in st.session_state:
+        st.session_state.trade_history = new_record
+    else:
+        st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_record], ignore_index=True)
+
+# --- [工具函數區結束] ---
 
 # --- [第 5 區：側邊欄管理 - 穩定修正版] ---
 if 'local_db' not in st.session_state:
