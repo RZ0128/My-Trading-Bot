@@ -518,9 +518,14 @@ with tab_scan:
             # A. 抓取數據與 AI 分析
             p, d, cc = get_stock_perf(sel_sid, 0)
             res = generate_ai_tech_analysis(sel_sid, p, 0)
-            
+
             if res:
                 display_name = STOCK_MAP.get(sel_sid.split('.')[0], '標的')
+            else:
+                # 這是漏掉的部分！
+                st.warning(f"📡 正在嘗試重新連線 {sel_sid} 的數據，請稍後...")
+                if st.button("🔄 點擊強制刷新"):
+                    st.rerun()
                 
                 # 【大基石核心：AI 學習觸發】將診斷結果餵給思維日誌
                 update_ai_thought_log(display_name, res['score'], res['msg'])
