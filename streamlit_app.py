@@ -220,7 +220,17 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             "pivot": pivot_info
         }
     except Exception as e:
-        return None
+        # 不要回傳 None，回傳一個基礎錯誤診斷
+        return {
+            "msg": "[C級] 數據連線不穩，建議手動輸入診斷",
+            "sent": "🔍 觀測中",
+            "score": 40,
+            "target": price * 1.05,
+            "stop": price * 0.95,
+            "atr_range": "±0",
+            "pivot": "等待數據同步"
+        }
+
 
 
 def fetch_and_score_intel():
