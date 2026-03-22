@@ -122,88 +122,100 @@ def save_data():
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
 
 
-# --- [第 3 區：大基石史詩級強大腦v13.0 - 老總三位一體完全體] ---
+# --- [第 3 區：大基石史詩級強大腦v13.1 - 操盤老總完全體（絕不精簡版）] ---
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
-    大腦核心 V13.0：
-    1. 整合老總三線系統 (60分/日/週) 
-    2. 偵測三線糾結 + 三角收斂 (洗盤尾聲)
-    3. 高低位爆量警報
+    大腦核心 V13.1：
+    1. 實時監控：60分/日/週 MACD 三線翻揚系統
+    2. 深度偵測：三線糾結 + 三角收斂 + 前低後縮 (洗盤尾聲預判)
+    3. 量價極致：高檔爆量脫手警報 & 低檔爆量支撐監控
+    4. 經典繼承：洗盤偵測、產業轉型、填息基因、ATR波動預測
     """
     try:
         stock = yf.Ticker(ticker)
-        # 抓取不同時區數據
-        h_full = stock.history(period="2y") # 日線 (20/60/124/248)
-        h_60m = stock.history(interval="60m", period="1mo") # 60分線 (5/35/200)
-        h_week = stock.history(interval="1wk", period="2y") # 週線 (5/35/200)
+        # 抓取不同時區數據 (老總要求的時空配合)
+        h_full = stock.history(period="2y") # 日線數據
+        h_60m = stock.history(interval="60m", period="1mo") # 60分線數據
+        h_week = stock.history(interval="1wk", period="2y") # 週線數據
         
         if len(h_full) < 60: return None 
         
-        # --- [A. 核心指標計算 - 老總級別三線系統] ---
-        # 1. 日線系統 (20/60/124/248)
+        # --- [A. 核心指標計算 - 老總級別三線與 MACD 系統] ---
+        # 1. MACD 多週期翻揚算法 (精確計算 DIF 與 MACD 斜率)
+        def get_complex_macd(df):
+            if df.empty or len(df) < 30: return "觀測中"
+            ema12 = df['Close'].ewm(span=12, adjust=False).mean()
+            ema26 = df['Close'].ewm(span=26, adjust=False).mean()
+            macd_val = ema12 - ema26
+            sig_val = macd_val.ewm(span=9, adjust=False).mean()
+            # 翻揚定義：金叉中 且 MACD 線向上傾斜
+            is_up = (macd_val.iloc[-1] > sig_val.iloc[-1]) and (macd_val.iloc[-1] > macd_val.iloc[-2])
+            return "📈翻揚" if is_up else "📉轉弱"
+
+        st_60_macd = get_complex_macd(h_60m)
+        st_day_macd = get_complex_macd(h_full)
+        st_week_macd = get_complex_macd(h_week)
+
+        # 2. 日線系統 (20/60/124/248)
         c, v, hi, lo = h_full['Close'], h_full['Volume'], h_full['High'], h_full['Low']
         ma20, ma60 = c.rolling(20).mean().iloc[-1], c.rolling(60).mean().iloc[-1]
         ma124 = h_full['Close'].rolling(124).mean().iloc[-1] if len(h_full) >= 124 else h_full['Close'].mean()
         ma248 = h_full['Close'].rolling(248).mean().iloc[-1] if len(h_full) >= 248 else h_full['Close'].mean()
         
-        # 2. 60分鐘線系統 (5/35/200)
-        if not h_60m.empty and len(h_60m) >= 35:
-            ma5_60 = h_60m['Close'].rolling(5).mean().iloc[-1]
-            ma35_60 = h_60m['Close'].rolling(35).mean().iloc[-1]
-            m60_status = "翻揚" if ma5_60 > ma35_60 else "轉弱"
-        else:
-            m60_status = "觀測中"
-
-        # 3. 週線系統 (5/35) - 判斷大局
-        ma5_w = h_week['Close'].rolling(5).mean().iloc[-1]
-        ma35_w = h_week['Close'].rolling(35).mean().iloc[-1]
-        week_trend = "波段看多" if ma5_w > ma35_w else "波段修正"
+        # 3. 60分鐘均線 (5/35/200)
+        ma5_60 = h_60m['Close'].rolling(5).mean().iloc[-1] if not h_60m.empty else 0
+        ma35_60 = h_60m['Close'].rolling(35).mean().iloc[-1] if not h_60m.empty else 0
+        m60_ma_status = "多頭" if ma5_60 > ma35_60 else "空頭"
 
         # 4. ATR 與 波動壓縮 (老總三角形)
         tr = pd.concat([hi-lo, (hi-c.shift()).abs(), (lo-c.shift()).abs()], axis=1).max(axis=1)
         atr = tr.rolling(14, min_periods=1).mean().iloc[-1]
         expected_range = round(atr * 1.618, 1)
-        # 波動壓縮偵測 (近10日震幅)
-        volatility_comp = (hi.tail(10).max() - lo.tail(10).min()) / price
+        volatility_comp = (hi.tail(10).max() - lo.tail(10).min()) / price # 震幅壓縮比
         
-        # --- [B. 評分邏輯 - 注入老總操盤靈魂] ---
+        # --- [B. 評分邏輯 - 注入操盤靈魂] ---
         score = 50 
         logic_tags = []
-        sentiment = "🔍 籌碼換手中"
         v_ma20 = v.rolling(20).mean().iloc[-1]
-        vol_dry_out = (v.iloc[-1] < v_ma20 * 0.75)
+        vol_dry_out = (v.iloc[-1] < v_ma20 * 0.75) # 量縮判斷
         high_2y = h_full['Close'].max()
         low_30_pct = h_full['Close'].quantile(0.3)
 
-        # 1. 老總絕學：三線糾結 + 三角收斂 + 前段趨勢往下
+        # 1. 老總絕學：三線糾結 + 三角收斂 + 趨勢往下後量縮
         ma_gaps = [abs(ma20-ma60)/ma60, abs(ma60-ma124)/ma124, abs(ma20-ma124)/ma124]
         is_converged = max(ma_gaps) < 0.04 # 均線糾結度 4% 內
-        is_downward = c.iloc[-60] > c.iloc[-10] # 前期趨勢往下
+        is_downward = c.iloc[-60] > c.iloc[-10] # 前期趨勢往下 (洗盤前提)
         
         if is_converged and volatility_comp < 0.08 and is_downward and vol_dry_out:
-            score += 35
-            logic_tags.append("🔥 偵測到三線糾結+三角收斂，洗盤尾聲等待噴發")
-            sentiment = "💎 黎明前夕 (最後洗盤)"
+            score += 40 # 這是老總精華，給予最高權重
+            logic_tags.append("🔥 三線糾結+三角收斂，洗盤尾聲即將噴發")
+            sentiment = "💎 黎明前夕 (大戶最後甩轎)"
 
-        # 2. 爆量警報：高檔脫手 vs 低檔支撐
-        if v.iloc[-1] > v_ma20 * 2.5:
+        # 2. MACD 三週期共振加分
+        if st_60_macd == "📈翻揚" and st_day_macd == "📈翻揚":
+            score += 15
+            logic_tags.append("🚀 MACD 短日共振翻紅")
+
+        # 3. 成交量極致警報 (高檔脫手 vs 低檔支撐)
+        vol_ratio = v.iloc[-1] / v_ma20
+        if vol_ratio > 2.5: # 爆出 2.5 倍巨量
             if price > high_2y * 0.9:
-                score -= 30
-                logic_tags.append("⚠️ 偵測到高檔異常巨量，大戶恐在脫手！")
+                score -= 40 # 高檔爆量重罰
+                logic_tags.append("🚨 警告：高檔異常巨量，大戶恐在出貨")
                 sentiment = "🚨 高檔派發 (準備下跌)"
             elif price < low_30_pct * 1.1:
-                score += 20
-                logic_tags.append("🛡️ 底部爆量支撐，成本區浮現")
-                sentiment = "🛡️ 大戶建倉 (底部支撐)"
+                score += 25 # 低檔爆量獎勵
+                logic_tags.append("🛡️ 底部爆量支撐，大戶建倉成本區")
+                sentiment = "🛡️ 大戶收貨 (底部換手)"
 
-        # 3. 洗盤偵測 (原 V12.9 核心)
+        # 4. 洗盤偵測 (原 V12.9 核心)
         on_support = (abs(price - ma248) / ma248 < 0.05) or (abs(price - ma60) / ma60 < 0.05)
-        if on_support and vol_dry_out and not is_converged: # 避免與糾結標籤重複
+        if on_support and vol_dry_out and not is_converged:
             score += 25
             logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
-            sentiment = "💎 大戶收貨 (浮額清除)"
+            sentiment = "💎 浮額清除 (大戶鎖籌)"
         
-        # 4. 戰略轉型與填息 (保留舊邏輯)
+        # 5. 戰略轉型與填息基因 (保留完整架構)
         if price >= high_2y * 0.95 and price > ma60:
             score += 15
             logic_tags.append("🔥 產業位階重估")
@@ -211,17 +223,17 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         if len(h_full) > 120 and (c.iloc[-1] > h_full['Close'].iloc[-120]) and (c.iloc[-1] > ma248):
             logic_tags.append("🎁 具備填息基因")
 
-        # --- [C. 最終輸出] ---
-        # 整合 60分與週線狀態到評語
-        m60_info = f" | 60M:{m60_status}"
-        final_msg = f"[{week_trend}] " + (" | ".join(logic_tags) if logic_tags else "趨勢整固中。") + m60_info
-        
+        # --- [C. 最終輸出與預測] ---
         total_score = max(0, min(100, score))
         rank = "SS級" if total_score >= 90 else ("A級" if total_score >= 75 else "B級")
+        
+        # 呈現 MACD 狀態前綴，讓老總法則一目了然
+        macd_prefix = f"【MACD 60M:{st_60_macd} | 日:{st_day_macd} | 週:{st_week_macd}】"
+        final_msg = macd_prefix + (" | ".join(logic_tags) if logic_tags else "趨勢整固中，靜待量能共振。")
 
         return {
             "msg": f"[{rank}] {final_msg}",
-            "sent": sentiment,
+            "sent": sentiment if 'sentiment' in locals() else "🔍 籌碼觀察中",
             "score": total_score,
             "target": round(price + expected_range, 1),
             "stop": round(ma20 * 0.95, 1),
@@ -230,7 +242,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             "pivot": "3/20 週五轉折窗" if datetime.now() < datetime(2026, 3, 20) else "觀測下週變盤"
         }
     except Exception as e:
-        return {"msg": "[B級] 正在進行深度演算...", "sent": "🔍 觀測中", "score": 55, "target": price, "stop": price, "atr_range": "±--", "pivot": "同步中"}
+        return {"msg": f"[B級] 大腦運算中... ({str(e)[:10]})", "sent": "🔍 觀測中", "score": 55, "target": price, "stop": price, "atr_range": "±0", "pivot": "數據同步中"}
 
 
 
