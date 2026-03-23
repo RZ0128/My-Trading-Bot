@@ -550,48 +550,41 @@ with st.sidebar:
 tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
 
 with tab_scan:
-    
     # --- [1. 標題與核心佈局定義] ---
-    st.title(f"🛡️ 13.5 戰略指揮所: [{st.session_state.get('cur_c', 'Robert')}]")
+    st.title(f"🛡️ 戰略指揮所: [{st.session_state.get('cur_c', 'Robert')}]")
     
-    # 關鍵修正：必須先定義 columns，後面的 with col_l 才能執行
     col_l, col_r = st.columns([1.6, 1.4]) 
     
     with col_l:
-        # 1. 搜尋區 (核心修復 1：增強 STOCK_MAP 與台股後綴處理)
+        # 1. 搜尋區 (核心修復：自動識別與診斷)
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
-            s_input = st.text_input("輸入名稱或代號", placeholder="例如：3211", key="global_search_fix")
+            s_input = st.text_input("輸入名稱或代號", placeholder="例如：2330 或 3211", key="global_search_fix")
+            
             if s_input:
                 s_raw = s_input.strip()
-                # 關鍵：自動補齊代號邏輯
-                if "." not in s_raw and s_raw.isdigit():
-                    # 調用第 253 行你寫的 get_full_ticker 函數
+                # A. 處理純數字代號 (自動補齊 .TW 或 .TWO)
+                if s_raw.isdigit():
                     sel_sid = get_full_ticker(s_raw)
+                    display_name = STOCK_MAP.get(s_raw, s_raw)
+                    if st.button(f"🔍 啟動 AI 深度診斷: {display_name} ({sel_sid})", use_container_width=True, key="diag_btn"):
+                        st.session_state.selected_stock = sel_sid
+                        st.rerun()
+                
+                # B. 處理中文名稱模糊搜尋
                 else:
-                    sel_sid = s_raw
-                
-                # 直接執行診斷按鈕
-                if st.button(f"🔍 啟動 AI 深度診斷: {sel_sid}", use_container_width=True):
-                    st.session_state.selected_stock = sel_sid
-                    st.rerun()
-
-                
-                if matches:
-                    m_cols = st.columns(3)
-                    for idx, (m_sid, m_sname) in enumerate(matches[:9]):
-                        with m_cols[idx % 3]:
-                            if st.button(f"🎯 {m_sname}", key=f"src_{idx}_{m_sid}"):
-                                if ".TW" not in m_sid and ".TWO" not in m_sid:
-                                    st.session_state.selected_stock = f"{m_sid}.TW"
-                                else:
+                    # 找出名稱中包含關鍵字的股票
+                    matches = [tid for tid, name in STOCK_MAP.items() if s_raw in name and "." in tid]
+                    if matches:
+                        m_cols = st.columns(3)
+                        for idx, m_sid in enumerate(list(set(matches))[:9]):
+                            m_name = STOCK_MAP.get(m_sid, m_sid)
+                            with m_cols[idx % 3]:
+                                if st.button(f"🎯 {m_name}", key=f"src_{idx}_{m_sid}", use_container_width=True):
                                     st.session_state.selected_stock = m_sid
-                                st.rerun()
-                else:
-                    if s_input.isdigit():
-                        if st.button(f"🔍 直接診斷代號: {s_input}", key="direct_search_btn"):
-                            st.session_state.selected_stock = f"{s_input}.TW"
-                            st.rerun()
+                                    st.rerun()
+                    else:
+                        st.warning("查無此名稱，請嘗試輸入數字代號。")
 
         # --- 2. 診斷呈現區：AI 個股深度分析 ---
         sel_sid = st.session_state.get('selected_stock')
@@ -600,21 +593,31 @@ with tab_scan:
             res = generate_ai_tech_analysis(sel_sid, p, 0)
 
             if res:
+                # 取得乾淨的中文名稱
                 raw_id = sel_sid.split('.')[0]
                 display_name = STOCK_MAP.get(raw_id, raw_id)
+                # 紀錄到 AI 思維日誌
                 update_ai_thought_log(display_name, res['score'], res['msg'])
                 
                 st.markdown(f"### 🎯 戰略診斷: {display_name} ({sel_sid})")
                 with st.container(border=True):
                     sc1, sc2 = st.columns([1.5, 1])
                     with sc1:
-                        st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
-                        if "🔥" in res['msg'] or "🚨" in res['msg']:
-                            st.error(f"{res['msg']}")
+                        # 顯示評分
+                        score_color = "red" if res['score'] >= 80 else ("orange" if res['score'] >= 60 else "green")
+                        st.markdown(f"#### **評分: <span style='color:{score_color};'>{res['score']}</span>**", unsafe_allow_html=True)
+                        
+                        if res['score'] >= 80:
+                            st.error(f"🔥 **AI 指令：** {res['msg']}")
+                        elif res['score'] <= 40:
+                            st.warning(f"🚨 **AI 指令：** {res['msg']}")
                         else:
-                            st.info(f"**診斷:** {res['msg']}")
-                        st.markdown(f"**📊 籌碼狀態:** `{res.get('sent', '大戶收貨 (融資減)')}`")
+                            st.info(f"💡 **AI 指令：** {res['msg']}")
+                            
+                        st.markdown(f"**📊 籌碼與心理:** `{res.get('sent', '觀測中')}`")
                         st.write("---")
+                        
+                        # 佈局區
                         u_c1, u_c2 = st.columns(2)
                         q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_buy_{sel_sid}")
                         u_val = u_c2.radio("單位", ["張", "股"], key=f"u_buy_{sel_sid}", horizontal=True)
@@ -626,19 +629,20 @@ with tab_scan:
                             }])
                             st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
                             record_transaction(st.session_state.cur_c, sel_sid, "買入", q_val, p, f"AI評分:{res['score']} | {res['msg']}")
-                            save_data(); st.success(f"✅ {display_name} 佈局成功！"); st.rerun()
+                            save_data()
+                            st.success(f"✅ {display_name} 已加入 {st.session_state.cur_c} 的持股！")
+                            st.rerun()
                     with sc2:
-                        st.metric("即時股價", p, d)
-                        st.subheader("🔮 AI 未來一週預測")
+                        st.metric("即時股價", f"{p}", d)
+                        st.subheader("🔮 AI 未來預測")
                         with st.container(border=True):
-                            st.write(f"📈 預期波動幅度: `{res['atr_range']}`")
-                            st.markdown(f"**🎯 AI 預期目標：** `NT$ {res['target']}`")
-                            st.markdown(f"**🛡️ 建議防守：** `NT$ {res['stop']}`")
-                            st.write(f"⏳ 戰略轉折視窗: `{res.get('pivot', '觀測中')}`") 
+                            st.write(f"📈 預期波動: `{res['atr_range']}`")
+                            st.markdown(f"**🎯 目標價：** `NT$ {res['target']}`")
+                            st.markdown(f"**🛡️ 停損價：** `NT$ {res['stop']}`")
                             st.progress(res['score'] / 100, text=f"預測勝率: {res['score']}%")
             else:
-                st.warning(f"📡 數據連線中...")
-                if st.button("🔄 點擊強制刷新"): st.rerun()
+                st.warning(f"📡 數據載入中，請稍候...")
+
 
         # --- 3. 產業板塊區 ---
         st.divider()
