@@ -544,10 +544,40 @@ with st.sidebar:
 # ==============================================================================
 tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
 
+# --- [第 6 區：戰策指揮所 - 頂端戰情看板] ---
 with tab_scan:
-    # 標題與 Client 顯示
-    st.title(f"🛡️ 13.1 大基石整合版: [{st.session_state.get('cur_c', 'Robert')}]")
-    col_l, col_r = st.columns([1.6, 1.4]) 
+    # 1. 頂端：全球連動戰情室 (新增)
+    us_impact, stress_count = get_us_market_impact()
+    if us_impact:
+        cols = st.columns(len(us_impact) + 1)
+        cols[0].markdown("**🌍 全球連動監控:**")
+        for i, (name, val) in enumerate(us_impact.items()):
+            color = "red" if val < 0 else "green"
+            # 暴跌警示：若跌幅超過 3%，加上閃爍感標籤
+            display_text = f"{name}: {val}%"
+            if val <= -3.0:
+                cols[i+1].markdown(f"### :red[🚨 {display_text}]")
+            else:
+                cols[i+1].write(f"**{display_text}**")
+        st.divider()
+
+    # 2. 標題與 Client 顯示 (維持原本佈局)
+    st.title(f"🛡️ 13.5 戰略指揮所: [{st.session_state.get('cur_c', 'Robert')}]")
+    
+    # ... (中間搜尋與診斷邏輯維持不變) ...
+
+    # 3. 產業板塊區：直接在 Radio 按鈕旁標示風險
+    st.subheader("🚀 產業板塊共振偵測")
+    
+    # 更好的建議：在板塊選擇器下方，直接用 Alert 標示受災產業
+    if us_impact.get("費半", 0) < -3.0:
+        st.error("📉 **美股警報：** 費半暴跌，請謹慎對待 [AI、半導體、設備] 板塊的買入訊號！")
+    if us_impact.get("那指", 0) < -3.0:
+        st.warning("📉 **科技壓力：** 那指重挫，[IC設計、軟體] 板塊可能出現多殺多。")
+
+    cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v135")
+    # ... (後續掃描邏輯維持不變) ...
+
     
     with col_l:
         # 1. 搜尋區 (核心修復 1：增強 STOCK_MAP 與台股後綴處理，確保 3211, 3293 必中)
