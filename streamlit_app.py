@@ -540,20 +540,18 @@ with st.sidebar:
 
 
 # ==============================================================================
-# 第六區 & 第七區：大基石史詩全功能還原版 (V13.1 終極修復 - 絕不簡化、絕不遺漏)
+# 第六區 & 第七區：大基石史詩全功能還原版 (V13.5 終極修復 - 解決 Col 定義錯誤)
 # ==============================================================================
 tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
 
-# --- [第 6 區：戰策指揮所 - 頂端戰情看板] ---
 with tab_scan:
-    # 1. 頂端：全球連動戰情室 (新增)
+    # --- [1. 頂端戰情監控區] ---
     us_impact, stress_count = get_us_market_impact()
     if us_impact:
         cols = st.columns(len(us_impact) + 1)
         cols[0].markdown("**🌍 全球連動監控:**")
         for i, (name, val) in enumerate(us_impact.items()):
             color = "red" if val < 0 else "green"
-            # 暴跌警示：若跌幅超過 3%，加上閃爍感標籤
             display_text = f"{name}: {val}%"
             if val <= -3.0:
                 cols[i+1].markdown(f"### :red[🚨 {display_text}]")
@@ -561,32 +559,19 @@ with tab_scan:
                 cols[i+1].write(f"**{display_text}**")
         st.divider()
 
-    # 2. 標題與 Client 顯示 (維持原本佈局)
+    # --- [2. 標題與核心佈局定義] ---
     st.title(f"🛡️ 13.5 戰略指揮所: [{st.session_state.get('cur_c', 'Robert')}]")
     
-    # ... (中間搜尋與診斷邏輯維持不變) ...
-
-    # 3. 產業板塊區：直接在 Radio 按鈕旁標示風險
-    st.subheader("🚀 產業板塊共振偵測")
-    
-    # 更好的建議：在板塊選擇器下方，直接用 Alert 標示受災產業
-    if us_impact.get("費半", 0) < -3.0:
-        st.error("📉 **美股警報：** 費半暴跌，請謹慎對待 [AI、半導體、設備] 板塊的買入訊號！")
-    if us_impact.get("那指", 0) < -3.0:
-        st.warning("📉 **科技壓力：** 那指重挫，[IC設計、軟體] 板塊可能出現多殺多。")
-
-    cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v135")
-    # ... (後續掃描邏輯維持不變) ...
-
+    # 關鍵修正：必須先定義 columns，後面的 with col_l 才能執行
+    col_l, col_r = st.columns([1.6, 1.4]) 
     
     with col_l:
-        # 1. 搜尋區 (核心修復 1：增強 STOCK_MAP 與台股後綴處理，確保 3211, 3293 必中)
+        # 1. 搜尋區 (核心修復 1：增強 STOCK_MAP 與台股後綴處理)
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
             s_input = st.text_input("輸入名稱或代號", placeholder="例如：3211 或 順達", key="global_search_fix")
             if s_input:
                 s_lower = s_input.lower().strip()
-                # 搜尋邏輯：先在 STOCK_MAP 找，找不到也允許直接輸入代號
                 matches = [(sid, sname) for sid, sname in STOCK_MAP.items() if s_lower in sid or s_lower in sname]
                 
                 if matches:
@@ -594,79 +579,51 @@ with tab_scan:
                     for idx, (m_sid, m_sname) in enumerate(matches[:9]):
                         with m_cols[idx % 3]:
                             if st.button(f"🎯 {m_sname}", key=f"src_{idx}_{m_sid}"):
-                                # 核心修復：自動補全後綴
                                 if ".TW" not in m_sid and ".TWO" not in m_sid:
                                     st.session_state.selected_stock = f"{m_sid}.TW"
                                 else:
                                     st.session_state.selected_stock = m_sid
                                 st.rerun()
                 else:
-                    # 如果不在 MAP 裡，允許用戶直接搜尋純代號
                     if s_input.isdigit():
                         if st.button(f"🔍 直接診斷代號: {s_input}", key="direct_search_btn"):
                             st.session_state.selected_stock = f"{s_input}.TW"
                             st.rerun()
 
-        # --- 2. 診斷呈現區：AI 個股深度分析 (內含記憶功能) ---
+        # --- 2. 診斷呈現區：AI 個股深度分析 ---
         sel_sid = st.session_state.get('selected_stock')
         if sel_sid:
-            # A. 抓取數據與 AI 分析 (V13.1 大腦)
             p, d, cc = get_stock_perf(sel_sid, 0)
             res = generate_ai_tech_analysis(sel_sid, p, 0)
 
             if res:
-                # 獲取顯示名稱
                 raw_id = sel_sid.split('.')[0]
                 display_name = STOCK_MAP.get(raw_id, raw_id)
-                
-                # 【大基石核心：AI 學習觸發】將診斷結果餵給思維日誌
                 update_ai_thought_log(display_name, res['score'], res['msg'])
                 
-                # B. UI 標題顯示
                 st.markdown(f"### 🎯 戰略診斷: {display_name} ({sel_sid})")
-                
                 with st.container(border=True):
                     sc1, sc2 = st.columns([1.5, 1])
-                    
-                    # C. 左側：評分、洗盤狀態與佈局控制
                     with sc1:
                         st.markdown(f"#### **評分: <span style='color:red;'>{res['score']}</span>**", unsafe_allow_html=True)
-                        
-                        # 顯示洗盤偵測 (高亮紅色) 或 一般診斷
                         if "🔥" in res['msg'] or "🚨" in res['msg']:
                             st.error(f"{res['msg']}")
                         else:
                             st.info(f"**診斷:** {res['msg']}")
-                        
-                        # 顯示籌碼狀態 (Sentiment)
                         st.markdown(f"**📊 籌碼狀態:** `{res.get('sent', '大戶收貨 (融資減)')}`")
                         st.write("---")
-                        
-                        # 佈局數量設定
                         u_c1, u_c2 = st.columns(2)
                         q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_buy_{sel_sid}")
                         u_val = u_c2.radio("單位", ["張", "股"], key=f"u_buy_{sel_sid}", horizontal=True)
-                        
-                        # 執行按鈕：按下後會同時存入「庫存」與「交易紀錄」
                         if st.button(f"🚀 執行戰略佈局", key=f"cf_buy_{sel_sid}", use_container_width=True):
                             new_entry = pd.DataFrame([{
-                                'client': st.session_state.cur_c, 
-                                'id': sel_sid, 
-                                'name': display_name, 
-                                'buy_price': p, 
-                                'shares': q_val, 
-                                'unit': u_val, 
-                                'entry_reason': res['msg'], 
-                                'current_score': res['score'], 
-                                'last_diag': datetime.now().strftime("%m-%d")
+                                'client': st.session_state.cur_c, 'id': sel_sid, 'name': display_name, 
+                                'buy_price': p, 'shares': q_val, 'unit': u_val, 'entry_reason': res['msg'], 
+                                'current_score': res['score'], 'last_diag': datetime.now().strftime("%m-%d")
                             }])
                             st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
                             record_transaction(st.session_state.cur_c, sel_sid, "買入", q_val, p, f"AI評分:{res['score']} | {res['msg']}")
-                            save_data()
-                            st.success(f"✅ {display_name} 佈局成功！AI 已同步紀錄至思維日誌。")
-                            st.rerun()
-                    
-                    # D. 右側：預測預警區 (增加老總級預測度)
+                            save_data(); st.success(f"✅ {display_name} 佈局成功！"); st.rerun()
                     with sc2:
                         st.metric("即時股價", p, d)
                         st.subheader("🔮 AI 未來一週預測")
@@ -677,14 +634,18 @@ with tab_scan:
                             st.write(f"⏳ 戰略轉折視窗: `{res.get('pivot', '觀測中')}`") 
                             st.progress(res['score'] / 100, text=f"預測勝率: {res['score']}%")
             else:
-                st.warning(f"📡 正在嘗試重新連線 {sel_sid} 的數據，請稍後...")
-                if st.button("🔄 點擊強制刷新"):
-                    st.rerun()
+                st.warning(f"📡 數據連線中...")
+                if st.button("🔄 點擊強制刷新"): st.rerun()
 
-        # --- [3. 產業板塊區：大基石 V13.1 強韌顯示版] ---
+        # --- 3. 產業板塊區 ---
         st.divider()
         st.subheader("🚀 產業板塊共振偵測")
-        cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v131")
+        if us_impact.get("費半", 0) < -3.0:
+            st.error("📉 **美股警報：** 費半暴跌，請謹慎對待 [AI、半導體、設備] 板塊！")
+        if us_impact.get("那指", 0) < -3.0:
+            st.warning("📉 **科技壓力：** 那指重挫，[IC設計、軟體] 可能出現多殺多。")
+
+        cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v135")
         
         scored_data = []
         with st.status(f"正在深度診斷 {cat_choice}...", expanded=False) as status:
@@ -704,13 +665,10 @@ with tab_scan:
             for idx, item in enumerate(top_picks):
                 with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | 價: {item['price']}"):
                     st.markdown(f"**🧠 AI 診斷：** `{item['msg']}`")
-                    st.markdown(f"**📊 籌碼：** `{item.get('sent', '觀測中')}` | **🔮 波動：** `{item.get('atr_range', '±0')}`")
                     st.markdown(f"**🎯 AI 預期目標：** `NT$ {item['target']}` | **🛡️ 建議防守：** `NT$ {item['stop']}`")
-                    
                     k_c1, k_c2, k_c3 = st.columns([1, 1.2, 1.8])
                     q_val_s = k_c1.number_input("數量", min_value=1, value=1, key=f"sq_v131_{item['tid']}_{idx}")
                     u_val_s = k_c2.radio("單位", ["張", "股"], key=f"su_v131_{item['tid']}_{idx}", horizontal=True)
-
                     if k_c3.button(f"🚀 執行戰略佈局 {item['tname']}", key=f"sb_v131_{item['tid']}_{idx}", use_container_width=True):
                         new_entry = pd.DataFrame([{
                             'client': st.session_state.cur_c, 'id': item['tid'], 'name': item['tname'], 
@@ -718,13 +676,13 @@ with tab_scan:
                             'entry_reason': item['msg'], 'current_score': item['score'], 'last_diag': datetime.now().strftime("%m-%d")
                         }])
                         st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
-                        record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val_s, item['price'], f"板塊掃描推薦 | 評分:{item['score']}")
-                        save_data(); st.success(f"✅ {item['tname']} 已加入庫存"); st.rerun()
+                        record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val_s, item['price'], f"板塊推薦|評分:{item['score']}")
+                        save_data(); st.rerun()
         else:
             st.warning("⚠️ 目前該板塊無符合條件的標的。")
 
     with col_r:
-        # --- [核心修復 2：持股監控還原張/股減持佈局，絕不省略] ---
+        # --- 持股監控 (完全還原) ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
         my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.cur_c]
         if not my_h.empty:
@@ -740,22 +698,17 @@ with tab_scan:
                     st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {row['buy_price']}")
                     pnl_color = "red" if pnl >= 0 else "green"
                     st.markdown(f"損益: <span style='color:{pnl_color}; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
-                    
-                    # --- 這是你最在意的「張/股」減持選擇佈局，完全還原 ---
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
                     exit_q = e_c1.number_input("減持數量", min_value=1, value=1, key=f"exq_{idx}_{row['id']}")
                     exit_u = e_c2.radio("單位", ["張", "股"], key=f"exu_{idx}_{row['id']}", horizontal=True)
-                    
                     if e_c3.button(f"❌ 執行減持", key=f"exb_{idx}_{row['id']}", use_container_width=True):
-                        # 邏輯計算：轉換為相同單位進行扣除
                         if exit_u == row['unit']:
                             if exit_q >= row['shares']: st.session_state.local_db = st.session_state.local_db.drop(idx)
                             else: st.session_state.local_db.at[idx, 'shares'] -= exit_q
-                        else:
-                            # 單位不同時的簡單轉換 (僅供參考，通常建議同單位操作)
-                            st.warning("⚠️ 單位不一致，請統一使用原購買單位減持。")
+                        else: st.warning("⚠️ 單位不一致")
                         save_data(); st.rerun()
             st.metric("📊 總未實現損益", f"NT$ {total_pnl:,.0f}", delta=f"{total_pnl:,.0f}")
+
 
 # --- 第七區：全球情報室 (完整還原分級卡片) ---
 with tab_intel:
