@@ -125,12 +125,11 @@ def save_data():
 # ==============================================================================
 # 第 3 區：大基石史詩級強大腦 V13.8 - 超越人腦「全自動巡航與進化」版本
 # ==============================================================================
-
 def get_us_market_impact():
-    """監控美股關鍵指標，並將地緣政治/能源風險權重化"""
+    """監控美股關鍵指標，回傳全球連動壓力值"""
     try:
-        # 擴張監控矩陣：費半、台積ADR、那指、輝達、美元指數(DX=F)
-        tickers = {"^SOX": "半導體指標", "TSM": "晶圓龍頭(ADR)", "^IXIC": "科技綜合", "NVDA": "AI龍頭", "DX=F": "美元指數"}
+        # 監控四大核心：費半(半導體)、那指(科技)、標普(大盤)、TSM ADR(台股權值)
+        tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
         impact_report = {}
         total_stress = 0
         
@@ -140,12 +139,22 @@ def get_us_market_impact():
             if len(h) < 2: continue
             change = ((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100
             impact_report[tname] = round(change, 2)
-            # 偵測到暴跌或美元暴漲(避險情緒)
-            if (tname != "美元指數" and change < -2.5) or (tname == "美元指數" and change > 1.0):
-                total_stress += 1
+            if change < -3.0: total_stress += 1  # 偵測到暴跌產業
+            
         return impact_report, total_stress
     except:
         return {}, 0
+
+# 在原本的分析函數中注入連動邏輯
+def generate_ai_tech_analysis(ticker, price, diff_pct):
+    # ... (保留原本 V13.2 的所有均線與 MACD 邏輯) ...
+    us_data, stress_lvl = get_us_market_impact()
+    
+    # [美股連動扣分機制]
+    if ".TW" in ticker or ".TWO" in ticker:
+        if us_data.get("費半", 0) < -2.5 or us_data.get("台積電ADR", 0) < -3.0:
+            score -= 15  # 系統性風險扣分
+            logic_tags.append("⚠️ 美股半導體暴跌，壓抑今日盤勢")
 
 # --- 【史詩進化：全市場自動巡航引擎】 ---
 def auto_cruise_learning(pool):
