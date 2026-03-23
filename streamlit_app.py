@@ -525,21 +525,8 @@ with st.sidebar:
 tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
 
 with tab_scan:
-    # --- [1. 頂端戰情監控區] ---
-    us_impact, stress_count = get_us_market_impact()
-    if us_impact:
-        cols = st.columns(len(us_impact) + 1)
-        cols[0].markdown("**🌍 全球連動監控:**")
-        for i, (name, val) in enumerate(us_impact.items()):
-            color = "red" if val < 0 else "green"
-            display_text = f"{name}: {val}%"
-            if val <= -3.0:
-                cols[i+1].markdown(f"### :red[🚨 {display_text}]")
-            else:
-                cols[i+1].write(f"**{display_text}**")
-        st.divider()
-
-    # --- [2. 標題與核心佈局定義] ---
+    
+    # --- [1. 標題與核心佈局定義] ---
     st.title(f"🛡️ 13.5 戰略指揮所: [{st.session_state.get('cur_c', 'Robert')}]")
     
     # 關鍵修正：必須先定義 columns，後面的 with col_l 才能執行
