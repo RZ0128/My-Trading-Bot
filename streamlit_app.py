@@ -561,10 +561,21 @@ with tab_scan:
         # 1. 搜尋區 (核心修復 1：增強 STOCK_MAP 與台股後綴處理)
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
-            s_input = st.text_input("輸入名稱或代號", placeholder="例如：3211 或 順達", key="global_search_fix")
+            s_input = st.text_input("輸入名稱或代號", placeholder="例如：3211", key="global_search_fix")
             if s_input:
-                s_lower = s_input.lower().strip()
-                matches = [(sid, sname) for sid, sname in STOCK_MAP.items() if s_lower in sid or s_lower in sname]
+                s_raw = s_input.strip()
+                # 關鍵：自動補齊代號邏輯
+                if "." not in s_raw and s_raw.isdigit():
+                    # 調用第 253 行你寫的 get_full_ticker 函數
+                    sel_sid = get_full_ticker(s_raw)
+                else:
+                    sel_sid = s_raw
+                
+                # 直接執行診斷按鈕
+                if st.button(f"🔍 啟動 AI 深度診斷: {sel_sid}", use_container_width=True):
+                    st.session_state.selected_stock = sel_sid
+                    st.rerun()
+
                 
                 if matches:
                     m_cols = st.columns(3)
