@@ -59,35 +59,40 @@ def check_connection():
         else:
             return False, f"❌ 連線失敗：分頁名稱不正確或權限未開放"
 
-# 顯示頂部標題與連線狀態燈
+# --- [第 2 區修正：頂部標題、美股監控看板與連線狀態燈] ---
 st.title("🛡️ 大基石 - AI 戰略經理人")
 
 is_connected, status_text = check_connection()
-if is_connected:
-    # --- [13.8 修正：優化美股監控看板] ---
-   us_impact, stress_count = get_us_market_impact()
-   if us_impact:
-       with st.container(border=True):
-           st.markdown("#### 🌍 全球戰略連動看板")
-           u_cols = st.columns(len(us_impact))
-           for i, (name, val) in enumerate(us_impact.items()):
-               # 判斷邏輯：跌幅 > 2% 變紅色
-               is_risk = (name != "美元指數" and val <= -2.0)
-               delta_color = "inverse" if is_risk else "normal"
-               u_cols[i].metric(name, f"{val}%", delta=f"{val}%", delta_color=delta_color)
-        
-           if stress_count >= 1:
-               st.markdown(f"""
-                   <div style="background-color: #fff5f5; border: 2px solid #ff4b4b; padding: 10px; border-radius: 8px; color: #ff4b4b; font-weight: bold; text-align: center;">
-                       🚨 AI 壓力預警：當前美股壓力值 [{stress_count}]！台股 AI 板塊可能面臨連動修正，建議防守。
-                   </div>
-               """, unsafe_allow_html=True)
-   st.divider()
 
+if is_connected:
+    # 1. 美股監控看板 (僅在連線成功時顯示)
+    us_impact, stress_count = get_us_market_impact()
+    if us_impact:
+        with st.container(border=True):
+            st.markdown("#### 🌍 全球戰略連動看板")
+            u_cols = st.columns(len(us_impact))
+            for i, (name, val) in enumerate(us_impact.items()):
+                # 判斷邏輯：跌幅 > 2% 變紅色
+                is_risk = (name != "美元指數" and val <= -2.0)
+                delta_color = "inverse" if is_risk else "normal"
+                u_cols[i].metric(name, f"{val}%", delta=f"{val}%", delta_color=delta_color)
+            
+            if stress_count >= 1:
+                st.markdown(f"""
+                    <div style="background-color: #fff5f5; border: 2px solid #ff4b4b; padding: 10px; border-radius: 8px; color: #ff4b4b; font-weight: bold; text-align: center;">
+                        🚨 AI 壓力預警：當前美股壓力值 [{stress_count}]！台股 AI 板塊可能面臨連動修正，建議防守。
+                    </div>
+                """, unsafe_allow_html=True)
+    
+    # 2. 顯示連線成功燈號 (注意：此行與美股看板平級)
     st.markdown(f'<div class="status-bar status-on">🌐 {status_text}</div>', unsafe_allow_html=True)
+    st.divider()
+
 else:
+    # 連線失敗時的顯示
     st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
     st.info("💡 提示：請確保 Google Sheets 已改名為 inventory/history/clients 並已『發布到網路』。")
+
 
 # --- [第 2 區：修正後的載入邏輯 - 強化容錯版] ---
 
