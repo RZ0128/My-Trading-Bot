@@ -526,6 +526,13 @@ with st.sidebar:
 tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
 
 with tab_scan:
+    # --- [新增：開盤自動巡航學習] ---
+    if "first_launch" not in st.session_state:
+        # 當你第一次打開頁面，AI 會執行全市場歷史模型比對
+        if auto_cruise_learning(pool_500):
+            st.session_state.first_launch = False
+            st.toast("✅ AI 已完成全市場歷史模型比對與學習！", icon="🧠")
+
     # --- [1. 頂端戰情監控區] ---
     us_impact, stress_count = get_us_market_impact()
     if us_impact:
