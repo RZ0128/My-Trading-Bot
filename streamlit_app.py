@@ -520,32 +520,35 @@ with st.sidebar:
     st.metric(f"{st.session_state['cur_c']} 的持股總數", len(c_stocks))
 
 
-# ==============================================================================
-# 第六區 & 第七區：大基石史詩全功能還原版 (V13.5 終極修復 - 解決 Col 定義錯誤)
-# ==============================================================================
-tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
-
+# --- [第 6 區：戰策指揮所 - 頂端戰情看板 (V13.8 穩定版)] ---
 with tab_scan:
-    # --- [新增：開盤自動巡航學習] ---
-    if "first_launch" not in st.session_state:
-        # 當你第一次打開頁面，AI 會執行全市場歷史模型比對
-        if auto_cruise_learning(pool_500):
-            st.session_state.first_launch = False
-            st.toast("✅ AI 已完成全市場歷史模型比對與學習！", icon="🧠")
-
-    # --- [1. 頂端戰情監控區] ---
+    # 1. 核心修復：強制執行全球連動監控 (放在最頂端，不受任何條件干擾)
     us_impact, stress_count = get_us_market_impact()
+    
+    # 視覺化看板呈現
     if us_impact:
-        cols = st.columns(len(us_impact) + 1)
-        cols[0].markdown("**🌍 全球連動監控:**")
-        for i, (name, val) in enumerate(us_impact.items()):
-            color = "red" if val < 0 else "green"
-            display_text = f"{name}: {val}%"
-            if val <= -3.0:
-                cols[i+1].markdown(f"### :red[🚨 {display_text}]")
-            else:
-                cols[i+1].write(f"**{display_text}**")
+        with st.container(border=True):
+            st.markdown("### 🌍 全球連動實時戰情")
+            cols = st.columns(len(us_impact))
+            for i, (name, val) in enumerate(us_impact.items()):
+                # 顏色邏輯：跌超過 2.5% 亮紅燈，漲亮綠燈
+                color = "red" if val < 0 else "green"
+                delta_str = f"{val}%"
+                
+                # 特殊警示：如果是輝達或費半暴跌，強制閃爍標籤
+                if val <= -3.0:
+                    cols[i].metric(name, delta_str, delta=delta_str, delta_color="inverse")
+                    st.toast(f"🚨 警告：{name} 波動異常！", icon="⚠️")
+                else:
+                    cols[i].metric(name, delta_str, delta=delta_str)
         st.divider()
+
+    # 2. 自動巡航進度條 (確保 AI 正在學習)
+    if "cruise_done" not in st.session_state:
+        if auto_cruise_learning(pool_500):
+            st.session_state.cruise_done = True
+            st.success("🧠 AI 已完成全市場歷史模型比對，權重已同步。")
+
 
     # --- [2. 標題與核心佈局定義] ---
     st.title(f"🛡️ 13.5 戰略指揮所: [{st.session_state.get('cur_c', 'Robert')}]")
