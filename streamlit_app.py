@@ -467,11 +467,6 @@ def record_transaction(client, tid, action, shares, price, note):
 if 'local_db' not in st.session_state:
     load_data()
 
-# 導覽列定義 (這是你代碼原本遺失的最重要部分！)
-tab_scan, tab_intel, tab_brain, tab_history = st.tabs([
-    "🛡️ 戰略指揮所", "🌎 全球情報室", "🧠 AI 思維日誌", "📜 交易紀錄"
-])
-
 # 側邊欄過濾與客戶管理
 target_ghosts = ["VIP實戰", "周靖傑", "nan", "None", None, "Unnamed: 0"]
 st.session_state.client_list = [c for c in st.session_state.client_list if str(c) not in target_ghosts and str(c).strip() != ""]
