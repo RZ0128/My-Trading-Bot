@@ -122,7 +122,39 @@ def save_data():
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
 
 
-# --- [第 3 區：大基石史詩級強大腦v13.2 - 操盤老總完全體（絕不精簡、偵測全開）] ---
+# --- [第 3 區：大基石史詩級強大腦v13.2 - 操盤老總完全體（強化：美股連動與產業警報引擎）] ---
+
+def get_us_market_impact():
+    """監控美股關鍵指標，回傳全球連動壓力值"""
+    try:
+        # 監控四大核心：費半(半導體)、那指(科技)、標普(大盤)、TSM ADR(台股權值)
+        tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
+        impact_report = {}
+        total_stress = 0
+        
+        for tid, tname in tickers.items():
+            tk = yf.Ticker(tid)
+            h = tk.history(period="2d")
+            if len(h) < 2: continue
+            change = ((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100
+            impact_report[tname] = round(change, 2)
+            if change < -3.0: total_stress += 1  # 偵測到暴跌產業
+            
+        return impact_report, total_stress
+    except:
+        return {}, 0
+
+# 在原本的分析函數中注入連動邏輯
+def generate_ai_tech_analysis(ticker, price, diff_pct):
+    # ... (保留原本 V13.2 的所有均線與 MACD 邏輯) ...
+    us_data, stress_lvl = get_us_market_impact()
+    
+    # [美股連動扣分機制]
+    if ".TW" in ticker or ".TWO" in ticker:
+        if us_data.get("費半", 0) < -2.5 or us_data.get("台積電ADR", 0) < -3.0:
+            score -= 15  # 系統性風險扣分
+            logic_tags.append("⚠️ 美股半導體暴跌，壓抑今日盤勢")
+
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
     大腦核心 V13.2：
