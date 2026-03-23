@@ -128,7 +128,7 @@ def get_us_market_impact():
     """監控美股關鍵指標，回傳全球連動壓力值"""
     try:
         # 監控四大核心：費半(半導體)、那指(科技)、標普(大盤)、TSM ADR(台股權值)
-        tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
+        tickers = {"^SOX": "半導體指標", "TSM": "晶圓龍頭(ADR)", "^IXIC": "科技綜合", "NVDA": "AI龍頭"}
         impact_report = {}
         total_stress = 0
         
