@@ -446,6 +446,7 @@ def get_stock_perf(ticker, buy_price):
 # --- [工具函數區結束] ---
 
 # --- [第 5 區：側邊欄管理與分頁定義 - 關鍵修正] ---
+tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
 if 'local_db' not in st.session_state:
     load_data()
 
