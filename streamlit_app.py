@@ -719,10 +719,10 @@ with tab_scan:
                             st.markdown(f"**🛡️ 停損價：** `NT$ {res['stop']}`")
                     
                             # 進度條顯示預測勝率
-                    st.progress(res['score'] / 100, text=f"預測勝率: {res['score']}%")。
-    else:
-        # 當數據抓取失敗或 generate_ai_tech_analysis 無回傳時顯示
-        st.warning(f"📡 數據載入中，請稍候...")
+                            st.progress(res['score'] / 100, text=f"預測勝率: {res['score']}%")。
+            else:
+                # 當數據抓取失敗或 generate_ai_tech_analysis 無回傳時顯示
+                st.warning(f"📡 數據載入中，請稍候...")
 
 
 
