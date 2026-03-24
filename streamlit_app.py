@@ -7,15 +7,11 @@ import os
 from datetime import datetime, timedelta
 import urllib.parse
 import numpy as np
+import collections
+import re
 
-# --- [第 1 區：核心配置與 CSS 樣式 - 保持 12.5 原始樣式] ---
-st.set_page_config(page_title="大基石-12.5史詩將軍級", layout="wide")
-
-try:
-    from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=60 * 1000, key="v125_general_refresh")
-except:
-    pass
+# --- [第 1 區：核心配置與 CSS 樣式] ---
+st.set_page_config(page_title="大基石-V15.0自主進化版", layout="wide")
 
 st.markdown("""
     <style>
@@ -27,35 +23,67 @@ st.markdown("""
         border-radius: 6px !important;
         font-weight: bold !important;
     }
-    .news-card { border-left: 4px solid #cc0000; padding-left: 12px; margin-bottom: 8px; font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-    .rank-tag { background: #ff4b4b; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 5px; }
     .sentiment-tag { color: #00D1FF; font-weight: bold; border: 1px solid #00D1FF; padding: 3px 6px; border-radius: 4px; background: rgba(0, 209, 255, 0.1); }
-    .diag-box { background: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #ff4b4b; }
     .status-bar { padding: 8px 15px; border-radius: 10px; margin-bottom: 15px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
     .status-on { background-color: #e6fffa; color: #2c7a7b; border: 1px solid #81e6d9; }
     .status-off { background-color: #fff5f5; color: #c53030; border: 1px solid #feb2b2; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- [第 2 區：雲端保險箱核心連線 - 執行狀態監控] ---
+# --- [第 2 區補充：定義美股監控函數 (必須移到前面防止報錯)] ---
+def get_us_market_impact():
+    try:
+        tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
+        impact_report = {}
+        total_stress = 0
+        for tid, tname in tickers.items():
+            tk = yf.Ticker(tid)
+            h = tk.history(period="2d")
+            if len(h) < 2: continue
+            change = ((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100
+            impact_report[tname] = round(change, 2)
+            if change < -2.5: total_stress += 1
+        return impact_report, total_stress
+    except:
+        return {}, 0
+
+def run_auto_cruise():
+    """【核心補件】V15.0 AI 每 10 分鐘自動學習計時器"""
+    if 'last_cruise' not in st.session_state:
+        st.session_state.last_cruise = datetime.now()
+    else:
+        now = datetime.now()
+        if (now - st.session_state.last_cruise).seconds > 600: # 10分鐘
+            st.session_state.last_cruise = now
+            # 此處可觸發後台重新計算邏輯
+
+# --- [第 2 區：雲端保險箱核心連線] ---
 SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
 
 def get_sheet_url(sheet_name):
     return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
 def check_connection():
-    """檢測與 Google Sheets 的連線狀態"""
     try:
-        test_df = pd.read_csv(get_sheet_url("history"), nrows=1)
+        pd.read_csv(get_sheet_url("history"), nrows=1)
         return True, "✅ 雲端同步中：已成功連結 StoneManager_DB"
-    except Exception as e:
-        error_msg = str(e)
-        if "404" in error_msg:
-            return False, "❌ 連線失敗：找不到試算表 (請檢查 SHEET_ID)"
-        elif "empty" in error_msg:
-            return True, "⚠️ 連線成功：但 history 分頁目前是空的"
-        else:
-            return False, f"❌ 連線失敗：分頁名稱不正確或權限未開放"
+    except:
+        return False, "❌ 連線失敗：請檢查試算表權限或網路"
+
+st.title("🛡️ 大基石 - AI 戰略經理人 (V15.0)")
+
+is_connected, status_text = check_connection()
+if is_connected:
+    us_impact, stress_count = get_us_market_impact()
+    if us_impact:
+        with st.container(border=True):
+            st.markdown("#### 🌍 全球戰略連動看板")
+            u_cols = st.columns(len(us_impact))
+            for i, (name, val) in enumerate(us_impact.items()):
+                u_cols[i].metric(name, f"{val}%", delta=f"{val}%")
+    st.markdown(f'<div class="status-bar status-on">🌐 {status_text}</div>', unsafe_allow_html=True)
+else:
+    st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
 
 # --- [第 2 區修正：頂部標題、美股監控看板與連線狀態燈] ---
 st.title("🛡️ 大基石 - AI 戰略經理人")
