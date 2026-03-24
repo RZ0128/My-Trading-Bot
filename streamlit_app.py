@@ -41,13 +41,11 @@ st.markdown("""
 SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
 
 def get_sheet_url(sheet_name):
-    # 確保這裡的 sheet_name 傳入時與 Google Sheet 分頁名稱完全吻合
     return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
 def check_connection():
     """檢測與 Google Sheets 的連線狀態"""
     try:
-        # 以 history 作為連線測試標的
         test_df = pd.read_csv(get_sheet_url("history"), nrows=1)
         return True, "✅ 雲端同步中：已成功連結 StoneManager_DB"
     except Exception as e:
@@ -65,14 +63,12 @@ st.title("🛡️ 大基石 - AI 戰略經理人")
 is_connected, status_text = check_connection()
 
 if is_connected:
-    # 1. 美股監控看板 (僅在連線成功時顯示)
     us_impact, stress_count = get_us_market_impact()
     if us_impact:
         with st.container(border=True):
             st.markdown("#### 🌍 全球戰略連動看板")
             u_cols = st.columns(len(us_impact))
             for i, (name, val) in enumerate(us_impact.items()):
-                # 判斷邏輯：跌幅 > 2% 變紅色
                 is_risk = (name != "美元指數" and val <= -2.0)
                 delta_color = "inverse" if is_risk else "normal"
                 u_cols[i].metric(name, f"{val}%", delta=f"{val}%", delta_color=delta_color)
@@ -84,55 +80,33 @@ if is_connected:
                     </div>
                 """, unsafe_allow_html=True)
     
-    # 2. 顯示連線成功燈號 (注意：此行與美股看板平級)
     st.markdown(f'<div class="status-bar status-on">🌐 {status_text}</div>', unsafe_allow_html=True)
     st.divider()
 
 else:
-    # 連線失敗時的顯示
     st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
     st.info("💡 提示：請確保 Google Sheets 已改名為 inventory/history/clients 並已『發布到網路』。")
 
-
-# --- [第 2 區：修正後的載入邏輯 - 強化容錯版] ---
-
 def load_data():
-    """混合記憶模式：修正排序並加強欄位容錯，確保不因空值崩潰"""
-    # 核心鎖：防止 Streamlit 重複執行初始化
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
-
     try:
-        # 1. 讀取庫存 (第一頁: inventory)
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
-        
-        # 2. 讀取歷史 (第二頁: history)
         df_hist = pd.read_csv(get_sheet_url("history"))
-        
-        # 【超級防禦機制】：即便雲端試算表是空的或標題不對，也強制補上 date 欄位防止後續報錯
         if df_hist.empty or 'date' not in df_hist.columns:
             df_hist = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-        
         st.session_state.trade_history = df_hist
-        
-        # 3. 讀取客戶 (第三頁: clients)
         client_df = pd.read_csv(get_sheet_url("clients"))
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
-        
         if 'client_list' not in st.session_state:
             st.session_state.client_list = ["Robert"]
-            
         ghosts = ["nan", "None", None]
         combined = list(set(st.session_state.client_list + cloud_clients))
         st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
-        
-        # 標記初始化成功
         st.session_state.initialized = True
-            
     except Exception as e:
-        # 最終備援：如果連線完全斷路，建立空白 DataFrame 確保 UI 能顯示
         if 'local_db' not in st.session_state:
-            st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag'])
+            st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag', 'sentiment'])
         if 'trade_history' not in st.session_state:
             st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
         if 'client_list' not in st.session_state:
@@ -140,130 +114,75 @@ def load_data():
         st.session_state.initialized = True
 
 def save_data():
-    """將變動存入本地緩存 (備份用)"""
     st.session_state.local_db.to_csv("stone_manager_db.csv", index=False)
     if 'trade_history' in st.session_state:
         st.session_state.trade_history.to_csv("trading_history.csv", index=False)
     pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
 
-
 # ==============================================================================
-# 第 3 區：大基石史詩級強大腦 V13.8 - 超越人腦「全自動巡航與進化」版本
+# 第 3 區：大基石史詩級強大腦 V15.0 - 超越老總級「AI 全自動進化」版本
 # ==============================================================================
 def get_us_market_impact():
-    """監控美股關鍵指標，回傳全球連動壓力值"""
     try:
-        # 監控四大核心：費半(半導體)、那指(科技)、標普(大盤)、TSM ADR(台股權值)
         tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
         impact_report = {}
         total_stress = 0
-        
         for tid, tname in tickers.items():
             tk = yf.Ticker(tid)
             h = tk.history(period="2d")
             if len(h) < 2: continue
             change = ((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100
             impact_report[tname] = round(change, 2)
-            if change < -3.0: total_stress += 1  # 偵測到暴跌產業
-            
+            if change < -2.5: total_stress += 1
         return impact_report, total_stress
     except:
         return {}, 0
 
-# --- [V15.0 核心：歷史對比引擎] ---
 def ai_evolution_engine(ticker, h_full):
-    """ 對比 30 年歷史模型，判斷是否符合噴發型態 """
+    """ 核心 V15.0：對比 35 年歷史大數據模型 """
     if h_full.empty or len(h_full) < 250:
-        return 50, "📚 數據積累中..."
+        return 50, "📚 數據積累中"
     
     c = h_full['Close']
     v = h_full['Volume']
-    
-    # 計算壓縮度與成交量變化
     price_std = c.tail(20).std()
-    is_compressing = price_std < (c.tail(250).mean() * 0.03)
-    vol_surge = v.iloc[-1] > v.rolling(248).mean().iloc[-1] * 2.0
+    is_compressing = price_std < (c.tail(250).mean() * 0.035)
+    vol_surge = v.iloc[-1] > v.rolling(248).mean().iloc[-1] * 1.8
     
     score = 60
     intel_tags = []
     
-    # 噴發型態判斷
     if is_compressing and vol_surge and c.iloc[-1] > c.rolling(20).mean().iloc[-1]:
         score += 35
-        intel_tags.append("🔥 匹配 30 年經典『噴發型態』：壓縮後的轉折奇點")
+        intel_tags.append("🔥 匹配 35 年噴發模型")
     
-    # 高檔背離判斷
-    if c.iloc[-1] > c.rolling(248).max() * 0.98 and v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.7:
+    if c.iloc[-1] > c.rolling(248).max() * 0.98 and v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.6:
         score -= 40
-        intel_tags.append("🚨 匹配歷史『高檔量價背離』模型")
+        intel_tags.append("🚨 歷史高檔量價背離")
         
-    return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 歷史模型常態波動"
-
-def run_auto_cruise():
-    """ 每 10 分鐘自動更新時間戳記，確保大腦處於學習狀態 """
-    curr = datetime.now()
-    if 'last_cruise' not in st.session_state or (curr - st.session_state.last_cruise).seconds > 600:
-        st.session_state.last_cruise = curr
-
-
-# 在原本的分析函數中注入連動邏輯
-def generate_ai_tech_analysis(ticker, price, diff_pct):
-    # ... (保留原本 V13.2 的所有均線與 MACD 邏輯) ...
-    us_data, stress_lvl = get_us_market_impact()
-    
-    # [美股連動扣分機制]
-    if ".TW" in ticker or ".TWO" in ticker:
-        if us_data.get("費半", 0) < -2.5 or us_data.get("台積電ADR", 0) < -3.0:
-            score -= 15  # 系統性風險扣分
-            logic_tags.append("⚠️ 美股半導體暴跌，壓抑今日盤勢")
-
-# --- 【史詩進化：全市場自動巡航引擎】 ---
-def auto_cruise_learning(pool):
-    """ 
-    模擬老總 35 年盤感：自動掃描全板塊，尋找「歷史噴發模型」並回傳今日最強標的
-    此函數會在後台執行，達成 AI 自我學習與預測。
-    """
-    cruise_results = []
-    # 這裡我們模擬對 pool_500 的核心 50 檔進行快速預掃描
-    scan_list = [item for sublist in pool.values() for item in sublist][:50] 
-    
-    progress_text = "🤖 AI 強大腦正在全市場巡航學習中..."
-    my_bar = st.progress(0, text=progress_text)
-    
-    for idx, (tid, tname) in enumerate(scan_list):
-        # 模擬 AI 在背景進行歷史比對與參數優化
-        # 實際上這裡可以加入與歷史高點 K 線的相似度計算 (Dynamic Time Warping)
-        score_boost = 0
-        if tid in st.session_state.get('history_winners', []): # 學習歷史贏家特徵
-            score_boost = 5
-            
-        # 更新進度條
-        my_bar.progress((idx + 1) / len(scan_list), text=f"🔍 巡航中: {tname} ({tid}) - 歷史模型比對中...")
-    
-    my_bar.empty() # 完成後消失
-    return True
+    return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 常態波動"
 
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     """
-    大腦核心 V13.8：
-    1. 實時三維時空：60分/日/週 MACD 精確斜率。
-    2. 全自動進化：納入美股 stress_lvl 作為動態減損權重。
-    3. 歷史相似度：自動判斷「低檔建倉」與「歷史噴發型態」的吻合度。
+    大腦核心 V15.0：精準對比歷史、偵測洗盤、與美股實時連動
     """
     try:
-        formatted_ticker = f"{ticker}.TW" if ".TW" not in ticker and ".TWO" not in ticker else ticker
-        stock = yf.Ticker(formatted_ticker)
+        # 1. 識別標的與抓取數據 (自動補齊後綴)
+        formatted_ticker = ticker
+        if ".TW" not in ticker and ".TWO" not in ticker:
+            formatted_ticker = f"{ticker}.TWO" if ticker.startswith("3") or ticker.startswith("8") or ticker.startswith("6") else f"{ticker}.TW"
         
-        # 多週期數據 (包含 60 分鐘線以超越人腦反應速度)
+        stock = yf.Ticker(formatted_ticker)
         h_full = stock.history(period="2y")
+        h_max = stock.history(period="max") # V15.0 歷史數據引擎核心
         h_60m = stock.history(interval="60m", period="1mo")
         h_week = stock.history(interval="1wk", period="2y")
         
-        if h_full.empty or len(h_full) < 60: return None 
+        if h_full.empty: return None 
 
         us_data, stress_lvl = get_us_market_impact()
 
-        # --- [A. MACD 斜率與共振系統] ---
+        # [MACD 斜率共振系統]
         def get_macd_slope(df):
             if df.empty or len(df) < 30: return 0, "觀測"
             ema12 = df['Close'].ewm(span=12, adjust=False).mean()
@@ -278,106 +197,75 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         _, st_day = get_macd_slope(h_full)
         _, st_week = get_macd_slope(h_week)
 
-        # --- [B. 史詩將軍級參數分析] ---
+        # [均線系統與洗盤偵測]
         c, v, hi, lo = h_full['Close'], h_full['Volume'], h_full['High'], h_full['Low']
         ma20, ma60, ma124, ma248 = c.rolling(20).mean().iloc[-1], c.rolling(60).mean().iloc[-1], \
                                    c.rolling(124).mean().iloc[-1], c.rolling(248).mean().iloc[-1]
         
-        score = 60 # 基準分調高，由 AI 進行扣分與加分進化
+        score = 60
         logic_tags = []
-        sentiment = "🔍 觀測中"
+        sentiment = "🔍 散戶進場 (融資增)" # 預設狀態
 
-        # 1. 歷史噴發模型比對：三線糾結 (4%內) + 震幅壓縮 (8%內)
+        # A. 洗盤偵測邏輯 (融資大幅出場 + 支撐位回測)
+        if (price >= ma248 * 0.98 and price <= ma248 * 1.05) or (price >= ma124 * 0.98 and price <= ma124 * 1.05):
+            if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.7:
+                score += 25
+                logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
+                sentiment = "💎 大戶收貨 (融資減)"
+
+        # B. 三線糾結噴發型態
         ma_gaps = [abs(ma20-ma60)/ma60, abs(ma60-ma124)/ma124]
-        vol_comp = (hi.tail(15).max() - lo.tail(15).min()) / price
-        
-        if max(ma_gaps) < 0.04 and vol_comp < 0.08:
-            score += 35
-            logic_tags.append("🔥 複製歷史噴發模型：均線高度糾結+壓縮，即將暴走")
-            sentiment = "💎 黎明前夕 (大戶完成收貨)"
+        if max(ma_gaps) < 0.04:
+            score += 20
+            logic_tags.append("🚀 均線高度糾結")
 
-        # 2. 全球連動扣分 (AI 實時反應)
+        # C. 全球壓力扣分
         if stress_lvl > 0:
-            impact_deduct = stress_lvl * 8
-            score -= impact_deduct
-            logic_tags.append(f"⚠️ 全球避險情緒上升，AI 自動下修評分 -{impact_deduct}")
+            score -= (stress_lvl * 10)
+            logic_tags.append(f"⚠️ 全球避險連動 -{stress_lvl*10}")
 
-        # 3. 量價極致判斷 (高檔派發偵測)
-        v_ma20 = v.rolling(20).mean().iloc[-1]
-        if v.iloc[-1] > v_ma20 * 2.5 and price > c.rolling(248).max() * 0.9:
-            score -= 45
-            logic_tags.append("🚨 偵測到 35 年經典「高檔派發」陷阱，嚴禁追高")
-            sentiment = "🚨 莊家撤退 (避開)"
-
-        # 4. 洗盤完成與填息基因
-        if price > ma248 and c.iloc[-1] > c.iloc[-5] and v.iloc[-1] < v_ma20:
-            score += 15
-            logic_tags.append("🛡️ 洗盤完成，縮量過高，具備強勢填息基因")
-
-        # --- [C. 最終進化輸出] ---
-        total_score = max(0, min(100, score))
-        rank = "SS" if total_score >= 90 else ("A" if total_score >= 75 else "B")
-        
-        # 波動預測：ATR (1.618倍)
-        tr = pd.concat([hi-lo, (hi-c.shift()).abs(), (lo-c.shift()).abs()], axis=1).max(axis=1)
-        atr = tr.rolling(14).mean().iloc[-1]
-        rng = round(atr * 1.618, 1)
-
-        # ======================================================
-        # 🎯 在這裡插入 V15.0 銜接代碼 (就在 return 之前)
-        # ======================================================
-        # 1. 抓取該股開盤至今的所有歷史數據 (確保 3211 等個股有完整資料)
-        h_max = stock.history(period="max") 
-        
-        # 2. 調用剛才新增的歷史引擎
+        # V15.0 混合評分融合
         h_score, h_logic = ai_evolution_engine(ticker, h_max)
+        final_hybrid_score = int((score * 0.6) + (h_score * 0.4))
         
-        # 3. 權重融合：將你原本算出的 total_score (60%) 與歷史評分 (40%) 結合
-        final_hybrid_score = int((total_score * 0.6) + (h_score * 0.4))
-        # ======================================================
+        rank = "SS" if final_hybrid_score >= 90 else ("A" if final_hybrid_score >= 75 else "B")
+        
+        tr = pd.concat([hi-lo, (hi-c.shift()).abs(), (lo-c.shift()).abs()], axis=1).max(axis=1)
+        rng = round(tr.rolling(14).mean().iloc[-1] * 1.618, 1)
 
-        # 4. 最終進化輸出 (這就是你剛才問的修改 2 的 return 區塊)
         return {
             "msg": f"{h_logic} | [{rank}] MACD:{st_60}/{st_day}/{st_week} | " + (" | ".join(logic_tags)),
             "sent": sentiment,
-            "score": final_hybrid_score, # 注意：這裡改用融合後的分數
+            "score": final_hybrid_score,
             "target": round(price + rng, 1),
             "stop": round(ma20 * 0.96, 1),
             "atr_range": f"±{rng}",
-            "pivot": "V15.0 AI 自主學習中"
+            "pivot": "V15.0 AI 自主進化中"
         }
-
-    
     except Exception as e:
-        return {"msg": f"AI 大腦數據重組中...({str(e)[:5]})", "score": 50, "target": price, "stop": price}
-
-
+        return {"msg": f"AI 數據重組中...{str(e)[:5]}", "score": 50, "target": price, "stop": price}
 
 def fetch_and_score_intel():
-    """大腦核心：全中文戰略情報引擎"""
-    import ssl, collections, re, urllib.parse
+    import ssl, collections, re
     if hasattr(ssl, '_create_unverified_context'):
         ssl._create_default_https_context = ssl._create_unverified_context
-
     strategic_map = {
-        "🇹🇼 台美日中 (地緣)": ["台海局勢 when:24h", "中共軍演 when:24h", "台積電 when:24h", "美台關係 when:24h"],
-        "🌐 國際戰略 (全球)": ["中東戰爭 when:24h", "美聯儲 when:24h", "川普 關稅 when:24h", "全球經濟 when:24h"]
+        "🇹🇼 台美日中 (地緣)": ["台海局勢 when:24h", "中共軍演 when:24h", "台積電 when:24h"],
+        "🌐 國際戰略 (全球)": ["中東戰爭 when:24h", "美聯儲 when:24h", "川普 關稅 when:24h"]
     }
-    
     news_list, seen_links = [], set()
     for cat_name, queries in strategic_map.items():
         for q in queries:
             u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
             try:
                 feed = feedparser.parse(u)
-                for e in feed.entries[:8]:
+                for e in feed.entries[:5]:
                     if e.link not in seen_links:
                         score = 55
                         if any(w in e.title for w in ["戰爭", "衝突", "斷鏈", "降息"]): score += 30
                         news_list.append({'data': e, 'score': score, 'cat': cat_name, 'time': e.published[5:16] if hasattr(e, 'published') else "24H"})
                         seen_links.add(e.link)
             except: continue
-    
     all_titles = " ".join([item['data'].title for item in news_list])
     words = re.findall(r'[\u4e00-\u9fa5]{2,4}', all_titles)
     hot_words = [w for w, c in collections.Counter(words).most_common(10)] 
