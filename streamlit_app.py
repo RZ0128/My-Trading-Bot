@@ -115,6 +115,29 @@ else:
     st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
     st.info("💡 提示：請確保 Google Sheets 已改名為 inventory/history/clients 並已『發布到網路』。")
 
+# --- [V15.0 核心工具補件：放在 load_data 之前] ---
+def get_full_ticker(tid):
+    """自動判斷上市/上櫃，支援 3211.TWO"""
+    tid = str(tid).split(".")[0]
+    if tid.isdigit():
+        otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
+        if any(tid.startswith(p) for p in otc_prefixes):
+            return f"{tid}.TWO"
+        return f"{tid}.TW"
+    return tid
+
+def record_transaction(client, tid, action, shares, price, note):
+    """紀錄交易紀錄至 Session 與雲端準備"""
+    new_trade = pd.DataFrame([{
+        'date': datetime.now().strftime("%Y-%m-%d"),
+        'client': client, 'id': tid, 'action': action,
+        'shares': shares, 'price': price, 'note': note
+    }])
+    if 'trade_history' not in st.session_state:
+        st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
+    st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_trade], ignore_index=True)
+
+# --- [原本的 load_data 保持不變或檢查是否如下] ---
 def load_data():
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
