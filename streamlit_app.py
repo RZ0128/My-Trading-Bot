@@ -173,21 +173,6 @@ def save_data():
 # ==============================================================================
 # 第 3 區：大基石史詩級強大腦 V15.0 - 超越老總級「AI 全自動進化」版本
 # ==============================================================================
-def get_us_market_impact():
-    try:
-        tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
-        impact_report = {}
-        total_stress = 0
-        for tid, tname in tickers.items():
-            tk = yf.Ticker(tid)
-            h = tk.history(period="2d")
-            if len(h) < 2: continue
-            change = ((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100
-            impact_report[tname] = round(change, 2)
-            if change < -2.5: total_stress += 1
-        return impact_report, total_stress
-    except:
-        return {}, 0
 
 def ai_evolution_engine(ticker, h_full):
     """ 核心 V15.0：對比 35 年歷史大數據模型 """
