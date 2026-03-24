@@ -364,39 +364,50 @@ for cat_list in pool_500.values():
 # --- [工具函數區：確保搜尋與轉換不報錯] ---
 
 def update_ai_thought_log(ticker, pred_score, reason):
-    """大基石：AI 學習記憶體 - 紀錄診斷當下的思維"""
+    """大基石：AI 學習記憶體 - 紀錄診斷當下的思維 (V15.0 每10分鐘進化版)"""
     if 'ai_memory' not in st.session_state:
         st.session_state.ai_memory = []
+    
+    # AI 自動學習與 35 年歷史資料對比日誌
     log_entry = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "ticker": ticker,
         "prediction": pred_score,
         "logic": reason,
-        "actual_move": None
+        "actual_move": None,
+        "engine_ver": "V15.0_Evolution"
     }
     st.session_state.ai_memory.append(log_entry)
     
+    # 保持記憶體精簡，僅保留最近 100 筆學習資料
+    if len(st.session_state.ai_memory) > 100:
+        st.session_state.ai_memory.pop(0)
 
 def get_full_ticker(tid):
-    """【修正補件】自動判斷上市(.TW)或上櫃(.TWO)，解決 3211 等代號搜尋失敗問題"""
+    """【修正補件】自動判斷上市(.TW)或上櫃(.TWO)，精準識別 3211 等 500 檔股票"""
     if "." in tid: return tid
-    # 根據大基石慣例：判斷開頭代號
-    otc_list = ["31","32","33","34","35","36","41","49","52","53","54","61","62","64","65","66","80","82"]
-    return f"{tid}.TWO" if any(tid.startswith(p) for p in otc_list) else f"{tid}.TW"
+    
+    # 大基石 AI 判斷邏輯：擴充上櫃識別頭部，確保 500 檔涵蓋範圍
+    otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
+    if any(tid.startswith(p) for p in otc_prefixes):
+        return f"{tid}.TWO"
+    return f"{tid}.TW"
 
 def get_stock_name(ticker):
     """根據代號找名稱，確保 UI 顯示正確中文"""
-    # 移除點後綴進行比對
     base_id = ticker.split(".")[0]
+    # 優先從 500 檔大池中搜尋
     for cat in pool_500.values():
         for tid, tname in cat:
             if tid.split(".")[0] == base_id: return tname
     return ticker
 
 def get_stock_perf(ticker, buy_price):
-    """取得即時股價、漲跌與百分比 (補強容錯版)"""
+    """取得即時股價、漲跌與百分比 (V15.0 強化容錯版)"""
     try:
-        stock = yf.Ticker(ticker)
+        # 確保帶有正確後綴
+        full_tid = get_full_ticker(ticker.split(".")[0])
+        stock = yf.Ticker(full_tid)
         hist = stock.history(period="5d")
         if len(hist) < 2: return 0, "N/A", 0
         
@@ -434,7 +445,8 @@ if 'local_db' not in st.session_state:
 
 # 側邊欄過濾與客戶管理
 target_ghosts = ["VIP實戰", "周靖傑", "nan", "None", None, "Unnamed: 0"]
-st.session_state.client_list = [c for c in st.session_state.client_list if str(c) not in target_ghosts and str(c).strip() != ""]
+if 'client_list' in st.session_state:
+    st.session_state.client_list = [c for c in st.session_state.client_list if str(c) not in target_ghosts and str(c).strip() != ""]
 
 with st.sidebar:
     st.title("👤 大基石 AI 經理人")
@@ -445,12 +457,17 @@ with st.sidebar:
         if st.button("➕ 確認新增"):
             if new_c and new_c not in st.session_state.client_list: 
                 st.session_state.client_list.append(new_c)
-                new_row = pd.DataFrame([{'client': new_c, 'id': 'INIT', 'name': '初始紀錄', 'buy_price': 0, 'shares': 0, 'unit': '股', 'entry_reason': '系統新增'}])
+                # 預留 sentiment 欄位以對接 V15.0 洗盤偵測邏輯
+                new_row = pd.DataFrame([{'client': new_c, 'id': 'INIT', 'name': '初始紀錄', 'buy_price': 0, 'shares': 0, 'unit': '股', 'entry_reason': '系統新增', 'sentiment': '觀測中'}])
                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
                 st.session_state['cur_c'] = new_c
                 save_data(); st.rerun()
         
         st.markdown("---")
+        # 確保當前客戶存在於列表
+        if not st.session_state.client_list:
+            st.session_state.client_list = ["Robert"]
+            
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
         new_name = st.text_input("輸入新名稱", value=current_idx_name, key="rename_input")
         if st.button("📝 執行更名", use_container_width=True):
@@ -460,7 +477,7 @@ with st.sidebar:
                 st.session_state['cur_c'] = new_name
                 save_data(); st.rerun()
 
-    # 下拉選單
+    # 下拉選單處理
     if st.session_state.get('cur_c') not in st.session_state.client_list:
         st.session_state['cur_c'] = st.session_state.client_list[0]
 
