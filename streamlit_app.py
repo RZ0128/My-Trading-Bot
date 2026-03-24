@@ -170,6 +170,31 @@ def get_us_market_impact():
     except:
         return {}, 0
 
+# --- [新增：V15.0 歷史對比引擎] ---
+def ai_evolution_engine(ticker, h_full):
+    if h_full.empty or len(h_full) < 250:
+        return 50, "📚 數據積累中..."
+    c = h_full['Close']
+    v = h_full['Volume']
+    price_std = c.tail(20).std()
+    is_compressing = price_std < (c.tail(250).mean() * 0.03)
+    vol_surge = v.iloc[-1] > v.rolling(248).mean().iloc[-1] * 2.0
+    score = 60
+    intel_tags = []
+    if is_compressing and vol_surge and c.iloc[-1] > c.rolling(20).mean().iloc[-1]:
+        score += 35
+        intel_tags.append("🔥 匹配 30 年經典『噴發型態』：壓縮後的轉折奇點")
+    if c.iloc[-1] > c.rolling(248).max() * 0.98 and v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.7:
+        score -= 40
+        intel_tags.append("🚨 匹配歷史『高檔量價背離』模型")
+    return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 歷史模型常態波動"
+
+def run_auto_cruise():
+    curr = datetime.now()
+    if 'last_cruise' not in st.session_state or (curr - st.session_state.last_cruise).seconds > 600:
+        st.session_state.last_cruise = curr
+
+
 # 在原本的分析函數中注入連動邏輯
 def generate_ai_tech_analysis(ticker, price, diff_pct):
     # ... (保留原本 V13.2 的所有均線與 MACD 邏輯) ...
