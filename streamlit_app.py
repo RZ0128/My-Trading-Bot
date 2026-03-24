@@ -312,15 +312,31 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         atr = tr.rolling(14).mean().iloc[-1]
         rng = round(atr * 1.618, 1)
 
+        # ======================================================
+        # 🎯 在這裡插入 V15.0 銜接代碼 (就在 return 之前)
+        # ======================================================
+        # 1. 抓取該股開盤至今的所有歷史數據 (確保 3211 等個股有完整資料)
+        h_max = stock.history(period="max") 
+        
+        # 2. 調用剛才新增的歷史引擎
+        h_score, h_logic = ai_evolution_engine(ticker, h_max)
+        
+        # 3. 權重融合：將你原本算出的 total_score (60%) 與歷史評分 (40%) 結合
+        final_hybrid_score = int((total_score * 0.6) + (h_score * 0.4))
+        # ======================================================
+
+        # 4. 最終進化輸出 (這就是你剛才問的修改 2 的 return 區塊)
         return {
-            "msg": f"[{rank}] MACD:{st_60}/{st_day}/{st_week} | " + (" | ".join(logic_tags)),
+            "msg": f"{h_logic} | [{rank}] MACD:{st_60}/{st_day}/{st_week} | " + (" | ".join(logic_tags)),
             "sent": sentiment,
-            "score": total_score,
+            "score": final_hybrid_score, # 注意：這裡改用融合後的分數
             "target": round(price + rng, 1),
             "stop": round(ma20 * 0.96, 1),
             "atr_range": f"±{rng}",
-            "pivot": "變盤窗開啟"
+            "pivot": "V15.0 AI 自主學習中"
         }
+
+    
     except Exception as e:
         return {"msg": f"AI 大腦數據重組中...({str(e)[:5]})", "score": 50, "target": price, "stop": price}
 
