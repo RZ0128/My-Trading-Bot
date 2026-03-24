@@ -629,60 +629,101 @@ with tab_scan:
 
         # --- 2. 診斷呈現區：AI 個股深度分析 ---
         sel_sid = st.session_state.get('selected_stock')
+
         if sel_sid:
+            # 1. 觸發 V15.0 每 10 分鐘的自主學習計時器
+            run_auto_cruise() 
+    
+            # 2. 獲取數據與大腦分析 (此時 res 已包含 V15.0 歷史融合分數)
             p, d, cc = get_stock_perf(sel_sid, 0)
             res = generate_ai_tech_analysis(sel_sid, p, 0)
 
             if res:
-                # 取得乾淨的中文名稱
+                # 3. 取得名稱與記錄日誌
                 raw_id = sel_sid.split('.')[0]
                 display_name = STOCK_MAP.get(raw_id, raw_id)
-                # 紀錄到 AI 思維日誌
+        
+                # 將 V15.0 的進化診斷結果寫入思維日誌
                 update_ai_thought_log(display_name, res['score'], res['msg'])
-                
-                st.markdown(f"### 🎯 戰略診斷: {display_name} ({sel_sid})")
+        
+                # 4. UI 顯示升級：大腦標題與時間戳記
+                st.markdown(f"### 🧠 V15.0 AI 進化診斷: {display_name} ({sel_sid})")
+        
+                # 顯示上次自主學習的時間戳
+                last_t = st.session_state.get('last_cruise', datetime.now()).strftime("%H:%M:%S")
+                st.caption(f"🤖 AI 每 10 分鐘對比 30 年歷史中 | 上次學習: {last_t}")
+
+                # --- 戰略儀表板容器 ---
                 with st.container(border=True):
                     sc1, sc2 = st.columns([1.5, 1])
                     with sc1:
-                        # 顯示評分
+                        # 顯示評分與動態顏色
                         score_color = "red" if res['score'] >= 80 else ("orange" if res['score'] >= 60 else "green")
                         st.markdown(f"#### **評分: <span style='color:{score_color};'>{res['score']}</span>**", unsafe_allow_html=True)
-                        
+                
+                        # 根據分數顯示不同等級的指令框
                         if res['score'] >= 80:
                             st.error(f"🔥 **AI 指令：** {res['msg']}")
                         elif res['score'] <= 40:
                             st.warning(f"🚨 **AI 指令：** {res['msg']}")
                         else:
                             st.info(f"💡 **AI 指令：** {res['msg']}")
-                            
+                    
                         st.markdown(f"**📊 籌碼與心理:** `{res.get('sent', '觀測中')}`")
                         st.write("---")
-                        
-                        # 佈局區
+                
+                        # 佈局區 (數量輸入與單位選擇)
                         u_c1, u_c2 = st.columns(2)
                         q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_buy_{sel_sid}")
                         u_val = u_c2.radio("單位", ["張", "股"], key=f"u_buy_{sel_sid}", horizontal=True)
+                
                         if st.button(f"🚀 執行戰略佈局", key=f"cf_buy_{sel_sid}", use_container_width=True):
+                            # 構建持股資料結構
                             new_entry = pd.DataFrame([{
-                                'client': st.session_state.cur_c, 'id': sel_sid, 'name': display_name, 
-                                'buy_price': p, 'shares': q_val, 'unit': u_val, 'entry_reason': res['msg'], 
-                                'current_score': res['score'], 'last_diag': datetime.now().strftime("%m-%d")
+                                'client': st.session_state.cur_c, 
+                                'id': sel_sid, 
+                                'name': display_name, 
+                                'buy_price': p, 
+                                'shares': q_val, 
+                                'unit': u_val, 
+                                'entry_reason': res['msg'], 
+                                'current_score': res['score'], 
+                                'last_diag': datetime.now().strftime("%m-%d")
                             }])
+                    
+                            # 更新本地數據庫
                             st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
-                            record_transaction(st.session_state.cur_c, sel_sid, "買入", q_val, p, f"AI評分:{res['score']} | {res['msg']}")
+                    
+                            # 紀錄詳細交易流水
+                            record_transaction(
+                                st.session_state.cur_c, 
+                                sel_sid, 
+                                "買入", 
+                                q_val, 
+                                p, 
+                                f"V15.0 AI 評分:{res['score']} | {res['msg']}"
+                           )
+                    
+                            # 存檔並刷新頁面
                             save_data()
                             st.success(f"✅ {display_name} 已加入 {st.session_state.cur_c} 的持股！")
                             st.rerun()
+
                     with sc2:
+                        # 右側：數據指標與未來預測
                         st.metric("即時股價", f"{p}", d)
                         st.subheader("🔮 AI 未來預測")
                         with st.container(border=True):
                             st.write(f"📈 預期波動: `{res['atr_range']}`")
                             st.markdown(f"**🎯 目標價：** `NT$ {res['target']}`")
                             st.markdown(f"**🛡️ 停損價：** `NT$ {res['stop']}`")
-                            st.progress(res['score'] / 100, text=f"預測勝率: {res['score']}%")
-            else:
-                st.warning(f"📡 數據載入中，請稍候...")
+                    
+                            # 進度條顯示預測勝率
+                    st.progress(res['score'] / 100, text=f"預測勝率: {res['score']}%")。
+    else:
+        # 當數據抓取失敗或 generate_ai_tech_analysis 無回傳時顯示
+        st.warning(f"📡 數據載入中，請稍候...")
+
 
 
         # --- 3. 產業板塊區 ---
