@@ -412,59 +412,37 @@ def update_ai_thought_log(ticker, pred_score, reason):
         st.session_state.ai_memory.pop(0)
 
 def get_full_ticker(tid):
-    """【修正補件】自動判斷上市(.TW)或上櫃(.TWO)，精準識別 3211 等 500 檔股票"""
+    """【精準修正】自動判斷上市/上櫃，支援 3211.TWO"""
     if "." in tid: return tid
-    
-    # 大基石 AI 判斷邏輯：擴充上櫃識別頭部，確保 500 檔涵蓋範圍
     otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
     if any(tid.startswith(p) for p in otc_prefixes):
         return f"{tid}.TWO"
     return f"{tid}.TW"
 
-def get_stock_name(ticker):
-    """根據代號找名稱，確保 UI 顯示正確中文"""
-    base_id = ticker.split(".")[0]
-    # 優先從 500 檔大池中搜尋
-    for cat in pool_500.values():
-        for tid, tname in cat:
-            if tid.split(".")[0] == base_id: return tname
-    return ticker
+def update_ai_thought_log(ticker, pred_score, reason):
+    if 'ai_memory' not in st.session_state: st.session_state.ai_memory = []
+    log_entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "ticker": ticker,
+        "prediction": pred_score,
+        "logic": reason,
+        "engine_ver": "V15.0_Evolution"
+    }
+    st.session_state.ai_memory.append(log_entry)
+    if len(st.session_state.ai_memory) > 100: st.session_state.ai_memory.pop(0)
 
 def get_stock_perf(ticker, buy_price):
-    """取得即時股價、漲跌與百分比 (V15.0 強化容錯版)"""
     try:
-        # 確保帶有正確後綴
         full_tid = get_full_ticker(ticker.split(".")[0])
         stock = yf.Ticker(full_tid)
         hist = stock.history(period="5d")
-        if len(hist) < 2: return 0, "N/A", 0
-        
-        current_price = round(hist['Close'].iloc[-1], 2)
-        prev_close = hist['Close'].iloc[-2]
-        diff = round(current_price - prev_close, 2)
-        change_pct = (diff / prev_close) * 100
-        
-        diff_str = f"{diff} ({change_pct:.2f}%)"
-        return current_price, diff_str, change_pct
+        if hist.empty or len(hist) < 2: return 0, "N/A", 0
+        cp = round(hist['Close'].iloc[-1], 2)
+        diff = round(cp - hist['Close'].iloc[-2], 2)
+        pct = (diff / hist['Close'].iloc[-2]) * 100
+        return cp, f"{diff} ({pct:.2f}%)", pct
     except:
         return 0, "N/A", 0
-
-def record_transaction(client, tid, action, shares, price, note):
-    """記錄每一筆史詩級交易 (確保 trade_history 存在)"""
-    new_record = pd.DataFrame([{
-        'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
-        'client': client,
-        'id': tid,
-        'action': action,
-        'shares': shares,
-        'price': price,
-        'note': note
-    }])
-    if 'trade_history' not in st.session_state:
-        st.session_state.trade_history = new_record
-    else:
-        st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_record], ignore_index=True)
-
 # --- [工具函數區結束] ---
 
 # --- [第 5 區：側邊欄管理與分頁定義 - 關鍵修正] ---
