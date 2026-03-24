@@ -697,7 +697,7 @@ with tab_scan:
             st.metric("📊 總未實現損益", f"NT$ {total_pnl:,.0f}", delta=f"{total_pnl:,.0f}")
 
 
-# --- 第七區：全球情報室 (完整還原分級卡片) ---
+# --- 第七區：全球情報室 (完整還原分級卡片 - V15.0 戰略強化) ---
 with tab_intel:
     st.header("🌎 全球戰略情報大腦 (24H 更新)")
     if 'news_mode' not in st.session_state: st.session_state.news_mode = "🇹🇼 台美日中 (地緣)"
@@ -707,6 +707,7 @@ with tab_intel:
     if n2.button("🌐 國際戰略動態", use_container_width=True, key="n_gl"): st.session_state.news_mode = "🌐 國際戰略 (全球)"
 
     try:
+        # 調用核心大腦情報引擎
         all_news, trends = fetch_and_score_intel()
         st.write(f"🔥 **戰略熱點：** " + " ".join([f"`{w}`" for w in trends]))
         
@@ -714,6 +715,7 @@ with tab_intel:
         nl, nr = st.columns(2)
         for i, item in enumerate(filtered):
             n, score = item['data'], item['score']
+            # 保持 12.5 史詩級顏色分級
             color = "#FF4B4B" if score >= 80 else ("#FFD700" if score >= 70 else "#00D1FF")
             label = "⚡ SS 級" if score >= 80 else ("🚨 A 級" if score >= 70 else "🔍 B 級")
             
@@ -727,27 +729,29 @@ with tab_intel:
             if i % 2 == 0: nl.markdown(card, unsafe_allow_html=True)
             else: nr.markdown(card, unsafe_allow_html=True)
     except Exception as e:
-        st.error("📡 情報連線中...")
-# --- [第 7.5 區：AI 大腦思維日誌 - 專屬分頁] ---
+        st.error(f"📡 情報連線中... AI 正在重新對齊全球戰略數據流")
+
+# --- [第 7.5 區：AI 大腦思維日誌 - V15.0 專屬進化分頁] ---
 with tab_brain: 
-    st.header("🧠 大基石：AI 進化思維日誌")
+    st.header("🧠 大基石：AI 進化思維日誌 (V15.0)")
+    st.caption("🤖 此日誌紀錄 AI 每 10 分鐘對比 35 年歷史大數據後的進化軌跡")
     st.write("---")
     
     if 'ai_memory' in st.session_state and st.session_state.ai_memory:
-        # 顯示最近 10 條紀錄
+        # 顯示最近 10 條紀錄，並標註進化版本
         for m in reversed(st.session_state.ai_memory[-10:]):
             with st.container(border=True):
                 c1, c2 = st.columns([1, 3])
                 c1.metric("診斷標的", m['ticker'])
                 with c2:
-                    st.markdown(f"**預測評分:** `{m['prediction']}`")
+                    st.markdown(f"**預測評分:** `{m['prediction']}` (混合評分權重: 60% 戰術 / 40% 歷史)")
                     st.markdown(f"**核心邏輯:** {m['logic']}")
-                    st.caption(f"📅 紀錄時間: {m['timestamp']}")
+                    st.caption(f"📅 紀錄時間: {m['timestamp']} | 引擎版本: {m.get('engine_ver', 'V15.0_Evolution')}")
     else:
-        st.info("💡 目前尚無思維紀錄，請開始進行個股戰略診斷，AI 將啟動自我學習。")
+        st.info("💡 目前尚無思維紀錄。請前往【戰策指揮所】進行個股深度診斷，AI 將啟動 35 年歷史模型自我學習。")
 
 
-# --- [第 8 區：交易紀錄 - 獨立分頁] ---
+# --- [第 8 區：交易紀錄 - 獨立分頁 (精準對齊)] ---
 with tab_history:
     st.subheader("📜 歷史交易紀錄")
     
@@ -759,17 +763,18 @@ with tab_history:
                 display_df = df_to_show.sort_values(by='date', ascending=False)
             else:
                 display_df = df_to_show
+            
+            # 使用 12.5 原始表格樣式呈現
             st.dataframe(display_df, use_container_width=True)
         except Exception as e:
             st.dataframe(st.session_state.trade_history, use_container_width=True)
     else:
         st.info("💡 目前尚無交易紀錄，或雲端連線中...")
         
-        
     st.divider()
     st.markdown("### ☁️ 交易紀錄同步備份")
     
-    # 準備下載用的 CSV 數據
+    # 準備下載用的 CSV 數據 (確保 UTF-8-SIG 避免中文亂碼)
     if 'trade_history' in st.session_state:
         csv_history = st.session_state.trade_history.to_csv(index=False).encode('utf-8-sig')
     else:
@@ -779,9 +784,9 @@ with tab_history:
     with h_sync1:
         if st.button("💾 存至本地紀錄", key="up_hist", use_container_width=True):
             save_data()
-            st.success("✅ 紀錄已存檔至本地緩存")
+            st.success("✅ 紀錄已成功存檔至本地緩存")
         
-        # --- 下載紀錄按鈕 ---
+        # --- 下載紀錄按鈕 (完全保留原始功能與名稱) ---
         st.download_button(
             label="📥 下載歷史紀錄 (CSV)",
             data=csv_history,
@@ -793,6 +798,7 @@ with tab_history:
 
     with h_sync2:
         if st.button("🔄 刷新雲端連線", key="dl_hist", use_container_width=True):
+            # 重置初始化狀態，觸發重新載入
             st.cache_data.clear()
             st.session_state.initialized = False
             st.rerun()
