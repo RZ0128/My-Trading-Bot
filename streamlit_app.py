@@ -613,7 +613,7 @@ with tab_scan:
                             }])
                             st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
                             
-                            # 紀錄交易紀錄
+                            # 紀錄交易紀錄 (V15.0 修正：確保 record_transaction 存在)
                             record_transaction(st.session_state.cur_c, sel_sid, "買入", q_val, p, f"V15.0 AI 評分:{res['score']} | {res['msg']}")
                             
                             save_data()
@@ -634,6 +634,10 @@ with tab_scan:
         # --- 3. 產業板塊區 (整合全市場 500 檔掃描) ---
         st.divider()
         st.subheader("🚀 產業板塊共振偵測")
+        
+        # 【核心修正點】：這裡原本漏掉了 get_us_market_impact 的呼叫，導致下方 us_impact 報錯
+        us_impact, stress_count = get_us_market_impact() 
+
         if us_impact.get("費半", 0) < -3.0:
             st.error("📉 **美股警報：** 費半暴跌，請謹慎對待 [AI、半導體、設備] 板塊！")
         if us_impact.get("那指", 0) < -3.0:
