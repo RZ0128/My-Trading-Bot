@@ -154,15 +154,23 @@ if is_connected:
             point_view = {"費半": "^SOX", "那指": "^IXIC", "台積電ADR": "TSM", "輝達": "NVDA"}
             
             for i, (name, val) in enumerate(us_impact.items()):
-                # 獲取最新點數 (從 yfinance 重新抓取最新一筆 Close)
+                # --- [修正核心：嚴格區分點數與百分比] ---
                 try:
                     target_ticker = point_view.get(name)
+                    # 抓取最新成交點數
                     latest_price = yf.Ticker(target_ticker).fast_info['last_price']
-                    display_val = f"{latest_price:,.2f} / {val:+}%"
+                    
+                    # 1. 這裡只給純數字（例如：7962.18），不要再加任何符號
+                    display_val = f"{latest_price:,.2f}" 
                 except:
+                    # 2. 備援邏輯：萬一抓不到點數，才顯示帶符號的百分比作為主數值
                     display_val = f"{val:+}%"
 
-                # 顏色反轉邏輯：美股漲(正數) -> delta_color="inverse" -> 顯示為紅色 (符合台股)
+                # 3. 呼叫 metric，將純數字放在 value，百分比放在 delta
+                # 這樣畫面就會呈現：
+                # 費半
+                # 7,962.18
+                # ↑ 1.14% (紅色)
                 u_cols[i].metric(
                     label=name, 
                     value=display_val, 
@@ -170,6 +178,7 @@ if is_connected:
                     delta_color="inverse"
                 )
             
+            # 壓力預警區（維持原樣，不更動佈局）
             if stress_count >= 1:
                 st.markdown(f"""
                     <div style="background-color: #fff5f5; border: 2px solid #ff4b4b; padding: 10px; border-radius: 8px; color: #ff4b4b; font-weight: bold; text-align: center;">
