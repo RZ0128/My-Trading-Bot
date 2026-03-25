@@ -142,16 +142,33 @@ run_auto_cruise()
 
 is_connected, status_text = check_connection()
 
+# --- [修正區：頂部全球看板精細化] ---
 if is_connected:
     us_impact, stress_count = get_us_market_impact()
     if us_impact:
         with st.container(border=True):
-            st.markdown("#### 🌍 全球戰略連動看板")
+            st.markdown("#### 🌍 全球戰略連動看板 (V15.0 精準對位)")
             u_cols = st.columns(len(us_impact))
+            
+            # 定義需要顯示點數的標的
+            point_view = {"費半": "^SOX", "那指": "^IXIC", "台積電ADR": "TSM", "輝達": "NVDA"}
+            
             for i, (name, val) in enumerate(us_impact.items()):
-                is_risk = (name != "美元指數" and val <= -2.0)
-                delta_color = "inverse" if is_risk else "normal"
-                u_cols[i].metric(name, f"{val}%", delta=f"{val}%", delta_color=delta_color)
+                # 獲取最新點數 (從 yfinance 重新抓取最新一筆 Close)
+                try:
+                    target_ticker = point_view.get(name)
+                    latest_price = yf.Ticker(target_ticker).fast_info['last_price']
+                    display_val = f"{latest_price:,.2f} / {val:+}%"
+                except:
+                    display_val = f"{val:+}%"
+
+                # 顏色反轉邏輯：美股漲(正數) -> delta_color="inverse" -> 顯示為紅色 (符合台股)
+                u_cols[i].metric(
+                    label=name, 
+                    value=display_val, 
+                    delta=f"{val}%", 
+                    delta_color="inverse"
+                )
             
             if stress_count >= 1:
                 st.markdown(f"""
@@ -159,12 +176,6 @@ if is_connected:
                         🚨 AI 壓力預警：當前美股壓力值 [{stress_count}]！台股 AI 板塊可能面臨連動修正，建議防守。
                     </div>
                 """, unsafe_allow_html=True)
-    st.markdown(f'<div class="status-bar status-on">🌐 {status_text}</div>', unsafe_allow_html=True)
-else:
-    st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
-    st.info("💡 提示：請確保 Google Sheets 已改名為 inventory/history/clients 並已『發布到網路』。")
-
-st.divider()
 
 
 # ==============================================================================
