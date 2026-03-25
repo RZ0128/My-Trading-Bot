@@ -1,3 +1,5 @@
+為什麼我在第五區並沒有找到你說的st.metric，以下是全代碼，麻煩幫我確認在第幾區？
+
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -652,11 +654,9 @@ with tab_scan:
                             st.success(f"✅ {display_name} 已加入 {st.session_state.cur_c} 的持股！")
                             st.rerun()
 
-                                        with sc2:
-                        # 修正：delta_color="inverse" 確保紅漲綠跌
-                        st.metric("即時股價", f"{p}", d, delta_color="inverse")
+                    with sc2:
+                        st.metric("即時股價", f"{p}", d)
                         st.subheader("🔮 AI 未來預測")
-
                         with st.container(border=True):
                             st.write(f"📈 預期波動: `{res['atr_range']}`")
                             st.markdown(f"**🎯 目標價：** `NT$ {res['target']}`")
