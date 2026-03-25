@@ -784,22 +784,31 @@ with tab_intel:
 
 # --- [第 7.5 區：AI 大腦思維日誌 - V15.0 專屬進化分頁] ---
 with tab_brain: 
+    # 確保此分頁不調用任何全球看板函數，直接進入標題
     st.header("🧠 大基石：AI 進化思維日誌 (V15.0)")
     st.caption("🤖 此日誌紀錄 AI 每 10 分鐘對比 35 年歷史大數據後的進化軌跡")
     st.write("---")
     
+    # 檢查 AI 記憶體是否存在
     if 'ai_memory' in st.session_state and st.session_state.ai_memory:
-        # 顯示最近 10 條紀錄，並標註進化版本
+        # 顯示最近 10 條紀錄，並標註進化版本 (倒序排列，最新優先)
         for m in reversed(st.session_state.ai_memory[-10:]):
             with st.container(border=True):
                 c1, c2 = st.columns([1, 3])
+                # 左側：診斷標的
                 c1.metric("診斷標的", m['ticker'])
+                
+                # 右側：核心邏輯與評分細節
                 with c2:
                     st.markdown(f"**預測評分:** `{m['prediction']}` (混合評分權重: 60% 戰術 / 40% 歷史)")
                     st.markdown(f"**核心邏輯:** {m['logic']}")
                     st.caption(f"📅 紀錄時間: {m['timestamp']} | 引擎版本: {m.get('engine_ver', 'V15.0_Evolution')}")
     else:
+        # 空值引導提示
         st.info("💡 目前尚無思維紀錄。請前往【戰策指揮所】進行個股深度診斷，AI 將啟動 35 年歷史模型自我學習。")
+
+# --- 7.5 區結束 ---
+
 
 
 # --- [第 8 區：交易紀錄 - 獨立分頁 (精準對齊)] ---
