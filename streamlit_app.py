@@ -454,14 +454,6 @@ def get_stock_perf(ticker, buy_price):
 # --- [工具函數區結束] ---
 
 # --- [第 5 區：側邊欄管理與分頁定義 - 關鍵修正] ---
-tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
-if 'local_db' not in st.session_state:
-    load_data()
-
-# 側邊欄過濾與客戶管理
-target_ghosts = ["VIP實戰", "周靖傑", "nan", "None", None, "Unnamed: 0"]
-if 'client_list' in st.session_state:
-    st.session_state.client_list = [c for c in st.session_state.client_list if str(c) not in target_ghosts and str(c).strip() != ""]
 
 with st.sidebar:
     st.title("👤 大基石 AI 經理人")
