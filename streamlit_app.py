@@ -133,6 +133,8 @@ def record_transaction(client, tid, action, shares, price, note):
     else:
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log], ignore_index=True)
 
+# --- 貼齊左邊結束 ---
+
 
 # --- 介面執行：頂部標題與狀態 ---
 st.title("🛡️ 大基石 - AI 戰略經理人 (V15.0)")
