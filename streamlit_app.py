@@ -82,23 +82,29 @@ def get_full_ticker(tid):
     return tid
 
 def load_data():
+    """核心：初始化並加載數據 (V15.0 穩定版)"""
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
     try:
+        # 1. 嘗試讀取雲端
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
         df_hist = pd.read_csv(get_sheet_url("history"))
         if df_hist.empty or 'date' not in df_hist.columns:
             df_hist = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
         st.session_state.trade_history = df_hist
+        
         client_df = pd.read_csv(get_sheet_url("clients"))
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
+        
         if 'client_list' not in st.session_state:
             st.session_state.client_list = ["Robert"]
+            
         ghosts = ["nan", "None", None]
         combined = list(set(st.session_state.client_list + cloud_clients))
         st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
         st.session_state.initialized = True
     except:
+        # 2. 失敗則建立本地備援
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag', 'sentiment'])
         if 'trade_history' not in st.session_state:
@@ -107,18 +113,12 @@ def load_data():
             st.session_state.client_list = ["Robert"]
         st.session_state.initialized = True
 
-# --- 從這裡開始，前面「絕對不能有任何空格」，要貼齊左邊 ---
 def save_data():
-    """確保數據回流至 session_state"""
-    try:
-        st.session_state.local_db = st.session_state.local_db
-        st.session_state.initialized = True 
-    except:
-        pass
+    """確保數據回流至 session_state (修正：不再依賴外部定義)"""
+    st.session_state.initialized = True 
 
 def record_transaction(client, tid, action, shares, price, note):
-    """補回交易紀錄函數"""
-    # 這裡面的內容（new_log...）要縮進，但 def 本身必須靠左
+    """【關鍵修復】補回被遺漏的交易紀錄函數，讓買賣按鈕生效"""
     new_log = pd.DataFrame([{
         'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
         'client': client,
@@ -133,12 +133,11 @@ def record_transaction(client, tid, action, shares, price, note):
     else:
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log], ignore_index=True)
 
-# --- 貼齊左邊結束 ---
-
-
 # --- 介面執行：頂部標題與狀態 ---
 st.title("🛡️ 大基石 - AI 戰略經理人 (V15.0)")
-load_data() # 確保數據加載
+# 這裡很重要：先定義完函數，才呼叫載入
+if 'initialized' not in st.session_state:
+    load_data() 
 run_auto_cruise()
 
 is_connected, status_text = check_connection()
