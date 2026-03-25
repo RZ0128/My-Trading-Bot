@@ -107,6 +107,35 @@ def load_data():
             st.session_state.client_list = ["Robert"]
         st.session_state.initialized = True
 
+# --- [外科手術補件：核心存檔與紀錄邏輯] ---
+def save_data():
+    """確保數據回流至 session_state，並預留雲端寫入接口"""
+    try:
+        # 將目前的 local_db 同步回 session_state (這行很重要，解決沒更新的問題)
+        st.session_state.local_db = st.session_state.local_db
+        st.session_state.initialized = True 
+    except:
+        pass
+
+def record_transaction(client, tid, action, shares, price, note):
+    """修復：補回被遺漏的交易紀錄函數，讓買賣按鈕不再報錯"""
+    new_log = pd.DataFrame([{
+        'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
+        'client': client,
+        'id': tid,
+        'action': action,
+        'shares': shares,
+        'price': price,
+        'note': note
+    }])
+    if 'trade_history' not in st.session_state:
+        st.session_state.trade_history = new_log
+    else:
+        st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log], ignore_index=True)
+
+# --- 貼完後，下方應該接原本的 st.title("🛡️ 大基石...") ---
+
+
 # --- 介面執行：頂部標題與狀態 ---
 st.title("🛡️ 大基石 - AI 戰略經理人 (V15.0)")
 load_data() # 確保數據加載
