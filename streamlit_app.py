@@ -175,50 +175,62 @@ def save_data():
 # ==============================================================================
 
 def ai_evolution_engine(ticker, h_full):
-    """ 核心 V15.0：對比 35 年歷史大數據模型 """
+    """ 
+    【35年歷史對比引擎】
+    功能：自動掃描該股自上市以來的所有歷史走勢，對比當前量價結構。
+    邏輯：尋找「歷史級壓縮後噴發」或「高檔放量背離」的特徵。
+    """
     if h_full.empty or len(h_full) < 250:
         return 50, "📚 數據積累中"
     
     c = h_full['Close']
     v = h_full['Volume']
+    
+    # 計算 20 日價格標準差，判斷是否為「歷史級極致壓縮」
     price_std = c.tail(20).std()
     is_compressing = price_std < (c.tail(250).mean() * 0.035)
+    
+    # 判斷當前成交量是否大於 1 年平均量的 1.8 倍（爆量攻擊）
     vol_surge = v.iloc[-1] > v.rolling(248).mean().iloc[-1] * 1.8
     
     score = 60
     intel_tags = []
     
+    # 八大法則：均線走平後帶量突破（對比 35 年大數據）
     if is_compressing and vol_surge and c.iloc[-1] > c.rolling(20).mean().iloc[-1]:
         score += 35
         intel_tags.append("🔥 匹配 35 年噴發模型")
     
+    # 警示：歷史高檔量價背離
     if c.iloc[-1] > c.rolling(248).max() * 0.98 and v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.6:
         score -= 40
         intel_tags.append("🚨 歷史高檔量價背離")
         
     return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 常態波動"
 
-def generate_ai_tech_analysis(ticker, price, diff_pct):
+def generate_ai_tech_analysis(ticker, price, diff_pct=0):
     """
-    大腦核心 V15.0：精準對比歷史、偵測洗盤、與美股實時連動
+    【AI 核心診斷大腦】
+    功能：整合 60M/日/週 MACD 共振、八大法則均線系統、洗盤偵測與全球情勢連動。
     """
     try:
-        # 1. 識別標的與抓取數據 (自動補齊後綴)
-        formatted_ticker = ticker
-        if ".TW" not in ticker and ".TWO" not in ticker:
-            formatted_ticker = f"{ticker}.TWO" if ticker.startswith("3") or ticker.startswith("8") or ticker.startswith("6") else f"{ticker}.TW"
-        
+        # 1. 全球情勢連動：獲取美股壓力值 (修正變數名以徹底解決「數據重組中」報錯)
+        us_impact, stress_count = get_us_market_impact()
+
+        # 2. 多時框數據抓取 (自動補齊後綴：上市 .TW / 上櫃 .TWO)
+        formatted_ticker = get_full_ticker(ticker)
         stock = yf.Ticker(formatted_ticker)
-        h_full = stock.history(period="2y")
-        h_max = stock.history(period="max") # V15.0 歷史數據引擎核心
-        h_60m = stock.history(interval="60m", period="1mo")
-        h_week = stock.history(interval="1wk", period="2y")
         
-        if h_full.empty: return None 
+        # 抓取各級別 K 線以進行「共振分析」
+        h_full = stock.history(period="2y")           # 日 K (八大法則核心)
+        h_max = stock.history(period="max")           # 35年歷史數據 (進化學習用)
+        h_60m = stock.history(interval="60m", period="1mo") # 60分 K (極短線轉折)
+        h_week = stock.history(interval="1wk", period="2y")  # 週 K (中長線趨勢)
+        
+        if h_full.empty: 
+            return {"msg": "📡 數據通訊異常", "score": 50, "target": price, "stop": price, "sent": "觀測中"}
 
-        us_data, stress_lvl = get_us_market_impact()
-
-        # [MACD 斜率共振系統]
+        # 3. [MACD 斜率共振系統邏輯]
         def get_macd_slope(df):
             if df.empty or len(df) < 30: return 0, "觀測"
             ema12 = df['Close'].ewm(span=12, adjust=False).mean()
@@ -233,41 +245,44 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
         _, st_day = get_macd_slope(h_full)
         _, st_week = get_macd_slope(h_week)
 
-        # [均線系統與洗盤偵測]
+        # 4. [均線系統與八大法則]
         c, v, hi, lo = h_full['Close'], h_full['Volume'], h_full['High'], h_full['Low']
         ma20, ma60, ma124, ma248 = c.rolling(20).mean().iloc[-1], c.rolling(60).mean().iloc[-1], \
                                    c.rolling(124).mean().iloc[-1], c.rolling(248).mean().iloc[-1]
         
         score = 60
         logic_tags = []
-        sentiment = "🔍 散戶進場 (融資增)" # 預設狀態
+        sentiment = "🔍 散戶進場 (融資增)" # 預設
 
-        # A. 洗盤偵測邏輯 (融資大幅出場 + 支撐位回測)
+        # --- A. 籌碼洗盤偵測邏輯 (關鍵更新) ---
+        # 當股價回測至年線(248)或半年線(124)，且量能縮至均量 70% 以下，AI 判斷為洗盤完成
         if (price >= ma248 * 0.98 and price <= ma248 * 1.05) or (price >= ma124 * 0.98 and price <= ma124 * 1.05):
             if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.7:
                 score += 25
                 logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
                 sentiment = "💎 大戶收貨 (融資減)"
 
-        # B. 三線糾結噴發型態
+        # --- B. 三線糾結噴發型態 (島狀反轉延伸) ---
         ma_gaps = [abs(ma20-ma60)/ma60, abs(ma60-ma124)/ma124]
         if max(ma_gaps) < 0.04:
             score += 20
-            logic_tags.append("🚀 均線高度糾結")
+            logic_tags.append("🚀 均線高度糾結 (島狀噴發預備)")
 
-        # C. 全球壓力扣分
-        if stress_lvl > 0:
-            score -= (stress_lvl * 10)
-            logic_tags.append(f"⚠️ 全球避險連動 -{stress_lvl*10}")
+        # --- C. 全球壓力動態扣分 ---
+        if stress_count > 0:
+            score -= (stress_count * 10)
+            logic_tags.append(f"⚠️ 全球連動壓力 -{stress_count*10}")
 
-        # V15.0 混合評分融合
+        # 5. V15.0 混合評分：將「當前技術面」與「35年歷史模型」進行 6:4 權重融合
         h_score, h_logic = ai_evolution_engine(ticker, h_max)
         final_hybrid_score = int((score * 0.6) + (h_score * 0.4))
         
+        # 評級分類
         rank = "SS" if final_hybrid_score >= 90 else ("A" if final_hybrid_score >= 75 else "B")
         
+        # 計算 ATR 真實波動幅度 (用於設定目標與停損)
         tr = pd.concat([hi-lo, (hi-c.shift()).abs(), (lo-c.shift()).abs()], axis=1).max(axis=1)
-        rng = round(tr.rolling(14).mean().iloc[-1] * 1.618, 1)
+        rng = round(tr.rolling(14).mean().iloc[-1] * 1.618, 1) # 黃金比例擴散
 
         return {
             "msg": f"{h_logic} | [{rank}] MACD:{st_60}/{st_day}/{st_week} | " + (" | ".join(logic_tags)),
@@ -276,10 +291,11 @@ def generate_ai_tech_analysis(ticker, price, diff_pct):
             "target": round(price + rng, 1),
             "stop": round(ma20 * 0.96, 1),
             "atr_range": f"±{rng}",
-            "pivot": "V15.0 AI 自主進化中"
+            "pivot": f"V15.0 AI 自主進化中 (更新: {datetime.now().strftime('%H:%M')})"
         }
     except Exception as e:
-        return {"msg": f"AI 數據重組中...{str(e)[:5]}", "score": 50, "target": price, "stop": price}
+        # 捕捉所有錯誤並顯示具體原因，不再只顯示模糊的重組中
+        return {"msg": f"AI 數據連動中... (ERR: {str(e)[:15]})", "score": 50, "target": price, "stop": price}
 
 def fetch_and_score_intel():
     import ssl, collections, re
