@@ -196,7 +196,8 @@ def ai_evolution_engine(ticker, h_full):
     【35年歷史對比引擎】
     功能：自動掃描該股自上市以來的所有歷史走勢，對比當前量價結構。
     """
-    if h_full.empty or len(h_full) < 250:
+    # 修正：確保數據不為空且長度足夠，避免 truth value 報錯
+    if h_full is None or h_full.empty or len(h_full) < 250:
         return 50, "📚 數據積累中"
     
     c = h_full['Close']
@@ -207,20 +208,25 @@ def ai_evolution_engine(ticker, h_full):
     is_compressing = price_std < (c.tail(250).mean() * 0.035)
     
     # 判斷當前成交量是否大於 1 年平均量的 1.8 倍（爆量攻擊）
-    vol_surge = v.iloc[-1] > v.rolling(248).mean().iloc[-1] * 1.8
+    avg_vol_year = v.rolling(248).mean().iloc[-1]
+    vol_surge = v.iloc[-1] > avg_vol_year * 1.8 if not np.isnan(avg_vol_year) else False
     
     score = 60
     intel_tags = []
     
     # 八大法則：均線走平後帶量突破（對比 35 年大數據）
-    if is_compressing and vol_surge and c.iloc[-1] > c.rolling(20).mean().iloc[-1]:
+    ma20_last = c.rolling(20).mean().iloc[-1]
+    if is_compressing and vol_surge and c.iloc[-1] > ma20_last:
         score += 35
         intel_tags.append("🔥 匹配 35 年噴發模型")
     
     # 警示：歷史高檔量價背離
-    if c.iloc[-1] > c.rolling(248).max() * 0.98 and v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.6:
-        score -= 40
-        intel_tags.append("🚨 歷史高檔量價背離")
+    max_price_year = c.rolling(248).max().iloc[-1]
+    avg_vol_short = v.rolling(20).mean().iloc[-1]
+    if not np.isnan(max_price_year) and not np.isnan(avg_vol_short):
+        if c.iloc[-1] > max_price_year * 0.98 and v.iloc[-1] < avg_vol_short * 0.6:
+            score -= 40
+            intel_tags.append("🚨 歷史高檔量價背離")
         
     return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 常態波動"
 
@@ -253,11 +259,13 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         h_60m = stock.history(interval="60m", period="1mo") 
         h_week = stock.history(interval="1wk", period="2y")  
         
-        if h_full.empty: return error_res
+        # 修正：使用 .empty 確保數據存在
+        if h_full is None or h_full.empty: return error_res
 
         # 3. [MACD 斜率共振系統邏輯]
         def get_macd_slope(df):
-            if df.empty or len(df) < 30: return 0, "觀測"
+            # 修正：確保 Series 判斷前先檢查是否為空
+            if df is None or df.empty or len(df) < 30: return 0, "觀測"
             ema12 = df['Close'].ewm(span=12, adjust=False).mean()
             ema26 = df['Close'].ewm(span=26, adjust=False).mean()
             macd = ema12 - ema26
@@ -280,11 +288,13 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         sentiment = "🔍 散戶進場 (融資增)" 
 
         # --- 洗盤偵測核心邏輯 ---
-        if (price >= ma248 * 0.97 and price <= ma248 * 1.05):
-            if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.75:
-                score += 25
-                logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
-                sentiment = "💎 大戶收貨 (融資減)"
+        if not np.isnan(ma248):
+            if (price >= ma248 * 0.97 and price <= ma248 * 1.05):
+                vol_ma20 = v.rolling(20).mean().iloc[-1]
+                if not np.isnan(vol_ma20) and v.iloc[-1] < vol_ma20 * 0.75:
+                    score += 25
+                    logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
+                    sentiment = "💎 大戶收貨 (融資減)"
 
         # 5. V15.0 混合評分與歷史對比
         h_score, h_logic = ai_evolution_engine(ticker, h_max)
@@ -293,25 +303,22 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         
         # ATR 波動計算
         tr = pd.concat([hi-lo, (hi-c.shift()).abs(), (lo-c.shift()).abs()], axis=1).max(axis=1)
-        rng = round(tr.rolling(14).mean().iloc[-1] * 1.618, 1)
+        atr_avg = tr.rolling(14).mean().iloc[-1]
+        rng = round(atr_avg * 1.618, 1) if not np.isnan(atr_avg) else 0
 
         return {
             "msg": f"{h_logic} | [{rank}] MACD:{st_60}/{st_day}/{st_week} | " + (" | ".join(logic_tags)),
             "sent": sentiment,
             "score": final_hybrid_score,
             "target": round(price + rng, 1),
-            "stop": round(ma20 * 0.96, 1),
+            "stop": round(ma20 * 0.96, 1) if not np.isnan(ma20) else price,
             "atr_range": f"±{rng}",
             "pivot": f"V15.0 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
         }
     except Exception as e:
         # 即使報錯也回傳預設結構，防止 UI 紅字崩潰
-        error_res["msg"] = f"AI 診斷暫時受阻: {str(e)[:20]}"
+        error_res["msg"] = f"AI 診斷暫時受阻: {str(e)[:25]}"
         return error_res
-
-# --- 測試運算輸出範例 (僅供參考邏輯是否通暢) ---
-# res = generate_ai_tech_analysis("2330", 1000)
-# st.write(res)
 
 
 def fetch_and_score_intel():
