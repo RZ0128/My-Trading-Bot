@@ -748,7 +748,8 @@ with tab_scan:
                             else: st.session_state.local_db.at[idx, 'shares'] -= exit_q
                         else: st.warning("⚠️ 單位不一致")
                         save_data(); st.rerun()
-            st.metric("📊 總未實現損益", f"NT$ {total_pnl:,.0f}", delta=f"{total_pnl:,.0f}")
+            st.metric("📊 總未實現損益", f"NT$ {total_pnl:,.0f}")
+
 
 
 # --- 第七區：全球情報室 (完整還原分級卡片 - V15.0 戰略強化) ---
