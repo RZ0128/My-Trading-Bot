@@ -1,5 +1,3 @@
-為什麼我在第五區並沒有找到你說的st.metric，以下是全代碼，麻煩幫我確認在第幾區？
-
 import streamlit as st
 import pandas as pd
 import yfinance as yf
