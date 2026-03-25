@@ -30,9 +30,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- [第 2 區補充：定義美股監控函數 (必須移到前面防止報錯)] ---
+# --- [第 2 區：定義監控函數與連線邏輯] ---
+
 def get_us_market_impact():
     try:
+        # 修正：確保 tickers 包含您需要的核心監控對象
         tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
         impact_report = {}
         total_stress = 0
@@ -55,9 +57,8 @@ def run_auto_cruise():
         now = datetime.now()
         if (now - st.session_state.last_cruise).seconds > 600: # 10分鐘
             st.session_state.last_cruise = now
-            # 此處可觸發後台重新計算邏輯
 
-# --- [第 2 區：雲端保險箱核心連線] ---
+# 雲端 ID (保持不變)
 SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
 
 def get_sheet_url(sheet_name):
@@ -70,23 +71,46 @@ def check_connection():
     except:
         return False, "❌ 連線失敗：請檢查試算表權限或網路"
 
+def get_full_ticker(tid):
+    """自動判斷上市/上櫃，支援 3211.TWO"""
+    tid = str(tid).split(".")[0]
+    if tid.isdigit():
+        otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
+        if any(tid.startswith(p) for p in otc_prefixes):
+            return f"{tid}.TWO"
+        return f"{tid}.TW"
+    return tid
+
+def load_data():
+    if 'initialized' in st.session_state and st.session_state.initialized:
+        return
+    try:
+        st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
+        df_hist = pd.read_csv(get_sheet_url("history"))
+        if df_hist.empty or 'date' not in df_hist.columns:
+            df_hist = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
+        st.session_state.trade_history = df_hist
+        client_df = pd.read_csv(get_sheet_url("clients"))
+        cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
+        if 'client_list' not in st.session_state:
+            st.session_state.client_list = ["Robert"]
+        ghosts = ["nan", "None", None]
+        combined = list(set(st.session_state.client_list + cloud_clients))
+        st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
+        st.session_state.initialized = True
+    except:
+        if 'local_db' not in st.session_state:
+            st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag', 'sentiment'])
+        if 'trade_history' not in st.session_state:
+            st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
+        if 'client_list' not in st.session_state:
+            st.session_state.client_list = ["Robert"]
+        st.session_state.initialized = True
+
+# --- 介面執行：頂部標題與狀態 ---
 st.title("🛡️ 大基石 - AI 戰略經理人 (V15.0)")
-
-is_connected, status_text = check_connection()
-if is_connected:
-    us_impact, stress_count = get_us_market_impact()
-    if us_impact:
-        with st.container(border=True):
-            st.markdown("#### 🌍 全球戰略連動看板")
-            u_cols = st.columns(len(us_impact))
-            for i, (name, val) in enumerate(us_impact.items()):
-                u_cols[i].metric(name, f"{val}%", delta=f"{val}%")
-    st.markdown(f'<div class="status-bar status-on">🌐 {status_text}</div>', unsafe_allow_html=True)
-else:
-    st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
-
-# --- [第 2 區修正：頂部標題、美股監控看板與連線狀態燈] ---
-st.title("🛡️ 大基石 - AI 戰略經理人")
+load_data() # 確保數據加載
+run_auto_cruise()
 
 is_connected, status_text = check_connection()
 
@@ -107,68 +131,13 @@ if is_connected:
                         🚨 AI 壓力預警：當前美股壓力值 [{stress_count}]！台股 AI 板塊可能面臨連動修正，建議防守。
                     </div>
                 """, unsafe_allow_html=True)
-    
     st.markdown(f'<div class="status-bar status-on">🌐 {status_text}</div>', unsafe_allow_html=True)
-    st.divider()
-
 else:
     st.markdown(f'<div class="status-bar status-off">📡 {status_text}</div>', unsafe_allow_html=True)
     st.info("💡 提示：請確保 Google Sheets 已改名為 inventory/history/clients 並已『發布到網路』。")
 
-# --- [V15.0 核心工具補件：放在 load_data 之前] ---
-def get_full_ticker(tid):
-    """自動判斷上市/上櫃，支援 3211.TWO"""
-    tid = str(tid).split(".")[0]
-    if tid.isdigit():
-        otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
-        if any(tid.startswith(p) for p in otc_prefixes):
-            return f"{tid}.TWO"
-        return f"{tid}.TW"
-    return tid
+st.divider()
 
-def record_transaction(client, tid, action, shares, price, note):
-    """紀錄交易紀錄至 Session 與雲端準備"""
-    new_trade = pd.DataFrame([{
-        'date': datetime.now().strftime("%Y-%m-%d"),
-        'client': client, 'id': tid, 'action': action,
-        'shares': shares, 'price': price, 'note': note
-    }])
-    if 'trade_history' not in st.session_state:
-        st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-    st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_trade], ignore_index=True)
-
-# --- [原本的 load_data 保持不變或檢查是否如下] ---
-def load_data():
-    if 'initialized' in st.session_state and st.session_state.initialized:
-        return
-    try:
-        st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
-        df_hist = pd.read_csv(get_sheet_url("history"))
-        if df_hist.empty or 'date' not in df_hist.columns:
-            df_hist = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-        st.session_state.trade_history = df_hist
-        client_df = pd.read_csv(get_sheet_url("clients"))
-        cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
-        if 'client_list' not in st.session_state:
-            st.session_state.client_list = ["Robert"]
-        ghosts = ["nan", "None", None]
-        combined = list(set(st.session_state.client_list + cloud_clients))
-        st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
-        st.session_state.initialized = True
-    except Exception as e:
-        if 'local_db' not in st.session_state:
-            st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag', 'sentiment'])
-        if 'trade_history' not in st.session_state:
-            st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-        if 'client_list' not in st.session_state:
-            st.session_state.client_list = ["Robert"]
-        st.session_state.initialized = True
-
-def save_data():
-    st.session_state.local_db.to_csv("stone_manager_db.csv", index=False)
-    if 'trade_history' in st.session_state:
-        st.session_state.trade_history.to_csv("trading_history.csv", index=False)
-    pd.DataFrame(st.session_state.client_list, columns=['name']).to_csv("client_list.csv", index=False)
 
 # ==============================================================================
 # 第 3 區：大基石史詩級強大腦 V15.0 - 超越老總級「AI 全自動進化」版本
@@ -178,7 +147,6 @@ def ai_evolution_engine(ticker, h_full):
     """ 
     【35年歷史對比引擎】
     功能：自動掃描該股自上市以來的所有歷史走勢，對比當前量價結構。
-    邏輯：尋找「歷史級壓縮後噴發」或「高檔放量背離」的特徵。
     """
     if h_full.empty or len(h_full) < 250:
         return 50, "📚 數據積累中"
@@ -214,18 +182,17 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
     功能：整合 60M/日/週 MACD 共振、八大法則均線系統、洗盤偵測與全球情勢連動。
     """
     try:
-        # 1. 全球情勢連動：獲取美股壓力值 (修正變數名以徹底解決「數據重組中」報錯)
-        us_impact, stress_count = get_us_market_impact()
+        # 1. 全球情勢連動
+        _, stress_count = get_us_market_impact()
 
-        # 2. 多時框數據抓取 (自動補齊後綴：上市 .TW / 上櫃 .TWO)
+        # 2. 多時框數據抓取
         formatted_ticker = get_full_ticker(ticker)
         stock = yf.Ticker(formatted_ticker)
         
-        # 抓取各級別 K 線以進行「共振分析」
-        h_full = stock.history(period="2y")           # 日 K (八大法則核心)
-        h_max = stock.history(period="max")           # 35年歷史數據 (進化學習用)
-        h_60m = stock.history(interval="60m", period="1mo") # 60分 K (極短線轉折)
-        h_week = stock.history(interval="1wk", period="2y")  # 週 K (中長線趨勢)
+        h_full = stock.history(period="2y")           
+        h_max = stock.history(period="max")           
+        h_60m = stock.history(interval="60m", period="1mo") 
+        h_week = stock.history(interval="1wk", period="2y")  
         
         if h_full.empty: 
             return {"msg": "📡 數據通訊異常", "score": 50, "target": price, "stop": price, "sent": "觀測中"}
@@ -247,22 +214,23 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
 
         # 4. [均線系統與八大法則]
         c, v, hi, lo = h_full['Close'], h_full['Volume'], h_full['High'], h_full['Low']
-        ma20, ma60, ma124, ma248 = c.rolling(20).mean().iloc[-1], c.rolling(60).mean().iloc[-1], \
-                                   c.rolling(124).mean().iloc[-1], c.rolling(248).mean().iloc[-1]
+        ma20 = c.rolling(20).mean().iloc[-1]
+        ma60 = c.rolling(60).mean().iloc[-1]
+        ma124 = c.rolling(124).mean().iloc[-1]
+        ma248 = c.rolling(248).mean().iloc[-1]
         
         score = 60
         logic_tags = []
         sentiment = "🔍 散戶進場 (融資增)" # 預設
 
-        # --- A. 籌碼洗盤偵測邏輯 (關鍵更新) ---
-        # 當股價回測至年線(248)或半年線(124)，且量能縮至均量 70% 以下，AI 判斷為洗盤完成
+        # --- A. 籌碼洗盤偵測邏輯 ---
         if (price >= ma248 * 0.98 and price <= ma248 * 1.05) or (price >= ma124 * 0.98 and price <= ma124 * 1.05):
             if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.7:
                 score += 25
                 logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
                 sentiment = "💎 大戶收貨 (融資減)"
 
-        # --- B. 三線糾結噴發型態 (島狀反轉延伸) ---
+        # --- B. 三線糾結噴發型態 ---
         ma_gaps = [abs(ma20-ma60)/ma60, abs(ma60-ma124)/ma124]
         if max(ma_gaps) < 0.04:
             score += 20
@@ -273,16 +241,16 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
             score -= (stress_count * 10)
             logic_tags.append(f"⚠️ 全球連動壓力 -{stress_count*10}")
 
-        # 5. V15.0 混合評分：將「當前技術面」與「35年歷史模型」進行 6:4 權重融合
+        # 5. V15.0 混合評分
         h_score, h_logic = ai_evolution_engine(ticker, h_max)
         final_hybrid_score = int((score * 0.6) + (h_score * 0.4))
         
         # 評級分類
         rank = "SS" if final_hybrid_score >= 90 else ("A" if final_hybrid_score >= 75 else "B")
         
-        # 計算 ATR 真實波動幅度 (用於設定目標與停損)
+        # ATR 真實波動幅度
         tr = pd.concat([hi-lo, (hi-c.shift()).abs(), (lo-c.shift()).abs()], axis=1).max(axis=1)
-        rng = round(tr.rolling(14).mean().iloc[-1] * 1.618, 1) # 黃金比例擴散
+        rng = round(tr.rolling(14).mean().iloc[-1] * 1.618, 1)
 
         return {
             "msg": f"{h_logic} | [{rank}] MACD:{st_60}/{st_day}/{st_week} | " + (" | ".join(logic_tags)),
@@ -294,8 +262,12 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
             "pivot": f"V15.0 AI 自主進化中 (更新: {datetime.now().strftime('%H:%M')})"
         }
     except Exception as e:
-        # 捕捉所有錯誤並顯示具體原因，不再只顯示模糊的重組中
-        return {"msg": f"AI 數據連動中... (ERR: {str(e)[:15]})", "score": 50, "target": price, "stop": price}
+        return {"msg": f"AI 數據連動中... (ERR: {str(e)[:15]})", "score": 50, "target": price, "stop": price, "sent": "重新計算中"}
+
+# --- 測試運算輸出範例 (僅供參考邏輯是否通暢) ---
+# res = generate_ai_tech_analysis("2330", 1000)
+# st.write(res)
+
 
 def fetch_and_score_intel():
     import ssl, collections, re
