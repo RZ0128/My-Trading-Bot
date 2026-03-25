@@ -107,18 +107,18 @@ def load_data():
             st.session_state.client_list = ["Robert"]
         st.session_state.initialized = True
 
-# --- [外科手術補件：核心存檔與紀錄邏輯] ---
+# --- 從這裡開始，前面「絕對不能有任何空格」，要貼齊左邊 ---
 def save_data():
-    """確保數據回流至 session_state，並預留雲端寫入接口"""
+    """確保數據回流至 session_state"""
     try:
-        # 將目前的 local_db 同步回 session_state (這行很重要，解決沒更新的問題)
         st.session_state.local_db = st.session_state.local_db
         st.session_state.initialized = True 
     except:
         pass
 
 def record_transaction(client, tid, action, shares, price, note):
-    """修復：補回被遺漏的交易紀錄函數，讓買賣按鈕不再報錯"""
+    """補回交易紀錄函數"""
+    # 這裡面的內容（new_log...）要縮進，但 def 本身必須靠左
     new_log = pd.DataFrame([{
         'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
         'client': client,
@@ -132,8 +132,6 @@ def record_transaction(client, tid, action, shares, price, note):
         st.session_state.trade_history = new_log
     else:
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log], ignore_index=True)
-
-# --- 貼完後，下方應該接原本的 st.title("🛡️ 大基石...") ---
 
 
 # --- 介面執行：頂部標題與狀態 ---
