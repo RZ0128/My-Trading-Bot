@@ -652,9 +652,11 @@ with tab_scan:
                             st.success(f"✅ {display_name} 已加入 {st.session_state.cur_c} 的持股！")
                             st.rerun()
 
-                    with sc2:
-                        st.metric("即時股價", f"{p}", d)
+                                        with sc2:
+                        # 修正：delta_color="inverse" 確保紅漲綠跌
+                        st.metric("即時股價", f"{p}", d, delta_color="inverse")
                         st.subheader("🔮 AI 未來預測")
+
                         with st.container(border=True):
                             st.write(f"📈 預期波動: `{res['atr_range']}`")
                             st.markdown(f"**🎯 目標價：** `NT$ {res['target']}`")
