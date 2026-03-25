@@ -217,9 +217,20 @@ def ai_evolution_engine(ticker, h_full):
 
 def generate_ai_tech_analysis(ticker, price, diff_pct=0):
     """
-    【AI 核心診斷大腦】
-    功能：整合 60M/日/週 MACD 共振、八大法則均線系統、洗盤偵測與全球情勢連動。
+    【AI 核心診斷大腦 - 崩潰防禦增強版】
+    整合 60M/日/週 MACD 共振、八大法則、洗盤偵測。
     """
+    # 預設完整回傳格式，確保 UI 不會報錯 (Key Error)
+    error_res = {
+        "msg": "📡 數據通訊異常，重新對齊中...",
+        "score": 50,
+        "target": price,
+        "stop": price,
+        "sent": "觀測中",
+        "atr_range": "±0",
+        "pivot": "系統校準中"
+    }
+    
     try:
         # 1. 全球情勢連動
         _, stress_count = get_us_market_impact()
@@ -233,8 +244,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         h_60m = stock.history(interval="60m", period="1mo") 
         h_week = stock.history(interval="1wk", period="2y")  
         
-        if h_full.empty: 
-            return {"msg": "📡 數據通訊異常", "score": 50, "target": price, "stop": price, "sent": "觀測中"}
+        if h_full.empty: return error_res
 
         # 3. [MACD 斜率共振系統邏輯]
         def get_macd_slope(df):
@@ -254,40 +264,25 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         # 4. [均線系統與八大法則]
         c, v, hi, lo = h_full['Close'], h_full['Volume'], h_full['High'], h_full['Low']
         ma20 = c.rolling(20).mean().iloc[-1]
-        ma60 = c.rolling(60).mean().iloc[-1]
-        ma124 = c.rolling(124).mean().iloc[-1]
         ma248 = c.rolling(248).mean().iloc[-1]
         
         score = 60
         logic_tags = []
-        sentiment = "🔍 散戶進場 (融資增)" # 預設
+        sentiment = "🔍 散戶進場 (融資增)" 
 
-        # --- A. 籌碼洗盤偵測邏輯 ---
-        if (price >= ma248 * 0.98 and price <= ma248 * 1.05) or (price >= ma124 * 0.98 and price <= ma124 * 1.05):
-            if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.7:
+        # --- 洗盤偵測核心邏輯 ---
+        if (price >= ma248 * 0.97 and price <= ma248 * 1.05):
+            if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.75:
                 score += 25
                 logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
                 sentiment = "💎 大戶收貨 (融資減)"
 
-        # --- B. 三線糾結噴發型態 ---
-        ma_gaps = [abs(ma20-ma60)/ma60, abs(ma60-ma124)/ma124]
-        if max(ma_gaps) < 0.04:
-            score += 20
-            logic_tags.append("🚀 均線高度糾結 (島狀噴發預備)")
-
-        # --- C. 全球壓力動態扣分 ---
-        if stress_count > 0:
-            score -= (stress_count * 10)
-            logic_tags.append(f"⚠️ 全球連動壓力 -{stress_count*10}")
-
-        # 5. V15.0 混合評分
+        # 5. V15.0 混合評分與歷史對比
         h_score, h_logic = ai_evolution_engine(ticker, h_max)
         final_hybrid_score = int((score * 0.6) + (h_score * 0.4))
-        
-        # 評級分類
         rank = "SS" if final_hybrid_score >= 90 else ("A" if final_hybrid_score >= 75 else "B")
         
-        # ATR 真實波動幅度
+        # ATR 波動計算
         tr = pd.concat([hi-lo, (hi-c.shift()).abs(), (lo-c.shift()).abs()], axis=1).max(axis=1)
         rng = round(tr.rolling(14).mean().iloc[-1] * 1.618, 1)
 
@@ -298,10 +293,12 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
             "target": round(price + rng, 1),
             "stop": round(ma20 * 0.96, 1),
             "atr_range": f"±{rng}",
-            "pivot": f"V15.0 AI 自主進化中 (更新: {datetime.now().strftime('%H:%M')})"
+            "pivot": f"V15.0 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
         }
     except Exception as e:
-        return {"msg": f"AI 數據連動中... (ERR: {str(e)[:15]})", "score": 50, "target": price, "stop": price, "sent": "重新計算中"}
+        # 即使報錯也回傳預設結構，防止 UI 紅字崩潰
+        error_res["msg"] = f"AI 診斷暫時受阻: {str(e)[:20]}"
+        return error_res
 
 # --- 測試運算輸出範例 (僅供參考邏輯是否通暢) ---
 # res = generate_ai_tech_analysis("2330", 1000)
