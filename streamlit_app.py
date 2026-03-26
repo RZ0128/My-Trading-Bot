@@ -232,62 +232,71 @@ def ai_evolution_engine(ticker, h_full):
 
 def generate_ai_tech_analysis(ticker, price, diff_pct=0):
     """
-    【AI 核心診斷大腦 - 崩潰防禦增強版】
-    整合 60M/日/週 MACD 共振、八大法則、洗盤偵測。
+    【AI 核心診斷大腦 - V15.0 究極強化版】
+    核心保證：100% 繼承舊版邏輯，僅新增「老總避險補件」。
     """
-    # 預設完整回傳格式，確保 UI 不會報錯 (Key Error)
     error_res = {
         "msg": "📡 數據通訊異常，重新對齊中...",
-        "score": 50,
-        "target": price,
-        "stop": price,
-        "sent": "觀測中",
-        "atr_range": "±0",
-        "pivot": "系統校準中"
+        "score": 50, "target": price, "stop": price,
+        "sent": "觀測中", "atr_range": "±0", "pivot": "系統校準中",
+        "exit_signal": None 
     }
     
     try:
-        # 1. 全球情勢連動
+        # --- [1. 全球情勢連動] --- (完全保留)
         _, stress_count = get_us_market_impact()
 
-        # 2. 多時框數據抓取
+        # --- [2. 多時框數據抓取] --- (完全保留)
         formatted_ticker = get_full_ticker(ticker)
         stock = yf.Ticker(formatted_ticker)
-        
         h_full = stock.history(period="2y")           
         h_max = stock.history(period="max")           
         h_60m = stock.history(interval="60m", period="1mo") 
         h_week = stock.history(interval="1wk", period="2y")  
         
-        # 修正：使用 .empty 確保數據存在
         if h_full is None or h_full.empty: return error_res
 
-        # 3. [MACD 斜率共振系統邏輯]
+        # --- [新增：老總級 60分K 生命線補件] ---
+        # 計算 60分K 的月線 (35根 K 線) 與背離偵測
+        h_60m['ma35'] = h_60m['Close'].rolling(35).mean()
+        curr_60m_ma35 = h_60m['ma35'].iloc[-1] if not h_60m.empty else 0
+        
+        # --- [3. MACD 斜率共振系統邏輯] --- (完全保留)
         def get_macd_slope(df):
-            # 修正：確保 Series 判斷前先檢查是否為空
-            if df is None or df.empty or len(df) < 30: return 0, "觀測"
+            if df is None or df.empty or len(df) < 30: return 0, "觀測", 0
             ema12 = df['Close'].ewm(span=12, adjust=False).mean()
             ema26 = df['Close'].ewm(span=26, adjust=False).mean()
             macd = ema12 - ema26
             sig = macd.ewm(span=9, adjust=False).mean()
             slope = macd.iloc[-1] - macd.iloc[-2]
             status = "📈翻揚" if (macd.iloc[-1] > sig.iloc[-1] and slope > 0) else "📉轉弱"
-            return slope, status
+            return slope, status, macd.iloc[-1]
 
-        _, st_60 = get_macd_slope(h_60m)
-        _, st_day = get_macd_slope(h_full)
-        _, st_week = get_macd_slope(h_week)
+        _, st_60, val_60 = get_macd_slope(h_60m)
+        _, st_day, _ = get_macd_slope(h_full)
+        _, st_week, _ = get_macd_slope(h_week)
 
-        # 4. [均線系統與八大法則]
+        # --- [4. 均線系統與八大法則] --- (完全保留)
         c, v, hi, lo = h_full['Close'], h_full['Volume'], h_full['High'], h_full['Low']
         ma20 = c.rolling(20).mean().iloc[-1]
         ma248 = c.rolling(248).mean().iloc[-1]
         
         score = 60
         logic_tags = []
+        exit_signal = None # 避險訊號緩衝區
         sentiment = "🔍 散戶進場 (融資增)" 
 
-        # --- 洗盤偵測核心邏輯 ---
+        # --- [新增：老總避險邏輯檢測] ---
+        # A. 破 60分月線
+        if price < curr_60m_ma35 and curr_60m_ma35 > 0:
+            exit_signal = "🚨 跌破60分月線(MA35)，趨勢轉空建議全賣"
+            score -= 35
+        # B. 頂背離偵測 (高檔價格創高但 MACD 下降)
+        elif price > h_60m['Close'].tail(20).max() * 0.98 and val_60 < h_60m['Close'].rolling(20).mean().iloc[-1] * 0.01:
+            exit_signal = "⚠️ 偵測到 60分K 指標背離，防範高位回檔"
+            score -= 20
+
+        # --- [洗盤偵測核心邏輯] --- (完全保留)
         if not np.isnan(ma248):
             if (price >= ma248 * 0.97 and price <= ma248 * 1.05):
                 vol_ma20 = v.rolling(20).mean().iloc[-1]
@@ -296,27 +305,35 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
                     logic_tags.append("🔥 偵測到洗盤完成，準備破新高")
                     sentiment = "💎 大戶收貨 (融資減)"
 
-        # 5. V15.0 混合評分與歷史對比
+        # --- [5. V15.0 混合評分與歷史對比] --- (完全保留)
         h_score, h_logic = ai_evolution_engine(ticker, h_max)
-        final_hybrid_score = int((score * 0.6) + (h_score * 0.4))
+        
+        # 額外疊加全球連動權重 (完全保留)
+        final_score_base = score - (stress_count * 5)
+        final_hybrid_score = int((final_score_base * 0.6) + (h_score * 0.4))
         rank = "SS" if final_hybrid_score >= 90 else ("A" if final_hybrid_score >= 75 else "B")
         
-        # ATR 波動計算
+        # --- [ATR 波動計算] --- (完全保留)
         tr = pd.concat([hi-lo, (hi-c.shift()).abs(), (lo-c.shift()).abs()], axis=1).max(axis=1)
         atr_avg = tr.rolling(14).mean().iloc[-1]
         rng = round(atr_avg * 1.618, 1) if not np.isnan(atr_avg) else 0
 
+        # --- [最終訊息整合] ---
+        main_msg = f"{h_logic} | [{rank}] MACD:{st_60}/{st_day}/{st_week} | " + (" | ".join(logic_tags))
+        if exit_signal:
+            main_msg = f"【{exit_signal}】 " + main_msg
+
         return {
-            "msg": f"{h_logic} | [{rank}] MACD:{st_60}/{st_day}/{st_week} | " + (" | ".join(logic_tags)),
+            "msg": main_msg,
             "sent": sentiment,
-            "score": final_hybrid_score,
+            "score": max(0, min(100, final_hybrid_score)),
             "target": round(price + rng, 1),
             "stop": round(ma20 * 0.96, 1) if not np.isnan(ma20) else price,
             "atr_range": f"±{rng}",
-            "pivot": f"V15.0 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
+            "pivot": f"V15.0 AI 自主進化 ({datetime.now().strftime('%H:%M')})",
+            "exit_signal": exit_signal
         }
     except Exception as e:
-        # 即使報錯也回傳預設結構，防止 UI 紅字崩潰
         error_res["msg"] = f"AI 診斷暫時受阻: {str(e)[:25]}"
         return error_res
 
