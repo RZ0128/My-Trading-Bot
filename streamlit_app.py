@@ -690,7 +690,7 @@ with tab_scan:
                         st.session_state.selected_stock = sel_sid
                         st.rerun()
                 else:
-                    # 名稱搜尋邏輯
+                    # 名稱搜尋邏輯 (保留 V15.0 全部匹配功能)
                     matches = [tid for tid, name in STOCK_MAP.items() if s_raw in name]
                     if matches:
                         m_cols = st.columns(3)
@@ -703,7 +703,7 @@ with tab_scan:
                     else:
                         st.warning("查無此名稱，請嘗試輸入數字代號。")
 
-        # --- 2. 診斷呈現區：AI 個股深度分析 ---
+        # --- 2. 診斷呈現區：AI 個股深度分析 (V15.2 究極進化大腦) ---
         sel_sid = st.session_state.get('selected_stock')
 
         if sel_sid:
@@ -730,7 +730,7 @@ with tab_scan:
                         else:
                             st.info(f"💡 **AI 指令：** {res['msg']}")
                             
-                        st.markdown(f"**📊 籌碼洗盤偵測:** `{res.get('sent', '觀測中')}`")
+                        st.markdown(f"**📊 籌碼洗盤偵測:** `{res.get('sentiment', '觀測中')}`")
                         st.write("---")
                         
                         u_c1, u_c2 = st.columns(2)
@@ -757,14 +757,12 @@ with tab_scan:
                             st.markdown(f"**🛡️ 停損價：** `NT$ {res.get('stop', 0)}`")
                             win_p = res.get('win_prob', 50.0)
                             st.progress(win_p / 100, text=f"歷史相似走勢勝率: {win_p}%")
-            else:
-                st.warning(f"📡 數據載入中，請稍候...")
 
         st.divider()
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v152")
         
-        # --- [板塊掃描核心邏輯] ---
+        # --- [板塊掃描核心功能區 - 100% 保留診斷與買入邏輯] ---
         scored_data = []
         with st.status(f"🤖 AI 正在掃描 {cat_choice} 板塊並套用 35 年戰策...", expanded=False) as status:
             for tid, tname in pool_500[cat_choice]:
@@ -801,6 +799,7 @@ with tab_scan:
                         st.rerun()
 
     with col_r:
+        # --- [持股監控區 - 100% 保留損益計算與減持功能] ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
         my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.cur_c]
         if not my_h.empty:
