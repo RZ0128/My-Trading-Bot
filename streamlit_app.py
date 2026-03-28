@@ -574,61 +574,6 @@ for cat_list in pool_500.values():
         STOCK_MAP[tid.split(".")[0]] = sname # 支援輸入 2330
         STOCK_MAP[tid] = sname               # 支援輸入 2330.TW
 
-# --- [工具函數區：確保搜尋與轉換不報錯] ---
-
-def update_ai_thought_log(ticker, pred_score, reason):
-    """大基石：AI 學習記憶體 - 紀錄診斷當下的思維 (V15.0 每10分鐘進化版)"""
-    if 'ai_memory' not in st.session_state:
-        st.session_state.ai_memory = []
-    
-    # AI 自動學習與 35 年歷史資料對比日誌
-    log_entry = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "ticker": ticker,
-        "prediction": pred_score,
-        "logic": reason,
-        "actual_move": None,
-        "engine_ver": "V15.0_Evolution"
-    }
-    st.session_state.ai_memory.append(log_entry)
-    
-    # 保持記憶體精簡，僅保留最近 100 筆學習資料
-    if len(st.session_state.ai_memory) > 100:
-        st.session_state.ai_memory.pop(0)
-
-def get_full_ticker(tid):
-    """【精準修正】自動判斷上市/上櫃，支援 3211.TWO"""
-    if "." in tid: return tid
-    otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
-    if any(tid.startswith(p) for p in otc_prefixes):
-        return f"{tid}.TWO"
-    return f"{tid}.TW"
-
-def update_ai_thought_log(ticker, pred_score, reason):
-    if 'ai_memory' not in st.session_state: st.session_state.ai_memory = []
-    log_entry = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "ticker": ticker,
-        "prediction": pred_score,
-        "logic": reason,
-        "engine_ver": "V15.0_Evolution"
-    }
-    st.session_state.ai_memory.append(log_entry)
-    if len(st.session_state.ai_memory) > 100: st.session_state.ai_memory.pop(0)
-
-def get_stock_perf(ticker, buy_price):
-    try:
-        full_tid = get_full_ticker(ticker.split(".")[0])
-        stock = yf.Ticker(full_tid)
-        hist = stock.history(period="5d")
-        if hist.empty or len(hist) < 2: return 0, "N/A", 0
-        cp = round(hist['Close'].iloc[-1], 2)
-        diff = round(cp - hist['Close'].iloc[-2], 2)
-        pct = (diff / hist['Close'].iloc[-2]) * 100
-        return cp, f"{diff} ({pct:.2f}%)", pct
-    except:
-        return 0, "N/A", 0
-# --- [工具函數區結束] ---
 
 # --- [第 5 區：側邊欄管理與分頁定義 - 15.2 雲端融合版] ---
 
