@@ -757,18 +757,26 @@ with tab_scan:
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v152")
         
+                # --- [修正版：確保板塊掃描能顯示中文名稱] ---
         scored_data = []
         with st.status(f"🤖 AI 正在掃描 {cat_choice} 板塊並套用 35 年戰策...", expanded=False) as status:
             for tid, tname in pool_500[cat_choice]:
                 try:
                     p_s, d_s, _ = get_stock_perf(tid, 0)
                     if p_s == 0: continue
+                    
+                    # 關鍵修正點 1：確保診斷時抓到正確名稱
+                    # 使用 get_stock_name 進行二次確認，如果庫存或 MAP 有名字就用名字
+                    real_tname = get_stock_name(tid.split(".")[0])
+                    
                     res_s = generate_ai_tech_analysis(tid, p_s, 0)
                     if res_s:
-                        res_s.update({'tid': tid, 'tname': tname, 'price': p_s, 'diff': d_s})
+                        # 關鍵修正點 2：將正確的名稱帶入結果字典
+                        res_s.update({'tid': tid, 'tname': real_tname, 'price': p_s, 'diff': d_s})
                         scored_data.append(res_s)
                 except: continue
             status.update(label="✅ V15.2 板塊診斷完成！", state="complete")
+
         
         if scored_data:
             top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
