@@ -196,26 +196,30 @@ def get_stock_name(ticker):
         return f"個股 {ticker}"
 
 def get_stock_perf(ticker, buy_price):
-    """強化版：加入緩衝與重試，解決 Delisted 假報錯"""
+    """強化穩定版：解決 Delisted 報錯與週末空窗問題"""
     try:
-        # 抓取前先休息 0.2 秒，避免被 Yahoo 封鎖
-        time.sleep(0.2) 
+        # 增加延遲防止被 Yahoo 封鎖
+        time.sleep(0.3) 
         
         full_tid = get_full_ticker(ticker)
         stock = yf.Ticker(full_tid)
         
-        # 增加抓取範圍到 7d，提高容錯率
-        hist = stock.history(period="7d") 
+        # 關鍵：將 period 改為 1mo (一個月)，確保一定能抓到最近兩個交易日的資料
+        hist = stock.history(period="1mo") 
         
         if hist.empty or len(hist) < 2: 
+            # 如果還是抓不到，回傳當前價格為 0 但不讓程式崩潰
             return 0, "N/A", 0
             
+        # 抓取最後兩天的收盤價
         cp = round(hist['Close'].iloc[-1], 2)
         prev_cp = hist['Close'].iloc[-2]
+        
         diff = round(cp - prev_cp, 2)
         pct = (diff / prev_cp) * 100
         return cp, f"{diff} ({pct:.2f}%)", pct
-    except:
+    except Exception as e:
+        print(f"❌ 股價抓取異常 ({ticker}): {e}")
         return 0, "N/A", 0
 
 def save_data():
