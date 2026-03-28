@@ -11,13 +11,21 @@ import collections
 import re
 import time
 
+# --- [新增：V15.2 雲端安全通訊官模組] ---
+import gspread
+import json
+from google.oauth2.service_account import Credentials
+
 # --- [第 1 區：核心配置與 CSS 樣式] ---
 # 標題更新為 V15.2 以符合目前的進化版本
 st.set_page_config(page_title="大基石-V15.2 自主進化雲端版", layout="wide")
 
 st.markdown("""
     <style>
+    /* 全域字體與顏色設定 */
     html, body, [class*="css"] { font-size: 13px !important; color: #1e1e1e; }
+    
+    /* 按鈕樣式佈局 (完全保留) */
     .stButton>button { 
         height: 32px !important; 
         padding: 0px 15px !important; 
@@ -25,12 +33,32 @@ st.markdown("""
         border-radius: 6px !important;
         font-weight: bold !important;
     }
-    .sentiment-tag { color: #00D1FF; font-weight: bold; border: 1px solid #00D1FF; padding: 3px 6px; border-radius: 4px; background: rgba(0, 209, 255, 0.1); }
-    .status-bar { padding: 8px 15px; border-radius: 10px; margin-bottom: 15px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
+    
+    /* 籌碼洗盤標籤 (完全保留) */
+    .sentiment-tag { 
+        color: #00D1FF; 
+        font-weight: bold; 
+        border: 1px solid #00D1FF; 
+        padding: 3px 6px; 
+        border-radius: 4px; 
+        background: rgba(0, 209, 255, 0.1); 
+    }
+    
+    /* 狀態列樣式 (完全保留) */
+    .status-bar { 
+        padding: 8px 15px; 
+        border-radius: 10px; 
+        margin-bottom: 15px; 
+        font-weight: bold; 
+        display: flex; 
+        align-items: center; 
+        gap: 10px; 
+    }
     .status-on { background-color: #e6fffa; color: #2c7a7b; border: 1px solid #81e6d9; }
     .status-off { background-color: #fff5f5; color: #c53030; border: 1px solid #feb2b2; }
     </style>
     """, unsafe_allow_html=True)
+
 
 # --- [第 2 區：定義監控函數與連線邏輯] ---
 
