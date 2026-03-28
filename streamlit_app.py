@@ -530,19 +530,33 @@ def get_stock_perf(ticker, buy_price):
         return 0, "N/A", 0
 # --- [工具函數區結束] ---
 
-# --- [第 5 區：側邊欄管理與分頁定義 - 關鍵修正] ---
+# --- [第 5 區：側邊欄管理與分頁定義 - 15.2 雲端融合版] ---
 
 with st.sidebar:
     st.title("👤 大基石 AI 經理人")
     st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d')}")
     
+    # 確保資料已初始化
+    if 'initialized' not in st.session_state:
+        load_data()
+
+    # --- [保留：V15.0 客戶系統設定功能] ---
     with st.expander("⚙️ 客戶系統設定 (增/改/刪)", expanded=False):
         new_c = st.text_input("新增客戶姓名", key="add_client_input")
         if st.button("➕ 確認新增"):
             if new_c and new_c not in st.session_state.client_list: 
                 st.session_state.client_list.append(new_c)
                 # 預留 sentiment 欄位以對接 V15.0 洗盤偵測邏輯
-                new_row = pd.DataFrame([{'client': new_c, 'id': 'INIT', 'name': '初始紀錄', 'buy_price': 0, 'shares': 0, 'unit': '股', 'entry_reason': '系統新增', 'sentiment': '觀測中'}])
+                new_row = pd.DataFrame([{
+                    'client': new_c, 
+                    'id': 'INIT', 
+                    'name': '初始紀錄', 
+                    'buy_price': 0, 
+                    'shares': 0, 
+                    'unit': '股', 
+                    'entry_reason': '系統新增', 
+                    'sentiment': '觀測中'
+                }])
                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
                 st.session_state['cur_c'] = new_c
                 save_data(); st.rerun()
@@ -561,7 +575,15 @@ with st.sidebar:
                 st.session_state['cur_c'] = new_name
                 save_data(); st.rerun()
 
-    # 下拉選單處理
+        if st.button("❌ 刪除當前客戶", use_container_width=True):
+            if st.session_state.get('cur_c') != "Robert":
+                to_del = st.session_state['cur_c']
+                st.session_state.client_list.remove(to_del)
+                st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != to_del]
+                st.session_state['cur_c'] = "Robert"
+                save_data(); st.rerun()
+
+    # --- [優化：下拉選單處理邏輯] ---
     if st.session_state.get('cur_c') not in st.session_state.client_list:
         st.session_state['cur_c'] = st.session_state.client_list[0]
 
@@ -572,15 +594,14 @@ with st.sidebar:
         key="client_selector"
     )
     
-    if st.button("❌ 刪除當前客戶", use_container_width=True):
-        if st.session_state['cur_c'] != "Robert":
-            to_del = st.session_state['cur_c']
-            st.session_state.client_list.remove(to_del)
-            st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != to_del]
-            st.session_state['cur_c'] = "Robert"
-            save_data(); st.rerun()
+    # --- [融合：V15.2 雲端刷新按鈕] ---
+    st.markdown("---")
+    if st.button("🔄 AI 自主學習/刷新雲端", use_container_width=True):
+        st.session_state.initialized = False  # 重置狀態以觸發 load_data 的進度條
+        st.rerun()
 
     st.markdown("---")
+    # 統計當前對象持股
     c_stocks = st.session_state.local_db[(st.session_state.local_db['client'] == st.session_state['cur_c']) & (st.session_state.local_db['id'] != 'INIT')]
     st.metric(f"{st.session_state['cur_c']} 的持股總數", len(c_stocks))
 
