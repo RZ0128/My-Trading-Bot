@@ -176,24 +176,31 @@ def get_full_ticker(tid):
     return tid
 
 def get_stock_name(ticker):
-    """修復版：確保搜尋時能調用到名稱"""
+    """大基石專用：三層名稱檢索機制"""
+    # 確保格式統一 (拿掉 .TW / .TWO 只取數字)
+    raw_id = str(ticker).split(".")[0].strip()
+    
+    # 第一層：優先從 500 檔核心標題池 (STOCK_MAP) 抓取，這最準確且快速
+    if raw_id in STOCK_MAP:
+        return STOCK_MAP[raw_id]
+        
+    # 第二層：從本地 session 庫存 (local_db) 尋找已存名稱
+    if 'local_db' in st.session_state:
+        match = st.session_state.local_db[st.session_state.local_db['id'].astype(str).str.contains(raw_id)]
+        if not match.empty:
+            name_val = str(match['name'].iloc[0])
+            if name_val != 'nan' and name_val != 'None':
+                return name_val
+    
+    # 第三層：最後才問 Yahoo (備援)
     try:
-        # 1. 先找本地 session 庫存
-        if 'local_db' in st.session_state:
-            match = st.session_state.local_db[st.session_state.local_db['id'].astype(str) == str(ticker)]
-            if not match.empty and str(match['name'].iloc[0]) != 'nan':
-                return match['name'].iloc[0]
-        
-        # 2. 如果庫存沒有，則問 Yahoo
-        full_tid = get_full_ticker(ticker)
+        full_tid = get_full_ticker(raw_id)
         tk = yf.Ticker(full_tid)
-        name = tk.info.get('longName') or tk.info.get('shortName') or str(ticker)
-        
-        if name == full_tid or name == str(ticker):
-            return f"個股 {ticker}"
+        name = tk.info.get('shortName') or tk.info.get('longName') or f"個股 {raw_id}"
         return name
     except:
-        return f"個股 {ticker}"
+        return f"個股 {raw_id}"
+
 
 def get_stock_perf(ticker, buy_price):
     """強化穩定版：解決 Delisted 報錯與週末空窗問題"""
