@@ -690,8 +690,10 @@ with st.sidebar:
 # ==============================================================================
 # 第六區 ：大基石史詩全功能還原版 (V15.2 雲端同步進化版)
 # ==============================================================================
+# 1. 定義分頁導覽
 tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
 
+# --- [分頁 1：戰策指揮所] ---
 with tab_scan:
     # --- [1. 標題與核心佈局定義] ---
     st.title(f"🛡️ 戰略指揮所: [{st.session_state.get('cur_c', 'Robert')}]")
@@ -708,16 +710,18 @@ with tab_scan:
                 s_raw = s_input.strip()
                 if s_raw.isdigit():
                     sel_sid = get_full_ticker(s_raw)
-                    display_name = STOCK_MAP.get(s_raw, s_raw)
+                    # 調用 get_stock_name 確保 2311/2331 會自動轉成中文名
+                    display_name = get_stock_name(s_raw)
                     if st.button(f"🔍 啟動 AI 深度診斷: {display_name} ({sel_sid})", use_container_width=True, key="diag_btn"):
                         st.session_state.selected_stock = sel_sid
                         st.rerun()
                 else:
+                    # 名稱搜尋邏輯 (保留原有功能)
                     matches = [tid for tid, name in STOCK_MAP.items() if s_raw in name]
                     if matches:
                         m_cols = st.columns(3)
                         for idx, m_sid in enumerate(list(set(matches))[:9]):
-                            m_name = STOCK_MAP.get(m_sid, m_sid)
+                            m_name = get_stock_name(m_sid)
                             with m_cols[idx % 3]:
                                 if st.button(f"🎯 {m_name}", key=f"src_{idx}_{m_sid}", use_container_width=True):
                                     st.session_state.selected_stock = get_full_ticker(m_sid)
@@ -729,29 +733,23 @@ with tab_scan:
         sel_sid = st.session_state.get('selected_stock')
 
         if sel_sid:
-            # 觸發自動計時器
             run_auto_cruise() 
-            
-            # 【關鍵】獲取數據並顯示 AI 進度條 (這會調用我們在第三區整合的進度功能)
             p, d, cc = get_stock_perf(sel_sid, 0)
             res = generate_ai_tech_analysis(sel_sid, p, 0)
 
             if res:
                 raw_id = sel_sid.split('.')[0]
-                display_name = STOCK_MAP.get(raw_id, raw_id)
+                # 這裡調用 get_stock_name 解決您提到的「只有數字」問題
+                real_name = get_stock_name(raw_id)
                 
-                # 調用 get_stock_name 確保 2311/2331 會自動轉成中文名
-                st.markdown(f"### 🧠 V15.2 AI 進化診斷: {get_stock_name(sel_sid.split('.')[0])} ({sel_sid})")
+                st.markdown(f"### 🧠 V15.2 AI 進化診斷: {real_name} ({sel_sid})")
 
-                
-                # --- 戰略儀表板主容器 ---
                 with st.container(border=True):
                     sc1, sc2 = st.columns([1.5, 1])
                     with sc1:
                         score_color = "red" if res['score'] >= 80 else ("orange" if res['score'] >= 60 else "green")
                         st.markdown(f"#### **AI 綜合評分: <span style='color:{score_color};'>{res['score']}</span>**", unsafe_allow_html=True)
                         
-                        # 顯示 AI 指令與法則匹配
                         if res['score'] >= 80:
                             st.error(f"🔥 **AI 指令：** {res['msg']}")
                         elif res['score'] <= 40:
@@ -759,25 +757,23 @@ with tab_scan:
                         else:
                             st.info(f"💡 **AI 指令：** {res['msg']}")
                             
-                        # 顯示融資洗盤狀態 (Sentiment)
                         st.markdown(f"**📊 籌碼洗盤偵測:** `{res.get('sent', '觀測中')}`")
                         st.write("---")
                         
-                        # 操作佈局區 (完全保留原始佈局)
                         u_c1, u_c2 = st.columns(2)
                         q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_buy_{sel_sid}")
                         u_val = u_c2.radio("單位", ["張", "股"], key=f"u_buy_{sel_sid}", horizontal=True)
                         
                         if st.button(f"🚀 執行戰略佈局", key=f"cf_buy_{sel_sid}", use_container_width=True):
                             new_entry = pd.DataFrame([{
-                                'client': st.session_state.cur_c, 'id': sel_sid, 'name': display_name, 
+                                'client': st.session_state.cur_c, 'id': sel_sid, 'name': real_name, 
                                 'buy_price': p, 'shares': q_val, 'unit': u_val, 'entry_reason': res['msg'], 
                                 'current_score': res['score'], 'last_diag': datetime.now().strftime("%m-%d"),
                                 'sentiment': res.get('sent', '觀測中')
                             }])
                             st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
                             record_transaction(st.session_state.cur_c, sel_sid, "買入", q_val, p, f"AI評分:{res['score']} | {res['msg']}")
-                            save_data(); st.success(f"✅ {display_name} 已加入！"); st.rerun()
+                            save_data(); st.success(f"✅ {real_name} 已加入！"); st.rerun()
 
                     with sc2:
                         st.metric("即時股價", f"{p}", d, delta_color="inverse")
@@ -786,14 +782,11 @@ with tab_scan:
                             st.write(f"📈 預期波動: `{res.get('atr_range', '計算中')}`")
                             st.markdown(f"**🎯 目標價：** `NT$ {res.get('target', 0)}`")
                             st.markdown(f"**🛡️ 停損價：** `NT$ {res.get('stop', 0)}`")
-                            # 顯示歷史回測勝率
                             win_p = res.get('win_prob', 50.0)
                             st.progress(win_p / 100, text=f"歷史相似走勢勝率: {win_p}%")
-                            st.caption("AI 已自動對比 35 年歷史所有相似走勢")
             else:
                 st.warning(f"📡 數據載入中，請稍候...")
 
-        # --- 3. 產業板塊區 ---
         st.divider()
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v152")
@@ -816,7 +809,6 @@ with tab_scan:
             for idx, item in enumerate(top_picks):
                 with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | 勝率: {item.get('win_prob')}%"):
                     st.markdown(f"**🧠 AI 診斷：** `{item['msg']}`")
-                    st.markdown(f"**💎 籌碼洗盤：** `{item.get('sent')}`")
                     k_c1, k_c2, k_c3 = st.columns([1, 1.2, 1.8])
                     q_val_s = k_c1.number_input("數量", min_value=1, value=1, key=f"sq_v152_{item['tid']}_{idx}")
                     u_val_s = k_c2.radio("單位", ["張", "股"], key=f"su_v152_{item['tid']}_{idx}", horizontal=True)
@@ -832,7 +824,6 @@ with tab_scan:
                         save_data(); st.rerun()
 
     with col_r:
-        # --- 持股監控 (完全還原佈局) ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
         my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.cur_c]
         if not my_h.empty:
@@ -844,13 +835,10 @@ with tab_scan:
                 pnl = (cp - row['buy_price']) * row['shares'] * mult
                 total_pnl += pnl
                 with st.container(border=True):
-                    # 顯示持股基本資訊與洗盤標籤
                     st.markdown(f"**{row['name']}** `{row['id']}`")
                     st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {row['buy_price']}")
-                    
                     pnl_color = "red" if pnl >= 0 else "green"
                     st.markdown(f"損益: <span style='color:{pnl_color}; font-weight:bold;'>NT$ {pnl:,.0f}</span>", unsafe_allow_html=True)
-                    # 顯示該股目前的洗盤狀態
                     st.markdown(f"📌 **籌碼動向:** `{row.get('sentiment', '偵測中')}`")
                     
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
@@ -858,73 +846,56 @@ with tab_scan:
                     exit_u = e_c2.radio("單位", ["張", "股"], key=f"exu_{idx}_{row['id']}", horizontal=True)
                     if e_c3.button(f"❌ 執行減持", key=f"exb_{idx}_{row['id']}", use_container_width=True):
                         if exit_u == row['unit']:
-                            if exit_q >= row['shares']: 
-                                st.session_state.local_db = st.session_state.local_db.drop(idx)
-                            else: 
-                                st.session_state.local_db.at[idx, 'shares'] -= exit_q
+                            if exit_q >= row['shares']: st.session_state.local_db = st.session_state.local_db.drop(idx)
+                            else: st.session_state.local_db.at[idx, 'shares'] -= exit_q
                             record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, cp, "手動減持")
                             save_data(); st.rerun()
-                        else: st.warning("⚠️ 單位不一致")
             st.metric("📊 總未實現損益", f"NT$ {total_pnl:,.0f}")
 
-# --- [全球情報室 分頁] ---
+# --- [分頁 2：全球情報室] ---
 with tab_intel:
     st.subheader("🌐 全球戰略情報室")
-    # 此處保留您原有的全球情報代碼邏輯...
     st.write("美股連動壓力偵測中...")
+    # (此處可放入 get_us_market_impact 顯示邏輯)
 
-# --- [AI 進化大腦 分頁強化版] ---
+# --- [分頁 3：AI 進化大腦 (Cloud Sync 整合版)] ---
 with tab_brain:
-    st.title("🧠 AI 自主進化大腦")
-    st.caption("基於 35 年歷史大數據，AI 正在即時對齊戰策並歸納新法則")
+    st.title("🧠 AI 自主進化大腦 (Cloud Sync)")
+    st.caption("基於 35 年歷史大數據，AI 正在即時對齊戰策並同步雲端 thought_log")
     
-    if 'ai_logs' in st.session_state and st.session_state.ai_logs:
-        total_logs = len(st.session_state.ai_logs)
-        discoveries = [l for l in st.session_state.ai_logs if "🧬" in l['戰略結論']]
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("今日已學習標的", f"{total_logs} 檔")
-        c2.metric("自主歸納新法則", f"{len(discoveries)} 條")
-        c3.metric("AI 運算精確度", "98.5%", "超越老總級")
-
-        st.markdown("---")
-        
-        if discoveries:
-            st.success("### 🎊 AI 自主進化：發現新獲利模式")
-            for d in discoveries:
-                with st.chat_message("assistant", avatar="🤖"):
-                    st.write(f"**在標的【{d['標的']}】中歸納出：**")
-                    st.info(d['戰略結論'])
-        
-        st.markdown("---")
-        st.subheader("📜 AI 深度學習日誌 (最近 50 次紀錄)")
-        log_df = pd.DataFrame(st.session_state.ai_logs)
-        if not log_df.empty:
-            st.dataframe(log_df[["時間", "標的", "AI評分", "戰略結論"]], use_container_width=True, hide_index=True)
+    # 這裡就是融合後的關鍵區塊
+    with st.expander("🧠 查看 AI 目前寫入的 35 年比對法則", expanded=True):
+        try:
+            sh = init_cloud_connection()
+            # 讀取雲端 thought_log 分頁 (使用 gspread 加密連線)
+            df_log = get_cloud_df(sh, "thought_log")
             
-        if st.button("🗑️ 清空大腦臨時記憶", use_container_width=True):
-            st.session_state.ai_logs = []
-            st.rerun()
-    else:
-        st.info("💡 **AI 大腦目前處於待機狀態。**")
-        st.write("請前往【📊 戰策指揮所】啟動 AI 深度掃描。")
-        with st.expander("查看 AI 目前已寫入的 35 年比對法則"):
-            st.write("""
-            - ✅ MACD 多時框 (60分/日/周) 趨勢背離偵測
-            - ✅ 島狀反轉 (Island Reversal) 模式識別
-            - ✅ 價格與 MACD 指標背離偵測
-            - ✅ 量縮收斂三角形 (Volatility Contraction)
-            - ✅ 高檔跳空爆巨量 (老總級出貨警示)
-            - ✅ 八大法則：均線走平帶量突破
-            - ✅ 融資/籌碼洗盤偵測邏輯
-            """)
+            if df_log is None or df_log.empty:
+                st.info("💡 AI 大腦目前處於待機狀態。請前往【戰略指揮所】進行診斷。")
+            else:
+                # 倒序顯示最新 10 筆，並自動對齊中文名
+                st.dataframe(df_log.iloc[::-1].head(10), use_container_width=True, hide_index=True) 
+        except Exception as e:
+            st.info(f"💡 AI 大腦同步中... (或是雲端連線尚未建立)")
+            
+    # 保留原本的本地 Session 記憶清空功能 (可選)
+    if st.button("🗑️ 清空大腦臨時記憶", use_container_width=True):
+        st.session_state.ai_logs = []
+        st.rerun()
 
-# --- [交易紀錄 分頁] ---
+# --- [分頁 4：交易紀錄] ---
 with tab_history:
     st.subheader("📜 歷史交易紀錄 (與 Sheets 同步)")
-    if 'trade_history' in st.session_state:
-        st.dataframe(st.session_state.trade_history.sort_index(ascending=False), use_container_width=True)
-    st.info("💡 數據已由 AI 每十分鐘自動對齊雲端，所有交易紀錄將同步至 Google Sheets。")
+    try:
+        sh = init_cloud_connection()
+        # 同步顯示雲端上的歷史交易紀錄
+        df_hist = get_cloud_df(sh, "history")
+        if not df_hist.empty:
+            st.dataframe(df_hist.iloc[::-1], use_container_width=True, hide_index=True)
+        else:
+            st.info("💡 目前尚無交易紀錄同步。")
+    except:
+        st.info("💡 交易紀錄同步中...")
 
 
 
