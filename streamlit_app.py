@@ -675,7 +675,6 @@ with tab_scan:
     
     with col_l:
         # 1. 搜尋區 (V15.2 自動識別與 35 年歷史診斷)
-        # --- [修正後的搜尋區塊] ---
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
             s_input = st.text_input("輸入名稱或代號", placeholder="例如：2330 或 3211", key="global_search_fix")
@@ -684,30 +683,14 @@ with tab_scan:
                 s_raw = s_input.strip()
                 # 如果輸入的是純數字代號
                 if s_raw.isdigit():
-                    # 立即轉換為中文名稱
                     real_name = get_stock_name(s_raw) 
                     sel_sid = get_full_ticker(s_raw)
                     
-                    # 按鈕直接顯示中文名稱
                     if st.button(f"🔍 啟動 AI 深度診斷: {real_name} ({sel_sid})", use_container_width=True, key="diag_btn"):
                         st.session_state.selected_stock = sel_sid
                         st.rerun()
-
-        else:
-            # 名稱搜尋邏輯
-            matches = [tid for tid, name in STOCK_MAP.items() if s_raw in name]
-            if matches:
-                m_cols = st.columns(3)
-                for idx, m_sid in enumerate(list(set(matches))[:9]):
-                    # 確保按鈕抓到 STOCK_MAP 裡的正確中文
-                    m_name = get_stock_name(m_sid)
-                    with m_cols[idx % 3]:
-                        if st.button(f"🎯 {m_name}", key=f"src_{idx}_{m_sid}", use_container_width=True):
-                            st.session_state.selected_stock = get_full_ticker(m_sid)
-                            st.rerun()
-
                 else:
-                    # 名稱搜尋邏輯 (保留原有功能)
+                    # 名稱搜尋邏輯
                     matches = [tid for tid, name in STOCK_MAP.items() if s_raw in name]
                     if matches:
                         m_cols = st.columns(3)
@@ -720,7 +703,7 @@ with tab_scan:
                     else:
                         st.warning("查無此名稱，請嘗試輸入數字代號。")
 
-        # --- 2. 診斷呈現區：AI 個股深度分析 (V15.2 究極進化大腦) ---
+        # --- 2. 診斷呈現區：AI 個股深度分析 ---
         sel_sid = st.session_state.get('selected_stock')
 
         if sel_sid:
@@ -730,7 +713,6 @@ with tab_scan:
 
             if res:
                 raw_id = sel_sid.split('.')[0]
-                # 這裡調用 get_stock_name 解決您提到的「只有數字」問題
                 real_name = get_stock_name(raw_id)
                 
                 st.markdown(f"### 🧠 V15.2 AI 進化診斷: {real_name} ({sel_sid})")
@@ -782,57 +764,31 @@ with tab_scan:
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v152")
         
-                # --- [修正版：確保板塊掃描能顯示中文名稱] ---
-                scored_data = []
+        # --- [板塊掃描核心邏輯] ---
+        scored_data = []
         with st.status(f"🤖 AI 正在掃描 {cat_choice} 板塊並套用 35 年戰策...", expanded=False) as status:
             for tid, tname in pool_500[cat_choice]:
                 try:
                     p_s, d_s, _ = get_stock_perf(tid, 0)
                     if p_s == 0: continue
-                    
-                    # 關鍵修正點 1：確保診斷時抓到正確名稱
                     real_tname = get_stock_name(tid.split(".")[0])
-                    
                     res_s = generate_ai_tech_analysis(tid, p_s, 0)
                     if res_s:
-                        # 關鍵修正點 2：將正確的名稱帶入結果字典
                         res_s.update({'tid': tid, 'tname': real_tname, 'price': p_s, 'diff': d_s})
                         scored_data.append(res_s)
                 except: continue
             status.update(label="✅ V15.2 板塊診斷完成！", state="complete")
 
-        # --- [修正後的板塊推薦呈現] ---
-        # 1. 先建立空清單 (對齊 Tab 鍵)
-        scored_data = [] 
-        
-        # 2. 開始掃描 (與清單對齊)
-        with st.status(f"🤖 AI 正在掃描 {cat_choice} 板塊...", expanded=False) as status:
-            for tid, tname in pool_500[cat_choice]:
-                try:
-                    p_s, d_s, _ = get_stock_perf(tid, 0)
-                    if p_s == 0: continue
-                    real_tname = get_stock_name(tid.split(".")[0])
-                    res_s = generate_ai_tech_analysis(tid, p_s, 0)
-                    if res_s:
-                        res_s.update({'tid': tid, 'tname': real_tname, 'price': p_s, 'diff': d_s})
-                        scored_data.append(res_s) # 這裡會把結果存進清單
-                except: continue
-            status.update(label="✅ V15.2 板塊診斷完成！", state="complete")
-
-        # 3. 顯示結果 (這整個區塊必須在 st.status 結束後才執行，所以要跟 with 平級)
         if scored_data:
             top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
             for idx, item in enumerate(top_picks):
                 with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']}"):
                     st.markdown(f"**🧠 AI 診斷建議：** `{item['msg']}`")
-                    
-                    # 這裡必須再往右縮進，才會在 expander 裡面
                     k_c1, k_c2, k_c3 = st.columns([1, 1.2, 1.8])
                     q_val_s = k_c1.number_input("數量", min_value=1, value=1, key=f"sq_v152_{item['tid']}_{idx}")
                     u_val_s = k_c2.radio("單位", ["張", "股"], key=f"su_v152_{item['tid']}_{idx}", horizontal=True)
                     
                     if k_c3.button(f"🚀 執行佈局 {item['tname']}", key=f"sb_v152_{item['tid']}_{idx}", use_container_width=True):
-                        # --- 買入邏輯代碼（請確保這段有貼進去） ---
                         new_entry = pd.DataFrame([{
                             'client': st.session_state.cur_c, 'id': item['tid'], 'name': item['tname'], 
                             'buy_price': item['price'], 'shares': q_val_s, 'unit': u_val_s, 
@@ -843,9 +799,6 @@ with tab_scan:
                         record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val_s, item['price'], f"板塊診斷|評分:{item['score']}")
                         save_data()
                         st.rerun()
-
-
-
 
     with col_r:
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
@@ -875,51 +828,6 @@ with tab_scan:
                             record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, cp, "手動減持")
                             save_data(); st.rerun()
             st.metric("📊 總未實現損益", f"NT$ {total_pnl:,.0f}")
-
-# --- [分頁 2：全球情報室] ---
-with tab_intel:
-    st.subheader("🌐 全球戰略情報室")
-    st.write("美股連動壓力偵測中...")
-    # (此處可放入 get_us_market_impact 顯示邏輯)
-
-# --- [分頁 3：AI 進化大腦 (Cloud Sync 整合版)] ---
-with tab_brain:
-    st.title("🧠 AI 自主進化大腦 (Cloud Sync)")
-    st.caption("基於 35 年歷史大數據，AI 正在即時對齊戰策並同步雲端 thought_log")
-    
-    # 這裡就是融合後的關鍵區塊
-    with st.expander("🧠 查看 AI 目前寫入的 35 年比對法則", expanded=True):
-        try:
-            sh = init_cloud_connection()
-            # 讀取雲端 thought_log 分頁 (使用 gspread 加密連線)
-            df_log = get_cloud_df(sh, "thought_log")
-            
-            if df_log is None or df_log.empty:
-                st.info("💡 AI 大腦目前處於待機狀態。請前往【戰略指揮所】進行診斷。")
-            else:
-                # 倒序顯示最新 10 筆，並自動對齊中文名
-                st.dataframe(df_log.iloc[::-1].head(10), use_container_width=True, hide_index=True) 
-        except Exception as e:
-            st.info(f"💡 AI 大腦同步中... (或是雲端連線尚未建立)")
-            
-    # 保留原本的本地 Session 記憶清空功能 (可選)
-    if st.button("🗑️ 清空大腦臨時記憶", use_container_width=True):
-        st.session_state.ai_logs = []
-        st.rerun()
-
-# --- [分頁 4：交易紀錄] ---
-with tab_history:
-    st.subheader("📜 歷史交易紀錄 (與 Sheets 同步)")
-    try:
-        sh = init_cloud_connection()
-        # 同步顯示雲端上的歷史交易紀錄
-        df_hist = get_cloud_df(sh, "history")
-        if not df_hist.empty:
-            st.dataframe(df_hist.iloc[::-1], use_container_width=True, hide_index=True)
-        else:
-            st.info("💡 目前尚無交易紀錄同步。")
-    except:
-        st.info("💡 交易紀錄同步中...")
 
 
 
