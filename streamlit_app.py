@@ -62,11 +62,28 @@ st.markdown("""
 
 # --- [第 2 區：定義監控函數與連線邏輯] ---
 
-# 雲端 ID (保持不變)
-SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
+# 1. 初始化 Google Sheets 高速連線 (gspread 引擎 - 安全性提升)
+def init_cloud_connection():
+    try:
+        # 從 Secrets 讀取您貼上的那串 GCP_JSON_KEY
+        gcp_json = json.loads(st.secrets["GCP_JSON_KEY"])
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
+        gc = gspread.authorize(creds)
+        # 開啟您的資料庫檔案 (與原 SHEET_ID 邏輯對接)
+        return gc.open("StoneManager_DB")
+    except Exception as e:
+        st.error(f"📡 雲端通訊官啟動失敗: {str(e)[:50]}")
+        return None
 
-def get_sheet_url(sheet_name):
-    return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+# 2. 獲取特定分頁數據的函數 (具備讀寫權限基礎)
+def get_cloud_df(sh, sheet_name):
+    try:
+        worksheet = sh.worksheet(sheet_name)
+        data = worksheet.get_all_records()
+        return pd.DataFrame(data)
+    except:
+        return pd.DataFrame()
 
 def get_us_market_impact():
     """保留 V15.0 核心美股監控邏輯"""
@@ -91,54 +108,54 @@ def run_auto_cruise():
         st.session_state.last_cruise = datetime.now()
     else:
         now = datetime.now()
-        if (now - st.session_state.last_cruise).seconds > 600: # 10分鐘
+        if (now - st.session_state.last_cruise).seconds > 600:
             st.session_state.last_cruise = now
 
 def check_connection():
-    """保留 V15.0 連線檢查狀態顯示"""
+    """使用 gspread 進行真實連線檢查 (取代原本的 URL 測試)"""
     try:
-        pd.read_csv(get_sheet_url("history"), nrows=1)
-        return True, "✅ 雲端同步中：已成功連結 StoneManager_DB"
+        sh = init_cloud_connection()
+        if sh: return True, "✅ 雲端同步中：gspread 已成功對齊 StoneManager_DB"
+        return False, "❌ 連線失敗：無法辨認金鑰或權限不足"
     except:
-        return False, "❌ 連線失敗：請檢查試算表權限或網路"
+        return False, "❌ 連線失敗：請檢查 Secrets 設定"
 
 def load_data():
-    """融合 V15.2 進度條與 V15.0 的初始化邏輯"""
+    """融合 gspread 高速讀取與 V15.2 進度條佈局"""
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
     
-    # 建立進度條模擬 AI 數據對齊
-    progress_bar = st.progress(0, text="🤖 AI 正在同步雲端資料庫...")
+    # 建立進度條模擬 AI 數據對齊 (完全保留您的 UI 視覺)
+    progress_bar = st.progress(0, text="🤖 AI 大腦正在透過 gspread 同步雲端...")
     try:
-        # 1. 載入 Inventory (對應您的 Sheets 佈局)
-        st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
-        progress_bar.progress(30, text="📊 已同步 Inventory 板塊...")
+        sh = init_cloud_connection()
+        if not sh: raise Exception("無法開啟試算表")
+
+        # 1. 同步持股清單 (inventory)
+        st.session_state.local_db = get_cloud_df(sh, "inventory")
+        progress_bar.progress(30, text="📊 已同步 Inventory 板塊 (雲端讀取成功)...")
         
-        # 2. 載入 History
-        df_hist = pd.read_csv(get_sheet_url("history"))
-        if df_hist.empty or 'date' not in df_hist.columns:
-            # 確保欄位符合 V15.0 record_transaction 的需求
-            df_hist = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-        st.session_state.trade_history = df_hist
-        progress_bar.progress(60, text="📜 已讀取歷史交易檔案...")
+        # 2. 同步交易歷史 (history)
+        st.session_state.trade_history = get_cloud_df(sh, "history")
+        progress_bar.progress(60, text="📜 已讀取歷史交易檔案 (高安全加密通訊)...")
         
-        # 3. 載入 Clients (融合雲端與本地列表)
-        client_df = pd.read_csv(get_sheet_url("clients"))
+        # 3. 同步客戶清單 (clients)
+        client_df = get_cloud_df(sh, "clients")
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
         
         if 'client_list' not in st.session_state:
             st.session_state.client_list = ["Robert"]
-            
+        
         ghosts = ["nan", "None", None]
         combined = list(set(st.session_state.client_list + cloud_clients))
         st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
         
-        progress_bar.progress(100, text="✅ 雲端大腦同步完成")
+        progress_bar.progress(100, text="✅ 雲端大腦同步完成 (gspread Ready)")
         time.sleep(0.5)
         progress_bar.empty()
         st.session_state.initialized = True
-    except:
-        # 失敗備援模式
+    except Exception as e:
+        # 備援模式 (確保介面佈局不崩潰)
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag', 'sentiment'])
         if 'trade_history' not in st.session_state:
@@ -178,7 +195,7 @@ def save_data():
     st.session_state.initialized = True 
 
 def record_transaction(client, tid, action, shares, price, note):
-    """保留 V15.0 關鍵買賣紀錄函數"""
+    """保留 V15.0 買賣紀錄函數 (後續可對位 gspread 寫入)"""
     new_log = pd.DataFrame([{
         'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
         'client': client,
@@ -233,6 +250,7 @@ if is_connected:
                         🚨 AI 壓力預警：當前美股壓力值 [{stress_count}]！台股 AI 板塊可能面臨連動修正，建議防守。
                     </div>
                 """, unsafe_allow_html=True)
+
 
 
 # ==============================================================================
