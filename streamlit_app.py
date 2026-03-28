@@ -696,7 +696,9 @@ with tab_scan:
                 raw_id = sel_sid.split('.')[0]
                 display_name = STOCK_MAP.get(raw_id, raw_id)
                 
-                st.markdown(f"### 🧠 V15.2 AI 進化診斷: {display_name} ({sel_sid})")
+                # 調用 get_stock_name 確保 2311/2331 會自動轉成中文名
+                st.markdown(f"### 🧠 V15.2 AI 進化診斷: {get_stock_name(sel_sid.split('.')[0])} ({sel_sid})")
+
                 
                 # --- 戰略儀表板主容器 ---
                 with st.container(border=True):
