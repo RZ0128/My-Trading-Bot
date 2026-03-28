@@ -166,9 +166,14 @@ def load_data():
         progress_bar.empty()
 
 def get_full_ticker(tid):
-    """保留 V15.0 的代碼自動判斷邏輯"""
-    tid = str(tid).split(".")[0]
+    """強化版：自動去空白、去小數點，並準確判斷上市櫃"""
+    # 1. 確保是字串並徹底清除空格與換行
+    tid = str(tid).strip().upper()
+    # 2. 如果讀到 2330.0，只取點前面的部分
+    tid = tid.split(".")[0]
+    
     if tid.isdigit():
+        # 台股上櫃代碼前綴判斷邏輯
         otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
         if any(tid.startswith(p) for p in otc_prefixes):
             return f"{tid}.TWO"
@@ -176,18 +181,29 @@ def get_full_ticker(tid):
     return tid
 
 def get_stock_perf(ticker, buy_price):
-    """融合 V15.2 更穩定的價格抓取邏輯"""
+    """
+    進化版價格抓取：
+    1. 使用 1mo (一個月) 確保絕對有資料，避免 period=5d 找不到資料報錯
+    2. 加入自動清洗機制，防止 delisted 錯誤
+    """
     try:
         full_tid = get_full_ticker(ticker)
         stock = yf.Ticker(full_tid)
-        hist = stock.history(period="2d")
-        if hist.empty or len(hist) < 2: return 0, "N/A", 0
+        
+        # 將 period 改為 1mo，這是最穩定的抓取範圍
+        hist = stock.history(period="1mo") 
+        
+        if hist.empty or len(hist) < 2:
+            return 0, "N/A", 0
+            
         cp = round(hist['Close'].iloc[-1], 2)
         prev_cp = hist['Close'].iloc[-2]
         diff = round(cp - prev_cp, 2)
         pct = (diff / prev_cp) * 100
         return cp, f"{diff} ({pct:.2f}%)", pct
-    except:
+    except Exception as e:
+        # 如果出錯，在後台日誌印出具體是哪一檔代碼出問題
+        print(f"⚠️ 抓取 {ticker} 失敗: {e}")
         return 0, "N/A", 0
 
 def save_data():
