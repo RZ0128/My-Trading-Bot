@@ -390,6 +390,8 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         _, st_day = get_macd_slope(h_full)
         
         p_bar.progress(75, text="🧬 AI 正在自主歸納新法則並計算歷史回測...")
+        
+        # 這裡會調用您的 ai_evolution_engine 與 ai_pattern_discovery (請確保這兩個函數已定義)
         h_score, h_logic, win_prob = ai_evolution_engine(ticker, h_max, price)
         new_discovery = ai_pattern_discovery(ticker, h_max)
         
@@ -397,32 +399,44 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         ma248 = h_full['Close'].rolling(248).mean().iloc[-1]
         sentiment = "🔍 散戶進場"
         if not np.isnan(ma248) and (price >= ma248 * 0.95 and price <= ma248 * 1.05):
+            # 偵測縮量洗盤邏輯
             if h_full['Volume'].iloc[-1] < h_full['Volume'].rolling(20).mean().iloc[-1] * 0.7:
                 h_score += 20; sentiment = "💎 大戶收貨 (洗盤完成)"
 
         p_bar.progress(100, text="✅ 診斷完成：已超越 35 年操盤手精確度")
         time.sleep(0.4); p_bar.empty()
 
+        # 組合最終診斷訊息
         full_msg = f"{h_logic} | MACD:{st_60}/{st_day} "
         if new_discovery: full_msg += f" | {new_discovery}"
 
-        # 寫入 AI 學習日誌
-        if 'update_ai_thought_log' in globals():
-            update_ai_thought_log(ticker, h_score, full_msg)
+        # --- [關鍵修改：診斷完畢後，立即同步到雲端大腦] ---
+        final_score = max(0, min(100, h_score))
+        update_ai_thought_log(ticker, final_score, full_msg)
 
+        # 正常出口：回傳完整的診斷數據
         return {
             "msg": full_msg,
             "sent": sentiment,
-            "score": max(0, min(100, h_score)),
+            "score": final_score,
             "win_prob": win_prob,
             "target": round(price * 1.15, 1),
             "stop": round(price * 0.92, 1),
             "atr_range": f"勝率: {win_prob}%",
             "pivot": f"V15.2 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
         }
+        
     except Exception as e:
-        p_bar.empty()
-        return {"msg": f"AI 大腦同步中: {str(e)[:15]}", "score": 50, "win_prob": 50}
+        # 保險出口：當發生錯誤（如網路斷線）時，確保 App 不會崩潰
+        if 'p_bar' in locals(): p_bar.empty()
+        return {
+            "msg": f"AI 大腦同步中: {str(e)[:15]}", 
+            "score": 50, 
+            "win_prob": 50,
+            "sent": "🔄 重新連線中",
+            "target": price,
+            "stop": price
+        }
 
 
 def fetch_and_score_intel():
