@@ -675,19 +675,37 @@ with tab_scan:
     
     with col_l:
         # 1. 搜尋區 (V15.2 自動識別與 35 年歷史診斷)
+        # --- [修正後的搜尋區塊] ---
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
             s_input = st.text_input("輸入名稱或代號", placeholder="例如：2330 或 3211", key="global_search_fix")
             
             if s_input:
                 s_raw = s_input.strip()
+                # 如果輸入的是純數字代號
                 if s_raw.isdigit():
+                    # 立即轉換為中文名稱
+                    real_name = get_stock_name(s_raw) 
                     sel_sid = get_full_ticker(s_raw)
-                    # 調用 get_stock_name 確保 2311/2331 會自動轉成中文名
-                    display_name = get_stock_name(s_raw)
-                    if st.button(f"🔍 啟動 AI 深度診斷: {display_name} ({sel_sid})", use_container_width=True, key="diag_btn"):
+                    
+                    # 按鈕直接顯示中文名稱
+                    if st.button(f"🔍 啟動 AI 深度診斷: {real_name} ({sel_sid})", use_container_width=True, key="diag_btn"):
                         st.session_state.selected_stock = sel_sid
                         st.rerun()
+
+        else:
+            # 名稱搜尋邏輯
+            matches = [tid for tid, name in STOCK_MAP.items() if s_raw in name]
+            if matches:
+                m_cols = st.columns(3)
+                for idx, m_sid in enumerate(list(set(matches))[:9]):
+                    # 確保按鈕抓到 STOCK_MAP 裡的正確中文
+                    m_name = get_stock_name(m_sid)
+                    with m_cols[idx % 3]:
+                        if st.button(f"🎯 {m_name}", key=f"src_{idx}_{m_sid}", use_container_width=True):
+                            st.session_state.selected_stock = get_full_ticker(m_sid)
+                            st.rerun()
+
                 else:
                     # 名稱搜尋邏輯 (保留原有功能)
                     matches = [tid for tid, name in STOCK_MAP.items() if s_raw in name]
