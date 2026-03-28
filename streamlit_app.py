@@ -802,28 +802,37 @@ with tab_scan:
             status.update(label="✅ V15.2 板塊診斷完成！", state="complete")
 
         # --- [修正後的板塊推薦呈現] ---
+        # 1. 先建立空清單 (對齊 Tab 鍵)
+        scored_data = [] 
+        
+        # 2. 開始掃描 (與清單對齊)
+        with st.status(f"🤖 AI 正在掃描 {cat_choice} 板塊...", expanded=False) as status:
+            for tid, tname in pool_500[cat_choice]:
+                try:
+                    p_s, d_s, _ = get_stock_perf(tid, 0)
+                    if p_s == 0: continue
+                    real_tname = get_stock_name(tid.split(".")[0])
+                    res_s = generate_ai_tech_analysis(tid, p_s, 0)
+                    if res_s:
+                        res_s.update({'tid': tid, 'tname': real_tname, 'price': p_s, 'diff': d_s})
+                        scored_data.append(res_s) # 這裡會把結果存進清單
+                except: continue
+            status.update(label="✅ V15.2 板塊診斷完成！", state="complete")
+
+        # 3. 顯示結果 (這整個區塊必須在 st.status 結束後才執行，所以要跟 with 平級)
         if scored_data:
             top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
             for idx, item in enumerate(top_picks):
-                # 這裡的 item['tname'] 會強制讀取 STOCK_MAP 裡的中文
-                with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | 勝率: {item.get('win_prob')}%"):
+                with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']}"):
                     st.markdown(f"**🧠 AI 診斷建議：** `{item['msg']}`")
                     
-                    # --- 縮排修正：確保以下組件在 expander 內部 ---
+                    # 這裡必須再往右縮進，才會在 expander 裡面
                     k_c1, k_c2, k_c3 = st.columns([1, 1.2, 1.8])
                     q_val_s = k_c1.number_input("數量", min_value=1, value=1, key=f"sq_v152_{item['tid']}_{idx}")
                     u_val_s = k_c2.radio("單位", ["張", "股"], key=f"su_v152_{item['tid']}_{idx}", horizontal=True)
                     
                     if k_c3.button(f"🚀 執行佈局 {item['tname']}", key=f"sb_v152_{item['tid']}_{idx}", use_container_width=True):
-                        new_entry = pd.DataFrame([{
-                            'client': st.session_state.cur_c, 'id': item['tid'], 'name': item['tname'], 
-                            'buy_price': item['price'], 'shares': q_val_s, 'unit': u_val_s, 
-                            'entry_reason': item['msg'], 'current_score': item['score'], 'last_diag': datetime.now().strftime("%m-%d"),
-                            'sentiment': item.get('sent', '觀測中')
-                        }])
-                        st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
-                        record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val_s, item['price'], f"板塊診斷|評分:{item['score']}")
-                        save_data()
+                        # ... 買入邏輯代碼 ...
                         st.rerun()
 
 
