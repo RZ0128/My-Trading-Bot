@@ -9,9 +9,11 @@ import urllib.parse
 import numpy as np
 import collections
 import re
+import time
 
 # --- [第 1 區：核心配置與 CSS 樣式] ---
-st.set_page_config(page_title="大基石-V15.0自主進化版", layout="wide")
+# 標題更新為 V15.2 以符合目前的進化版本
+st.set_page_config(page_title="大基石-V15.2 自主進化雲端版", layout="wide")
 
 st.markdown("""
     <style>
@@ -32,9 +34,15 @@ st.markdown("""
 
 # --- [第 2 區：定義監控函數與連線邏輯] ---
 
+# 雲端 ID (保持不變)
+SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
+
+def get_sheet_url(sheet_name):
+    return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+
 def get_us_market_impact():
+    """保留 V15.0 核心美股監控邏輯"""
     try:
-        # 修正：確保 tickers 包含您需要的核心監控對象
         tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
         impact_report = {}
         total_stress = 0
@@ -58,41 +66,35 @@ def run_auto_cruise():
         if (now - st.session_state.last_cruise).seconds > 600: # 10分鐘
             st.session_state.last_cruise = now
 
-# 雲端 ID (保持不變)
-SHEET_ID = "1EC30rbvM2PQdz6KAYpx-hZAm-DYgulzYJ9lcqGJJn90"
-
-def get_sheet_url(sheet_name):
-    return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-
 def check_connection():
+    """保留 V15.0 連線檢查狀態顯示"""
     try:
         pd.read_csv(get_sheet_url("history"), nrows=1)
         return True, "✅ 雲端同步中：已成功連結 StoneManager_DB"
     except:
         return False, "❌ 連線失敗：請檢查試算表權限或網路"
 
-def get_full_ticker(tid):
-    """自動判斷上市/上櫃，支援 3211.TWO"""
-    tid = str(tid).split(".")[0]
-    if tid.isdigit():
-        otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
-        if any(tid.startswith(p) for p in otc_prefixes):
-            return f"{tid}.TWO"
-        return f"{tid}.TW"
-    return tid
-
 def load_data():
-    """核心：初始化並加載數據 (V15.0 穩定版)"""
+    """融合 V15.2 進度條與 V15.0 的初始化邏輯"""
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
+    
+    # 建立進度條模擬 AI 數據對齊
+    progress_bar = st.progress(0, text="🤖 AI 正在同步雲端資料庫...")
     try:
-        # 1. 嘗試讀取雲端
+        # 1. 載入 Inventory (對應您的 Sheets 佈局)
         st.session_state.local_db = pd.read_csv(get_sheet_url("inventory"))
+        progress_bar.progress(30, text="📊 已同步 Inventory 板塊...")
+        
+        # 2. 載入 History
         df_hist = pd.read_csv(get_sheet_url("history"))
         if df_hist.empty or 'date' not in df_hist.columns:
+            # 確保欄位符合 V15.0 record_transaction 的需求
             df_hist = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
         st.session_state.trade_history = df_hist
+        progress_bar.progress(60, text="📜 已讀取歷史交易檔案...")
         
+        # 3. 載入 Clients (融合雲端與本地列表)
         client_df = pd.read_csv(get_sheet_url("clients"))
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
         
@@ -102,9 +104,13 @@ def load_data():
         ghosts = ["nan", "None", None]
         combined = list(set(st.session_state.client_list + cloud_clients))
         st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
+        
+        progress_bar.progress(100, text="✅ 雲端大腦同步完成")
+        time.sleep(0.5)
+        progress_bar.empty()
         st.session_state.initialized = True
     except:
-        # 2. 失敗則建立本地備援
+        # 失敗備援模式
         if 'local_db' not in st.session_state:
             st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag', 'sentiment'])
         if 'trade_history' not in st.session_state:
@@ -112,13 +118,39 @@ def load_data():
         if 'client_list' not in st.session_state:
             st.session_state.client_list = ["Robert"]
         st.session_state.initialized = True
+        progress_bar.empty()
+
+def get_full_ticker(tid):
+    """保留 V15.0 的代碼自動判斷邏輯"""
+    tid = str(tid).split(".")[0]
+    if tid.isdigit():
+        otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
+        if any(tid.startswith(p) for p in otc_prefixes):
+            return f"{tid}.TWO"
+        return f"{tid}.TW"
+    return tid
+
+def get_stock_perf(ticker, buy_price):
+    """融合 V15.2 更穩定的價格抓取邏輯"""
+    try:
+        full_tid = get_full_ticker(ticker)
+        stock = yf.Ticker(full_tid)
+        hist = stock.history(period="2d")
+        if hist.empty or len(hist) < 2: return 0, "N/A", 0
+        cp = round(hist['Close'].iloc[-1], 2)
+        prev_cp = hist['Close'].iloc[-2]
+        diff = round(cp - prev_cp, 2)
+        pct = (diff / prev_cp) * 100
+        return cp, f"{diff} ({pct:.2f}%)", pct
+    except:
+        return 0, "N/A", 0
 
 def save_data():
-    """確保數據回流至 session_state (修正：不再依賴外部定義)"""
+    """保留 V15.0 session 狀態維護"""
     st.session_state.initialized = True 
 
 def record_transaction(client, tid, action, shares, price, note):
-    """【關鍵修復】補回被遺漏的交易紀錄函數，讓買賣按鈕生效"""
+    """保留 V15.0 關鍵買賣紀錄函數"""
     new_log = pd.DataFrame([{
         'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
         'client': client,
@@ -134,43 +166,32 @@ def record_transaction(client, tid, action, shares, price, note):
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log], ignore_index=True)
 
 # --- 介面執行：頂部標題與狀態 ---
-st.title("🛡️ 大基石 - AI 戰略經理人 (V15.0)")
-# 這裡很重要：先定義完函數，才呼叫載入
+st.title("🛡️ 大基石 - AI 戰略經理人 (V15.2)")
+
 if 'initialized' not in st.session_state:
     load_data() 
 run_auto_cruise()
 
 is_connected, status_text = check_connection()
 
-# --- [修正區：頂部全球看板精細化] ---
+# --- [全球看板佈局：100% 還原 V15.0 樣式] ---
 if is_connected:
     us_impact, stress_count = get_us_market_impact()
     if us_impact:
         with st.container(border=True):
-            st.markdown("#### 🌍 全球戰略連動看板 (V15.0 精準對位)")
+            st.markdown("#### 🌍 全球戰略連動看板 (V15.2 進化版對位)")
             u_cols = st.columns(len(us_impact))
             
-            # 定義需要顯示點數的標的
             point_view = {"費半": "^SOX", "那指": "^IXIC", "台積電ADR": "TSM", "輝達": "NVDA"}
             
             for i, (name, val) in enumerate(us_impact.items()):
-                # --- [修正核心：嚴格區分點數與百分比] ---
                 try:
                     target_ticker = point_view.get(name)
-                    # 抓取最新成交點數
                     latest_price = yf.Ticker(target_ticker).fast_info['last_price']
-                    
-                    # 1. 這裡只給純數字（例如：7962.18），不要再加任何符號
                     display_val = f"{latest_price:,.2f}" 
                 except:
-                    # 2. 備援邏輯：萬一抓不到點數，才顯示帶符號的百分比作為主數值
                     display_val = f"{val:+}%"
 
-                # 3. 呼叫 metric，將純數字放在 value，百分比放在 delta
-                # 這樣畫面就會呈現：
-                # 費半
-                # 7,962.18
-                # ↑ 1.14% (紅色)
                 u_cols[i].metric(
                     label=name, 
                     value=display_val, 
@@ -178,7 +199,6 @@ if is_connected:
                     delta_color="inverse"
                 )
             
-            # 壓力預警區（維持原樣，不更動佈局）
             if stress_count >= 1:
                 st.markdown(f"""
                     <div style="background-color: #fff5f5; border: 2px solid #ff4b4b; padding: 10px; border-radius: 8px; color: #ff4b4b; font-weight: bold; text-align: center;">
