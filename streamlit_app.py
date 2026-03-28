@@ -198,29 +198,26 @@ def get_stock_name(ticker):
 def get_stock_perf(ticker, buy_price):
     """強化穩定版：解決 Delisted 報錯與週末空窗問題"""
     try:
-        # 增加延遲防止被 Yahoo 封鎖
-        time.sleep(0.3) 
-        
+        time.sleep(0.5) # 避開 Yahoo 頻率限制
         full_tid = get_full_ticker(ticker)
         stock = yf.Ticker(full_tid)
         
-        # 關鍵：將 period 改為 1mo (一個月)，確保一定能抓到最近兩個交易日的資料
+        # 關鍵：改用 1mo 確保能抓到週五數據
         hist = stock.history(period="1mo") 
         
         if hist.empty or len(hist) < 2: 
-            # 如果還是抓不到，回傳當前價格為 0 但不讓程式崩潰
-            return 0, "N/A", 0
+            # 備援：如果歷史紀錄失敗，抓取即時價格
+            last_p = stock.fast_info.get('lastPrice', 0)
+            return last_p, "資料對齊中", 0
             
-        # 抓取最後兩天的收盤價
         cp = round(hist['Close'].iloc[-1], 2)
         prev_cp = hist['Close'].iloc[-2]
-        
         diff = round(cp - prev_cp, 2)
         pct = (diff / prev_cp) * 100
         return cp, f"{diff} ({pct:.2f}%)", pct
     except Exception as e:
-        print(f"❌ 股價抓取異常 ({ticker}): {e}")
         return 0, "N/A", 0
+
 
 def save_data():
     """保留 V15.0 session 狀態維護"""
