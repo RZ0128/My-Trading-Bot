@@ -783,7 +783,7 @@ with tab_scan:
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v152")
         
                 # --- [修正版：確保板塊掃描能顯示中文名稱] ---
-        scored_data = []
+                scored_data = []
         with st.status(f"🤖 AI 正在掃描 {cat_choice} 板塊並套用 35 年戰策...", expanded=False) as status:
             for tid, tname in pool_500[cat_choice]:
                 try:
@@ -791,7 +791,6 @@ with tab_scan:
                     if p_s == 0: continue
                     
                     # 關鍵修正點 1：確保診斷時抓到正確名稱
-                    # 使用 get_stock_name 進行二次確認，如果庫存或 MAP 有名字就用名字
                     real_tname = get_stock_name(tid.split(".")[0])
                     
                     res_s = generate_ai_tech_analysis(tid, p_s, 0)
@@ -802,15 +801,19 @@ with tab_scan:
                 except: continue
             status.update(label="✅ V15.2 板塊診斷完成！", state="complete")
 
-        
+        # --- [修正後的板塊推薦呈現] ---
         if scored_data:
             top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
             for idx, item in enumerate(top_picks):
+                # 這裡的 item['tname'] 會強制讀取 STOCK_MAP 裡的中文
                 with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | 勝率: {item.get('win_prob')}%"):
-                    st.markdown(f"**🧠 AI 診斷：** `{item['msg']}`")
+                    st.markdown(f"**🧠 AI 診斷建議：** `{item['msg']}`")
+                    
+                    # --- 縮排修正：確保以下組件在 expander 內部 ---
                     k_c1, k_c2, k_c3 = st.columns([1, 1.2, 1.8])
                     q_val_s = k_c1.number_input("數量", min_value=1, value=1, key=f"sq_v152_{item['tid']}_{idx}")
                     u_val_s = k_c2.radio("單位", ["張", "股"], key=f"su_v152_{item['tid']}_{idx}", horizontal=True)
+                    
                     if k_c3.button(f"🚀 執行佈局 {item['tname']}", key=f"sb_v152_{item['tid']}_{idx}", use_container_width=True):
                         new_entry = pd.DataFrame([{
                             'client': st.session_state.cur_c, 'id': item['tid'], 'name': item['tname'], 
@@ -820,7 +823,10 @@ with tab_scan:
                         }])
                         st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
                         record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val_s, item['price'], f"板塊診斷|評分:{item['score']}")
-                        save_data(); st.rerun()
+                        save_data()
+                        st.rerun()
+
+
 
     with col_r:
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
