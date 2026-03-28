@@ -832,8 +832,18 @@ with tab_scan:
                     u_val_s = k_c2.radio("單位", ["張", "股"], key=f"su_v152_{item['tid']}_{idx}", horizontal=True)
                     
                     if k_c3.button(f"🚀 執行佈局 {item['tname']}", key=f"sb_v152_{item['tid']}_{idx}", use_container_width=True):
-                        # ... 買入邏輯代碼 ...
+                        # --- 買入邏輯代碼（請確保這段有貼進去） ---
+                        new_entry = pd.DataFrame([{
+                            'client': st.session_state.cur_c, 'id': item['tid'], 'name': item['tname'], 
+                            'buy_price': item['price'], 'shares': q_val_s, 'unit': u_val_s, 
+                            'entry_reason': item['msg'], 'current_score': item['score'], 'last_diag': datetime.now().strftime("%m-%d"),
+                            'sentiment': item.get('sent', '觀測中')
+                        }])
+                        st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                        record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val_s, item['price'], f"板塊診斷|評分:{item['score']}")
+                        save_data()
                         st.rerun()
+
 
 
 
