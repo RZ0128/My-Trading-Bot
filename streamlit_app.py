@@ -223,6 +223,36 @@ def record_transaction(client, tid, action, shares, price, note):
     else:
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log], ignore_index=True)
 
+def update_ai_thought_log(ticker, score, msg):
+    """
+    【AI 大腦雲端寫入器】V15.2 專用
+    功能：診斷完成後，自動將結果存入 StoneManager_DB 的 thought_log 分頁。
+    """
+    try:
+        # 1. 初始化雲端連線
+        sh = init_cloud_connection()
+        if sh:
+            # 2. 指定寫入 "thought_log" 分頁
+            ws = sh.worksheet("thought_log")
+            
+            # 3. 準備資料列：時間、代碼、名稱、分數、AI 診斷建議
+            new_row = [
+                datetime.now().strftime("%Y-%m-%d %H:%M"), # 時間
+                str(ticker),                                # 股票代碼
+                get_stock_name(ticker),                    # 自動轉換中文名
+                score,                                     # AI 評分
+                msg                                        # 診斷核心邏輯
+            ]
+            
+            # 4. 執行寫入動作 (這就是您說的 append_row)
+            ws.append_row(new_row)
+            return True
+    except Exception as e:
+        # 如果寫入失敗，在後台顯示錯誤，但不影響 App 運行
+        print(f"⚠️ 大腦寫入同步失敗: {e}")
+        return False
+
+
 # --- 介面執行：頂部標題與狀態 ---
 st.title("🛡️ 大基石 - AI 戰略經理人 (V15.2)")
 
