@@ -166,19 +166,34 @@ def load_data():
         progress_bar.empty()
 
 def get_full_ticker(tid):
-    """強化版：自動去空白、去小數點，並準確判斷上市櫃"""
-    # 1. 確保是字串並徹底清除空格與換行
-    tid = str(tid).strip().upper()
-    # 2. 如果讀到 2330.0，只取點前面的部分
-    tid = tid.split(".")[0]
-    
+    """強化版：自動格式化代碼"""
+    tid = str(tid).strip().upper().split(".")[0]
     if tid.isdigit():
-        # 台股上櫃代碼前綴判斷邏輯
         otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
         if any(tid.startswith(p) for p in otc_prefixes):
             return f"{tid}.TWO"
         return f"{tid}.TW"
     return tid
+
+def get_stock_name(ticker):
+    """修復版：確保搜尋時能調用到名稱"""
+    try:
+        # 1. 先找本地 session 庫存
+        if 'local_db' in st.session_state:
+            match = st.session_state.local_db[st.session_state.local_db['id'].astype(str) == str(ticker)]
+            if not match.empty and str(match['name'].iloc[0]) != 'nan':
+                return match['name'].iloc[0]
+        
+        # 2. 如果庫存沒有，則問 Yahoo
+        full_tid = get_full_ticker(ticker)
+        tk = yf.Ticker(full_tid)
+        name = tk.info.get('longName') or tk.info.get('shortName') or str(ticker)
+        
+        if name == full_tid or name == str(ticker):
+            return f"個股 {ticker}"
+        return name
+    except:
+        return f"個股 {ticker}"
 
 def get_stock_perf(ticker, buy_price):
     """強化版：加入緩衝與重試，解決 Delisted 假報錯"""
