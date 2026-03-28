@@ -428,7 +428,11 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
 
         # --- [關鍵修改：診斷完畢後，立即同步到雲端大腦] ---
         final_score = max(0, min(100, h_score))
-        update_ai_thought_log(ticker, final_score, full_msg)
+        # 這裡會觸發您在第 2 區定義的雲端寫入函數
+        try:
+            update_ai_thought_log(ticker, final_score, full_msg)
+        except:
+            pass # 防止雲端寫入失敗導致整個診斷卡死
 
         # 正常出口：回傳完整的診斷數據
         return {
@@ -441,6 +445,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
             "atr_range": f"勝率: {win_prob}%",
             "pivot": f"V15.2 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
         }
+
         
     except Exception as e:
         # 保險出口：當發生錯誤（如網路斷線）時，確保 App 不會崩潰
