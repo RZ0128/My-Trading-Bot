@@ -194,30 +194,40 @@ def get_full_ticker(tid):
     return tid
 
 def get_stock_name(ticker):
-    """大基石專用：三層名稱檢索機制"""
-    # 確保格式統一 (拿掉 .TW / .TWO 只取數字)
+    """大基石專用：四層名稱檢索機制 (含 twstock 備援)"""
     raw_id = str(ticker).split(".")[0].strip()
     
-    # 第一層：優先從 500 檔核心標題池 (STOCK_MAP) 抓取，這最準確且快速
+    # 第一層：500 檔核心標題池 (最快、最準)
     if raw_id in STOCK_MAP:
         return STOCK_MAP[raw_id]
         
-    # 第二層：從本地 session 庫存 (local_db) 尋找已存名稱
+    # 第二層：本地庫存紀錄 (local_db)
     if 'local_db' in st.session_state:
         match = st.session_state.local_db[st.session_state.local_db['id'].astype(str).str.contains(raw_id)]
         if not match.empty:
             name_val = str(match['name'].iloc[0])
-            if name_val != 'nan' and name_val != 'None':
+            if name_val not in ['nan', 'None', None]:
                 return name_val
     
-    # 第三層：最後才問 Yahoo (備援)
+    # 第三層：【新增】twstock 名稱備援 (專治台股搜尋不到)
+    if raw_id.isdigit():
+        try:
+            import twstock
+            if raw_id in twstock.codes:
+                return twstock.codes[raw_id].name
+        except:
+            pass
+
+    # 第四層：最後才問 Yahoo (最慢，僅作為全球股備援)
     try:
         full_tid = get_full_ticker(raw_id)
         tk = yf.Ticker(full_tid)
+        # 這裡改用 fast_info 或直接 get 以提高速度
         name = tk.info.get('shortName') or tk.info.get('longName') or f"個股 {raw_id}"
         return name
     except:
         return f"個股 {raw_id}"
+
 
 
 def get_stock_perf(sid, retry_count=0):
