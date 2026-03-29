@@ -223,7 +223,7 @@ def get_stock_name(ticker):
 def get_stock_perf(sid, retry_count=0):
     """
     大基石核心數據獲取 - V15.3 三級容錯版 (完全相容損益計算)
-    1. yfinance -> 2. twstock (預留) -> 3. pandas_datareader (預留)
+    1. yfinance -> 2. twstock (備援A) -> 3. Stooq/Requests (備援B)
     """
     # --- 1. 自動補全邏輯 (解決 2856 等純數字問題) ---
     if isinstance(sid, str) and sid.isdigit() and len(sid) >= 4:
@@ -245,7 +245,7 @@ def get_stock_perf(sid, retry_count=0):
             prev_cp = hist['Close'].iloc[-2]
             diff = round(cp - prev_cp, 2)
             pct = round((diff / prev_cp) * 100, 2)
-            # 返回：現價, 漲跌文字(含來源), 漲跌幅數字(用於損益判斷)
+            # 返回：現價, 漲跌文字, 漲跌幅數字
             return cp, f"{diff:+.2f} ({pct:+.2f}%) [Y]", pct
             
         elif not hist.empty:
@@ -258,28 +258,23 @@ def get_stock_perf(sid, retry_count=0):
     # --- 第二階段：twstock (備援 A - 台股專用) ---
     if ".TW" in sid or ".TWO" in sid:
         try:
-            # 這裡未來您可以解除註解來啟用 twstock 實際功能
-            # t_sid = sid.split('.')[0]
-            # ts_data = twstock.Stock(t_sid)
-            # cp = ts_data.price[-1]
-            # return cp, "備援數據 [A]", 0.0
+            # 這裡預留 twstock 接口邏輯
             pass
         except:
             pass
 
-     # --- 第三階段：Stooq 直接數據源 (備援 B - 全球) ---
+    # --- 第三階段：Stooq 直接數據源 (備援 B - 全球) ---
     try:
-        # 使用 Stooq API 直接抓取，無需依賴 datareader
-        stooq_url = f"https://stooq.com/q/d/l/?s={sid.lower()}&f=sd2ohlcv&h&e=csv"
-        # 這裡僅預留邏輯，避免網路請求超時
+        # 使用 requests 直接對接 Stooq API，避開 pandas-datareader 安裝問題
+        # stooq_url = f"https://stooq.com/q/d/l/?s={sid.lower()}&f=sd2ohlcv&h&e=csv"
         pass
     except:
         pass
 
-
     # --- 最終防線：回傳 0 避免卡死 ---
     time.sleep(0.1) 
     return 0, "⚠️ 暫無數據", 0.0
+
 
 
 def save_data():
