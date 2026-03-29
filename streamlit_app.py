@@ -814,20 +814,41 @@ with tab_scan:
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v152")
         
-        # --- [板塊掃描核心功能區 - 100% 保留診斷與買入邏輯] ---
+
+        # --- [板塊掃描核心功能區 - V15.3 穩定版] ---
         scored_data = []
         with st.status(f"🤖 AI 正在掃描 {cat_choice} 板塊並套用 35 年戰策...", expanded=False) as status:
             for tid, tname in pool_500[cat_choice]:
                 try:
-                    p_s, d_s, _ = get_stock_perf(tid, 0)
-                    if p_s == 0: continue
+                    # 1. 獲取數據 (使用我們剛改好的三級容錯函數)
+                    p_s, d_s, pct_s = get_stock_perf(tid, 0)
+            
+                    # 核心防禦：如果股價回傳為 0 (代表所有來源都抓不到)
+                    if p_s == 0:
+                        print(f"⏩ 跳過 {tname} ({tid}): 無法獲取即時數據")
+                        continue  # 直接跳過這支，不浪費時間做 AI 診斷
+            
+                    # 2. 獲取真實名稱 (避免顯示代號)
                     real_tname = get_stock_name(tid.split(".")[0])
+            
+                    # 3. 進入 AI 診斷 (只有拿到正確數據才進來)
                     res_s = generate_ai_tech_analysis(tid, p_s, 0)
+            
                     if res_s:
-                        res_s.update({'tid': tid, 'tname': real_tname, 'price': p_s, 'diff': d_s})
+                        res_s.update({
+                            'tid': tid, 
+                            'tname': real_tname, 
+                            'price': p_s, 
+                            'diff': d_s,
+                            'pct': pct_s
+                        })
                         scored_data.append(res_s)
-                except: continue
-            status.update(label="✅ V15.2 板塊診斷完成！", state="complete")
+                except Exception as e:
+                    print(f"⚠️ 掃描 {tid} 時發生未知錯誤: {e}")
+                    continue 
+            
+            status.update(label="✅ V15.3 板塊診斷完成！", state="complete")
+
 
         if scored_data:
             top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
