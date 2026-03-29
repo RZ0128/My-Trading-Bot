@@ -204,40 +204,42 @@ def get_full_ticker(tid):
 
 def get_stock_name(ticker):
     """
-    大基石專用：四層名稱檢索機制 (V15.3 強化對位版)
+    大基石專用：四層名稱檢索機制 (V15.3 究極版)
     優先級：核心池 > 本地庫存 > twstock 本地庫 > Yahoo (最終備援)
     """
-    # 統一格式：只取數字部分
+    # 統一格式：只取數字部分 (例如把 2888.TW 轉成 2888)
     raw_id = str(ticker).split(".")[0].strip()
     
-    # 第一層：500 檔核心標題池 (極速 0 秒)
+    # --- 第一層：500 檔核心標題池 (極速 0 秒) ---
     if raw_id in STOCK_MAP:
         return STOCK_MAP[raw_id]
         
-    # 第二層：從本地 session 庫存尋找 (避免重複抓取)
-    if 'local_db' in st.session_state:
-        # 使用 str 包含比對，增加彈性
-        match = st.session_state.local_db[st.session_state.local_db['id'].astype(str).str.contains(raw_id)]
-        if not match.empty:
-            name_val = str(match['name'].iloc[0])
-            if name_val not in ['nan', 'None', 'None', None]:
-                return name_val
+    # --- 第二層：從本地 session 庫存尋找 ---
+    if 'local_db' in st.session_state and not st.session_state.local_db.empty:
+        # 確保 id 欄位存在再進行比對
+        if 'id' in st.session_state.local_db.columns:
+            match = st.session_state.local_db[st.session_state.local_db['id'].astype(str).str.contains(raw_id)]
+            if not match.empty:
+                name_val = str(match['name'].iloc[0])
+                if name_val not in ['nan', 'None', '', None]:
+                    return name_val
     
-    # 第三層：【關鍵強化】twstock 本地代碼庫 (台股專用，免聯網)
+    # --- 第三層：【關鍵強化】twstock 本地庫 (台股秒出名字) ---
     if raw_id.isdigit():
         try:
             import twstock
-            # 直接從 twstock 內建的 codes 字典查表，這最穩
+            # 直接從 twstock 內建字典查表，這不需要聯網，速度極快
             if raw_id in twstock.codes:
                 return twstock.codes[raw_id].name
         except:
+            # 如果 twstock 沒裝好，就跳過
             pass
 
-    # 第四層：Yahoo 備援 (全球股、美股專用)
+    # --- 第四層：Yahoo 備援 (全球股/美股專用) ---
     try:
         full_tid = get_full_ticker(raw_id)
         tk = yf.Ticker(full_tid)
-        # Yahoo 的 info 請求很慢，放在最後一層是正確的
+        # 這是最後一線，如果 Yahoo 又擋掉，就回傳代號
         name = tk.info.get('shortName') or tk.info.get('longName') or f"個股 {raw_id}"
         return name
     except:
