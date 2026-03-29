@@ -814,39 +814,37 @@ with tab_scan:
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v152")
         
 
-        # --- [板塊掃描核心功能區 - V15.3 穩定版] ---
+        # --- [板塊掃描核心功能區 - V15.3 進度條強化版] ---
         scored_data = []
+        target_pool = pool_500[cat_choice]
+        total_count = len(target_pool)
+        
+        # 建立一個動態狀態區
+        scan_progress = st.progress(0, text=f"🚀 AI 準備掃描 {cat_choice} 共 {total_count} 檔個股...")
+        
         with st.status(f"🤖 AI 正在掃描 {cat_choice} 板塊並套用 35 年戰策...", expanded=False) as status:
-            for tid, tname in pool_500[cat_choice]:
+            for idx, (tid, tname) in enumerate(target_pool):
                 try:
-                    # 1. 獲取數據 (使用我們剛改好的三級容錯函數)
+                    # 更新外部進度條
+                    current_percent = int((idx + 1) / total_count * 100)
+                    scan_progress.progress(current_percent, text=f"🔍 正在掃描 ({idx+1}/{total_count}): {tname}...")
+                    
+                    # 獲取數據與診斷
                     p_s, d_s, pct_s = get_stock_perf(tid, 0)
-            
-                    # 核心防禦：如果股價回傳為 0 (代表所有來源都抓不到)
-                    if p_s == 0:
-                        print(f"⏩ 跳過 {tname} ({tid}): 無法獲取即時數據")
-                        continue  # 直接跳過這支，不浪費時間做 AI 診斷
-            
-                    # 2. 獲取真實名稱 (避免顯示代號)
+                    if p_s == 0: continue
+                    
                     real_tname = get_stock_name(tid.split(".")[0])
-            
-                    # 3. 進入 AI 診斷 (只有拿到正確數據才進來)
                     res_s = generate_ai_tech_analysis(tid, p_s, 0)
             
                     if res_s:
-                        res_s.update({
-                            'tid': tid, 
-                            'tname': real_tname, 
-                            'price': p_s, 
-                            'diff': d_s,
-                            'pct': pct_s
-                        })
+                        res_s.update({'tid': tid, 'tname': real_tname, 'price': p_s, 'diff': d_s, 'pct': pct_s})
                         scored_data.append(res_s)
-                except Exception as e:
-                    print(f"⚠️ 掃描 {tid} 時發生未知錯誤: {e}")
-                    continue 
+                except: continue 
             
-            status.update(label="✅ V15.3 板塊診斷完成！", state="complete")
+            status.update(label=f"✅ {cat_choice} 掃描完成！共發現 {len(scored_data)} 檔有效標的。", state="complete")
+            time.sleep(0.5)
+            scan_progress.empty() # 結束後移除進度條
+
 
 
         if scored_data:
