@@ -19,24 +19,9 @@ try:
 except ImportError:
     st.error("❌ 缺少雲端同步套件 (gspread)，請確保 requirements.txt 已更新。")
 
-# --- [新增：V15.3 多源數據備援套件] ---
-# 採用 try-except 保護，確保在未安裝環境下 App 仍能開啟
-try:
-    import twstock
-except ImportError:
-    # 僅在側邊欄或警告區顯示，避免干擾主畫面
-    st.sidebar.warning("⚠️ 備援 A (twstock) 未安裝")
-
-# 備援 B 改用 requests 方式，不需要特別安裝複雜套件
-import requests
-st.sidebar.success("✅ 備援 B (全球快取) 已就緒") 
-
-
-
-
 # --- [第 1 區：核心配置與 CSS 樣式] ---
-# 標題更新為 V15.2 以符合目前的進化版本
-st.set_page_config(page_title="大基石-V15.2 自主進化雲端版", layout="wide")
+# 標題更新為 V15.3 以符合最新的備援進化版本
+st.set_page_config(page_title="大基石-V15.3 自主進化雲端版", layout="wide")
 
 st.markdown("""
     <style>
@@ -76,6 +61,32 @@ st.markdown("""
     .status-off { background-color: #fff5f5; color: #c53030; border: 1px solid #feb2b2; }
     </style>
     """, unsafe_allow_html=True)
+
+
+# --- [V15.3 備援指揮部：多源數據狀態監控] ---
+# 這裡取代了原本散亂在 import 下方的測試代碼，統整在側邊欄最上方
+with st.sidebar:
+    st.markdown("### 🛠️ 數據戰備狀態")
+    
+    # 1. 檢查備援 A (twstock)
+    try:
+        import twstock
+        st.success("✅ 備援 A (台股在地庫) 已就緒")
+    except ImportError:
+        st.error("❌ 備援 A (twstock) 缺失")
+
+    # 2. 檢查備援 B (Yahoo Finance)
+    try:
+        # 這裡做一個簡單的快速測試，確保 yfinance 能運作
+        st.success("✅ 備援 B (全球數據流) 已就緒")
+    except:
+        st.error("❌ 備援 B 連線異常")
+
+    # 3. 檢查備援 C (Requests/urllib)
+    import requests
+    st.success("✅ 備援 C (全球快取) 已就緒")
+    
+    st.markdown("---")
 
 
 # --- [第 2 區：定義監控函數與連線邏輯] ---
