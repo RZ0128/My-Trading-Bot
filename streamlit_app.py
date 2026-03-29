@@ -245,20 +245,14 @@ def get_stock_name(ticker):
 
 
 def get_stock_perf(sid, retry_count=0):
-    """
-    大基石核心數據獲取 - V15.3 真正三級容錯版
-    1. yfinance -> 2. twstock (台股備援) -> 3. Stooq (全球備援)
-    """
-    # 提取純數字代號 (例如從 2856.TW 提取 2856)
     raw_id = str(sid).split(".")[0].strip()
     
-    # --- 第一階段：yfinance (首選) ---
+    # --- 第一階段：yfinance ---
     try:
-        time.sleep(0.2) 
-        # 確保搜尋格式正確
         full_sid = get_full_ticker(raw_id)
         stock = yf.Ticker(full_sid)
-        hist = stock.history(period="1mo", timeout=5)
+        # 加入更短的 timeout，如果 Yahoo 報 404 或卡住，趕快換掉
+        hist = stock.history(period="1mo", timeout=3)
         
         if not hist.empty and len(hist) >= 2:
             cp = round(hist['Close'].iloc[-1], 2)
@@ -267,40 +261,26 @@ def get_stock_perf(sid, retry_count=0):
             pct = round((diff / prev_cp) * 100, 2)
             return cp, f"{diff:+.2f} ({pct:+.2f}%) [Y]", pct
     except Exception as e:
-        print(f"⚠️ Yahoo 抓取失敗 {raw_id}")
+        # 當出現 404 時，這裡會印出警告，但程式會繼續往下跑
+        print(f"📡 Yahoo 無法讀取 {raw_id} (可能代碼不存在)，啟動備援機制...")
 
-    # --- 第二階段：twstock (備援 A - 台股即時救星) ---
-    # 這是解決 2856, 2888 抓不到的核心區
+    # --- 第二階段：twstock (這是解決 2888 的關鍵) ---
     if raw_id.isdigit():
         try:
-            # 只有當 twstock 有正確安裝時才會執行
             import twstock
-            t_data = twstock.realtime.get(raw_id)
-            if t_data and t_data['success']:
-                # 取得即時價格與漲跌幅
-                info = t_data['realtime']
-                cp = float(info['latest_trade_price'])
-                # 計算漲跌 (twstock 需手動計算)
-                open_p = float(info['open'])
+            # 使用 twstock 抓取即時資料
+            real = twstock.realtime.get(raw_id)
+            if real and real['success']:
+                cp = float(real['realtime']['latest_trade_price'])
+                # 漲跌幅計算
+                open_p = float(real['realtime']['open'])
                 diff = round(cp - open_p, 2)
                 pct = round((diff / open_p) * 100, 2)
                 return cp, f"{diff:+.2f} ({pct:+.2f}%) [A]", pct
-        except Exception as e:
-            print(f"⚠️ 備援 A (twstock) 失敗: {e}")
+        except:
+            pass
 
-    # --- 第三階段：全球 Requests 備援 (備援 B) ---
-    try:
-        # 針對台股，Stooq 的代碼格式通常是 raw_id.TW
-        stooq_sid = f"{raw_id}.TW"
-        url = f"https://stooq.com/q/d/l/?s={stooq_sid.lower()}&f=sd2ohlcv&h&e=csv"
-        # 這裡僅預留 requests 邏輯，防止環境沒裝 pandas-datareader
-        pass 
-    except:
-        pass
-
-    # --- 最終防線：回傳 0 避免卡死 ---
     return 0, "⚠️ 暫無數據", 0.0
-
 
 
 def save_data():
