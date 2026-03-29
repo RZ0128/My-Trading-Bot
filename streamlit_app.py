@@ -184,13 +184,22 @@ def load_data():
         progress_bar.empty()
 
 def get_full_ticker(tid):
-    """強化版：自動格式化代碼"""
+    """更精準的台股後綴判斷，減少 404 錯誤"""
     tid = str(tid).strip().upper().split(".")[0]
     if tid.isdigit():
-        otc_prefixes = ["31","32","33","34","35","36","41","43","45","47","49","52","53","54","61","62","64","65","66","80","82","83","84"]
-        if any(tid.startswith(p) for p in otc_prefixes):
-            return f"{tid}.TWO"
-        return f"{tid}.TW"
+        # 建立一個簡單的判斷：6 位數以上通常是權證或特定標的，4 位數是普通股
+        # 這裡我們讓它先嘗試 .TW，如果 404，下方的 get_stock_perf 會接手
+        if len(tid) == 4:
+            # 2888 這種金融股絕大多數是 .TW
+            return f"{tid}.TW"
+        else:
+            # 透過 twstock 判斷上市或上櫃 (這最準)
+            try:
+                import twstock
+                if tid in twstock.codes:
+                    return f"{tid}.TWO" if twstock.codes[tid].market == '本國上櫃' else f"{tid}.TW"
+            except:
+                pass
     return tid
 
 def get_stock_name(ticker):
