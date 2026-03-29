@@ -244,43 +244,42 @@ def get_stock_name(ticker):
         return f"個股 {raw_id}"
 
 
-def get_stock_perf(sid, retry_count=0):
-    raw_id = str(sid).split(".")[0].strip()
+def get_stock_perf(ticker, period_days=0):
+    """大基石 V15.3：台股優先策略"""
+    raw_id = str(ticker).split(".")[0].strip()
     
-    # --- 第一階段：yfinance ---
-    try:
-        full_sid = get_full_ticker(raw_id)
-        stock = yf.Ticker(full_sid)
-        # 加入更短的 timeout，如果 Yahoo 報 404 或卡住，趕快換掉
-        hist = stock.history(period="1mo", timeout=3)
-        
-        if not hist.empty and len(hist) >= 2:
-            cp = round(hist['Close'].iloc[-1], 2)
-            prev_cp = hist['Close'].iloc[-2]
-            diff = round(cp - prev_cp, 2)
-            pct = round((diff / prev_cp) * 100, 2)
-            return cp, f"{diff:+.2f} ({pct:+.2f}%) [Y]", pct
-    except Exception as e:
-        # 當出現 404 時，這裡會印出警告，但程式會繼續往下跑
-        print(f"📡 Yahoo 無法讀取 {raw_id} (可能代碼不存在)，啟動備援機制...")
-
-    # --- 第二階段：twstock (這是解決 2888 的關鍵) ---
-    if raw_id.isdigit():
+    # --- 策略 A：如果是台股，優先使用 twstock (快且穩) ---
+    if raw_id.isdigit() and len(raw_id) >= 4:
         try:
             import twstock
-            # 使用 twstock 抓取即時資料
-            real = twstock.realtime.get(raw_id)
-            if real and real['success']:
-                cp = float(real['realtime']['latest_trade_price'])
-                # 漲跌幅計算
-                open_p = float(real['realtime']['open'])
-                diff = round(cp - open_p, 2)
-                pct = round((diff / open_p) * 100, 2)
-                return cp, f"{diff:+.2f} ({pct:+.2f}%) [A]", pct
-        except:
+            stock = twstock.Stock(raw_id)
+            # 抓取最近 31 天數據確保能算出斜率
+            prices = stock.price[-31:] 
+            if len(prices) >= 2:
+                p_current = prices[-1]
+                p_prev = prices[-2]
+                diff = p_current - p_prev
+                # 標記來源為 [A] (內地/備援 A 扶正)
+                return p_current, diff, "[A]"
+        except Exception as e:
+            # 如果 twstock 失敗，才往下走到 Yahoo
             pass
 
-    return 0, "⚠️ 暫無數據", 0.0
+    # --- 策略 B：全球股或台股備援，使用 Yahoo ---
+    try:
+        full_tid = get_full_ticker(raw_id)
+        tk = yf.Ticker(full_tid)
+        hist = tk.history(period="1mo")
+        
+        if not hist.empty and len(hist) >= 2:
+            p_current = hist['Close'].iloc[-1]
+            p_prev = hist['Close'].iloc[-2]
+            diff = p_current - p_prev
+            return float(p_current), float(diff), "[Y]"
+    except:
+        pass
+
+    return 0, 0, "[N/A]"
 
 
 def save_data():
