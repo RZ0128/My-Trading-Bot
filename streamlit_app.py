@@ -11,10 +11,27 @@ import collections
 import re
 import time
 
-# --- [新增：V15.2 雲端安全通訊官模組] ---
-import gspread
-import json
-from google.oauth2.service_account import Credentials
+# --- [V15.2 雲端安全通訊官：Google Sheets 同步模組] ---
+try:
+    import gspread
+    import json
+    from google.oauth2.service_account import Credentials
+except ImportError:
+    st.error("❌ 缺少雲端同步套件 (gspread)，請確保 requirements.txt 已更新。")
+
+# --- [新增：V15.3 多源數據備援套件] ---
+# 採用 try-except 保護，確保在未安裝環境下 App 仍能開啟
+try:
+    import twstock
+except ImportError:
+    # 僅在側邊欄或警告區顯示，避免干擾主畫面
+    st.sidebar.warning("⚠️ 備援 A (twstock) 未安裝")
+
+try:
+    from pandas_datareader import data as pdr
+except ImportError:
+    st.sidebar.warning("⚠️ 備援 B (pandas-datareader) 未安裝")
+
 
 # --- [第 1 區：核心配置與 CSS 樣式] ---
 # 標題更新為 V15.2 以符合目前的進化版本
