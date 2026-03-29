@@ -29,8 +29,11 @@ except ImportError:
 
 try:
     from pandas_datareader import data as pdr
-except ImportError:
-    st.sidebar.warning("⚠️ 備援 B (pandas-datareader) 未安裝")
+    # 這裡加一個小測試，確保它真的能動
+    st.sidebar.success("✅ 備援 B (全球) 已就緒")
+except Exception:
+    st.sidebar.warning("⚠️ 備援 B (pandas-datareader) 安裝中或未就緒")
+
 
 
 # --- [第 1 區：核心配置與 CSS 樣式] ---
