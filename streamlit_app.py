@@ -219,28 +219,63 @@ def get_stock_name(ticker):
         return f"個股 {raw_id}"
 
 
-def get_stock_perf(ticker, buy_price):
-    """強化穩定版：解決 Delisted 報錯與週末空窗問題"""
+def get_stock_perf(sid, retry_count=0):
+    """
+    大基石核心數據獲取 - V15.3 三級容錯版 (完全相容損益計算)
+    1. yfinance -> 2. twstock (預留) -> 3. pandas_datareader (預留)
+    """
+    # --- 1. 自動補全邏輯 (解決 2856 等純數字問題) ---
+    if isinstance(sid, str) and sid.isdigit() and len(sid) >= 4:
+        sid = f"{sid}.TW"
+    
+    timeout_sec = 5 
+    
+    # --- 第一階段：yfinance (首選) ---
     try:
-        time.sleep(0.5) # 避開 Yahoo 頻率限制
-        full_tid = get_full_ticker(ticker)
-        stock = yf.Ticker(full_tid)
+        # 避開 Yahoo 頻率限制
+        time.sleep(0.2) 
+        stock = yf.Ticker(sid)
         
-        # 關鍵：改用 1mo 確保能抓到週五數據
-        hist = stock.history(period="1mo") 
+        # 使用 1mo 確保週末或連假時也能抓到最後兩個交易日
+        hist = stock.history(period="1mo", timeout=timeout_sec)
         
-        if hist.empty or len(hist) < 2: 
-            # 備援：如果歷史紀錄失敗，抓取即時價格
-            last_p = stock.fast_info.get('lastPrice', 0)
-            return last_p, "資料對齊中", 0
+        if not hist.empty and len(hist) >= 2:
+            cp = round(hist['Close'].iloc[-1], 2)
+            prev_cp = hist['Close'].iloc[-2]
+            diff = round(cp - prev_cp, 2)
+            pct = round((diff / prev_cp) * 100, 2)
+            # 返回：現價, 漲跌文字(含來源), 漲跌幅數字(用於損益判斷)
+            return cp, f"{diff:+.2f} ({pct:+.2f}%) [Y]", pct
             
-        cp = round(hist['Close'].iloc[-1], 2)
-        prev_cp = hist['Close'].iloc[-2]
-        diff = round(cp - prev_cp, 2)
-        pct = (diff / prev_cp) * 100
-        return cp, f"{diff} ({pct:.2f}%)", pct
+        elif not hist.empty:
+            cp = round(hist['Close'].iloc[-1], 2)
+            return cp, "資料對齊中 [Y]", 0.0
+            
     except Exception as e:
-        return 0, "N/A", 0
+        print(f"⚠️ [Yahoo 失敗] {sid}: {e}")
+
+    # --- 第二階段：twstock (備援 A - 台股專用) ---
+    if ".TW" in sid or ".TWO" in sid:
+        try:
+            # 這裡未來您可以解除註解來啟用 twstock 實際功能
+            # t_sid = sid.split('.')[0]
+            # ts_data = twstock.Stock(t_sid)
+            # cp = ts_data.price[-1]
+            # return cp, "備援數據 [A]", 0.0
+            pass
+        except:
+            pass
+
+    # --- 第三階段：pandas_datareader (備援 B - 全球) ---
+    try:
+        # 預留接口
+        pass
+    except:
+        pass
+
+    # --- 最終防線：回傳 0 避免卡死 ---
+    time.sleep(0.1) 
+    return 0, "⚠️ 暫無數據", 0.0
 
 
 def save_data():
