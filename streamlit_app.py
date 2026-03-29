@@ -27,12 +27,10 @@ except ImportError:
     # 僅在側邊欄或警告區顯示，避免干擾主畫面
     st.sidebar.warning("⚠️ 備援 A (twstock) 未安裝")
 
-try:
-    from pandas_datareader import data as pdr
-    # 這裡加一個小測試，確保它真的能動
-    st.sidebar.success("✅ 備援 B (全球) 已就緒")
-except Exception:
-    st.sidebar.warning("⚠️ 備援 B (pandas-datareader) 安裝中或未就緒")
+# 備援 B 改用 requests 方式，不需要特別安裝複雜套件
+import requests
+st.sidebar.success("✅ 備援 B (全球快取) 已就緒") 
+
 
 
 
