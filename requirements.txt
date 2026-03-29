@@ -4,3 +4,5 @@ yfinance
 feedparser
 gspread
 google-auth
+twstock
+pandas-datareader
