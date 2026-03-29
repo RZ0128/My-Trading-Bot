@@ -267,12 +267,15 @@ def get_stock_perf(sid, retry_count=0):
         except:
             pass
 
-    # --- 第三階段：pandas_datareader (備援 B - 全球) ---
+     # --- 第三階段：Stooq 直接數據源 (備援 B - 全球) ---
     try:
-        # 預留接口
+        # 使用 Stooq API 直接抓取，無需依賴 datareader
+        stooq_url = f"https://stooq.com/q/d/l/?s={sid.lower()}&f=sd2ohlcv&h&e=csv"
+        # 這裡僅預留邏輯，避免網路請求超時
         pass
     except:
         pass
+
 
     # --- 最終防線：回傳 0 避免卡死 ---
     time.sleep(0.1) 
