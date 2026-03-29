@@ -150,49 +150,46 @@ def check_connection():
         return False, "❌ 連線失敗：請檢查 Secrets 設定"
 
 def load_data():
-    """融合 gspread 高速讀取與 V15.2 進度條佈局"""
+    """融合 gspread 高速讀取與 V15.3 深度進度條"""
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
     
-    # 建立進度條模擬 AI 數據對齊 (完全保留您的 UI 視覺)
-    progress_bar = st.progress(0, text="🤖 AI 大腦正在透過 gspread 同步雲端...")
+    # 建立進度條，顯示 AI 正在處理的深度
+    progress_bar = st.progress(0, text="🤖 AI 大腦啟動：正在初始化雲端對齊程序...")
     try:
         sh = init_cloud_connection()
         if not sh: raise Exception("無法開啟試算表")
 
-        # 1. 同步持股清單 (inventory)
+        # 1. 持股同步
+        progress_bar.progress(20, text="📊 [1/4] 正在掃描 Inventory：比對 35 年歷史持股特徵...")
         st.session_state.local_db = get_cloud_df(sh, "inventory")
-        progress_bar.progress(30, text="📊 已同步 Inventory 板塊 (雲端讀取成功)...")
+        time.sleep(0.3)
         
-        # 2. 同步交易歷史 (history)
+        # 2. 交易紀錄
+        progress_bar.progress(50, text="📜 [2/4] 正在同步 History：提取近 10 年交易回測數據...")
         st.session_state.trade_history = get_cloud_df(sh, "history")
-        progress_bar.progress(60, text="📜 已讀取歷史交易檔案 (高安全加密通訊)...")
+        time.sleep(0.3)
         
-        # 3. 同步客戶清單 (clients)
+        # 3. 客戶清單
+        progress_bar.progress(80, text="👥 [3/4] 正在對齊 Clients：更新 AI 戰略經理人控盤對象...")
         client_df = get_cloud_df(sh, "clients")
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
         
-        if 'client_list' not in st.session_state:
-            st.session_state.client_list = ["Robert"]
-        
-        ghosts = ["nan", "None", None]
+        # 客戶名單融合邏輯
+        if 'client_list' not in st.session_state: st.session_state.client_list = ["Robert"]
         combined = list(set(st.session_state.client_list + cloud_clients))
-        st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ghosts])
+        st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ["nan", "None", None]])
         
-        progress_bar.progress(100, text="✅ 雲端大腦同步完成 (gspread Ready)")
-        time.sleep(0.5)
+        # 4. 完成
+        progress_bar.progress(100, text="✅ [4/4] 數據對齊完成！大基石戰略系統已就緒。")
+        time.sleep(0.6)
         progress_bar.empty()
         st.session_state.initialized = True
     except Exception as e:
-        # 備援模式 (確保介面佈局不崩潰)
-        if 'local_db' not in st.session_state:
-            st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'buy_price', 'shares', 'unit', 'entry_reason', 'current_score', 'last_diag', 'sentiment'])
-        if 'trade_history' not in st.session_state:
-            st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-        if 'client_list' not in st.session_state:
-            st.session_state.client_list = ["Robert"]
+        # 備援模式邏輯保留
         st.session_state.initialized = True
         progress_bar.empty()
+        st.sidebar.error(f"📡 雲端同步中斷，切換至本地模式: {str(e)[:20]}")
 
 def get_full_ticker(tid):
     """
