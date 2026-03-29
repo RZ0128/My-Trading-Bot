@@ -184,23 +184,34 @@ def load_data():
         progress_bar.empty()
 
 def get_full_ticker(tid):
-    """更精準的台股後綴判斷，減少 404 錯誤"""
+    """
+    大基石 V15.3：輕量化後綴判斷
+    目標：讓 Yahoo 備援層能抓到正確後綴，但不干擾 twstock 運作
+    """
+    # 統一清洗格式
     tid = str(tid).strip().upper().split(".")[0]
-    if tid.isdigit():
-        # 建立一個簡單的判斷：6 位數以上通常是權證或特定標的，4 位數是普通股
-        # 這裡我們讓它先嘗試 .TW，如果 404，下方的 get_stock_perf 會接手
-        if len(tid) == 4:
-            # 2888 這種金融股絕大多數是 .TW
-            return f"{tid}.TW"
-        else:
-            # 透過 twstock 判斷上市或上櫃 (這最準)
-            try:
-                import twstock
-                if tid in twstock.codes:
-                    return f"{tid}.TWO" if twstock.codes[tid].market == '本國上櫃' else f"{tid}.TW"
-            except:
-                pass
+    
+    if not tid.isdigit():
+        # 如果是美股或其他非純數字代號，直接回傳原樣 (例如 AAPL, TSLA)
+        return tid
+        
+    # --- 針對台股數字代號 ---
+    try:
+        import twstock
+        if tid in twstock.codes:
+            # 這是最準的判斷方式：利用 twstock 的本地資料庫判斷市場
+            market = twstock.codes[tid].market
+            if "上櫃" in market:
+                return f"{tid}.TWO"
+            else:
+                return f"{tid}.TW"
+    except:
+        # 如果 twstock 沒裝好或出錯，則採用最常見的預設
+        # 台股 4 位數(普通股)大多是 .TW，權證或 ETF 則不一定
+        return f"{tid}.TW"
+    
     return tid
+
 
 def get_stock_name(ticker):
     """
