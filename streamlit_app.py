@@ -192,33 +192,18 @@ def load_data():
         st.sidebar.error(f"📡 雲端同步中斷，切換至本地模式: {str(e)[:20]}")
 
 def get_full_ticker(tid):
-    """
-    大基石 V15.3：輕量化後綴判斷
-    目標：讓 Yahoo 備援層能抓到正確後綴，但不干擾 twstock 運作
-    """
-    # 統一清洗格式
+    """大基石 V15.3：精準後綴判斷 (與 twstock 深度綁定)"""
     tid = str(tid).strip().upper().split(".")[0]
+    if not tid.isdigit(): return tid # 美股原樣回傳
     
-    if not tid.isdigit():
-        # 如果是美股或其他非純數字代號，直接回傳原樣 (例如 AAPL, TSLA)
-        return tid
-        
-    # --- 針對台股數字代號 ---
     try:
         import twstock
         if tid in twstock.codes:
-            # 這是最準的判斷方式：利用 twstock 的本地資料庫判斷市場
+            # 根據在地資料庫自動判斷上市(.TW)或上櫃(.TWO)
             market = twstock.codes[tid].market
-            if "上櫃" in market:
-                return f"{tid}.TWO"
-            else:
-                return f"{tid}.TW"
-    except:
-        # 如果 twstock 沒裝好或出錯，則採用最常見的預設
-        # 台股 4 位數(普通股)大多是 .TW，權證或 ETF 則不一定
-        return f"{tid}.TW"
-    
-    return tid
+            return f"{tid}.TWO" if "上櫃" in market else f"{tid}.TW"
+    except: pass
+    return f"{tid}.TW" # 預設
 
 
 def get_stock_name(ticker):
@@ -266,39 +251,28 @@ def get_stock_name(ticker):
 
 
 def get_stock_perf(ticker, period_days=0):
-    """大基石 V15.3：台股優先策略"""
+    """大基石 V15.3：台股優先戰略 (直接跳過 Yahoo 封鎖)"""
     raw_id = str(ticker).split(".")[0].strip()
     
-    # --- 策略 A：如果是台股，優先使用 twstock (快且穩) ---
+    # --- 優先權 1：台股在地數據 (twstock) ---
     if raw_id.isdigit() and len(raw_id) >= 4:
         try:
             import twstock
             stock = twstock.Stock(raw_id)
-            # 抓取最近 31 天數據確保能算出斜率
             prices = stock.price[-31:] 
             if len(prices) >= 2:
-                p_current = prices[-1]
-                p_prev = prices[-2]
-                diff = p_current - p_prev
-                # 標記來源為 [A] (內地/備援 A 扶正)
-                return p_current, diff, "[A]"
-        except Exception as e:
-            # 如果 twstock 失敗，才往下走到 Yahoo
-            pass
+                # 計算漲跌與今日價格
+                return float(prices[-1]), float(prices[-1] - prices[-2]), "[A]"
+        except: pass
 
-    # --- 策略 B：全球股或台股備援，使用 Yahoo ---
+    # --- 優先權 2：全球數據 (Yahoo Finance) ---
     try:
         full_tid = get_full_ticker(raw_id)
         tk = yf.Ticker(full_tid)
         hist = tk.history(period="1mo")
-        
         if not hist.empty and len(hist) >= 2:
-            p_current = hist['Close'].iloc[-1]
-            p_prev = hist['Close'].iloc[-2]
-            diff = p_current - p_prev
-            return float(p_current), float(diff), "[Y]"
-    except:
-        pass
+            return float(hist['Close'].iloc[-1]), float(hist['Close'].iloc[-1] - hist['Close'].iloc[-2]), "[Y]"
+    except: pass
 
     return 0, 0, "[N/A]"
 
