@@ -465,31 +465,55 @@ def generate_ai_tech_analysis(ticker, price, mode=0): # 這裡將 diff_pct 改�
     p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年歷史檔案...")
     
     try:
-        # [2/4] 同步全球市場
-        p_bar.progress(25, text="🌐 正在同步全球市場連動與美股數據...")
-        _, stress_count = get_us_market_impact()
+        # --- [2/4] 數據引擎：V15.3 台股在地化 (twstock) + 美股 (Yahoo) ---
+        p_bar.progress(25, text=f"🌐 正在同步數據流：{ticker}...")
         
-        formatted_ticker = get_full_ticker(ticker)
-        stock = yf.Ticker(formatted_ticker)
+        raw_id = str(ticker).split(".")[0]
         
-        # --- [V15.3 節能雙軌邏輯：核心修改點] ---
-        if mode == 0:
-            # 🚀 模式 0：板塊掃描 (快速模式)
-            # 只抓 1 個月數據，足以計算 MACD 趨勢，且極難被 Yahoo 封鎖
-            h_full = stock.history(period="1mo")
-            h_max  = h_full # 掃描時不抓 max，節省流量
-            h_60m  = h_full # 掃描時不抓 60m，節省流量
+        if raw_id.isdigit():
+            # 🇹🇼 台股模式：100% 使用 twstock 在地資料庫
+            import twstock
+            ts_stock = twstock.Stock(raw_id)
+            
+            # 根據 mode 決定長度：掃描模式(0)抓 60 筆(3個月)；深度模式(1)抓 500 筆(2年)
+            fetch_len = 60 if mode == 0 else 500 
+            
+            # 提取數據並防禦 None 值 (twstock 特性)
+            raw_p = ts_stock.price[-fetch_len:]
+            if not raw_p or len(raw_p) < 10: # 如果資料太少，直接跳過以免報錯
+                p_bar.empty()
+                return None
+            
+            # 封裝為 DataFrame (對接大腦後續計算邏輯)
+            h_full = pd.DataFrame({
+                'Close': raw_p,
+                'High': ts_stock.high[-fetch_len:],
+                'Low': ts_stock.low[-fetch_len:],
+                'Volume': ts_stock.capacity[-fetch_len:]
+            }).astype(float) # 確保全部轉為數字型態
+            
+            h_max = h_full
+            h_60m = h_full # twstock 無 60m 資料，以日線替代防止大腦當機
+            
         else:
-            # 🔍 模式 1：單股深度診斷 (完整模式)
-            # 維持原有邏輯，抓取完整歷史檔案
-            h_full = stock.history(period="2y")           
-            h_max  = stock.history(period="max")           
-            h_60m  = stock.history(interval="60m", period="1mo") 
-        # ---------------------------------------
+            # 🇺🇸 美股模式：維持使用 Yahoo Finance (美股不會被擋)
+            formatted_ticker = get_full_ticker(ticker)
+            stock = yf.Ticker(formatted_ticker)
+            
+            h_full = stock.history(period="3mo" if mode == 0 else "2y")
+            if h_full.empty:
+                p_bar.empty()
+                return None
+                
+            h_max = h_full
+            # 只有在深度模式且非掃描時才去抓 60m，節省流量
+            h_60m = stock.history(interval="60m", period="1mo") if mode != 0 else h_full
 
-        if h_full.empty:
+        # --- 數據安全檢查出口 ---
+        if h_full is None or len(h_full) < 2:
             p_bar.empty()
             return None
+
         
         # [3/4] 技術指標配對
         p_bar.progress(50, text="🧠 正在配對：MACD 多時框 / 均線 / 八大法則...")
