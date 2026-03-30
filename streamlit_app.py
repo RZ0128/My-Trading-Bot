@@ -455,62 +455,80 @@ def ai_evolution_engine(ticker, h_max, current_price):
 
 def generate_ai_tech_analysis(ticker, price, diff_pct=0):
     """
-    【AI 核心診斷大腦 - V15.2 究極進化】
+    【AI 核心診斷大腦 - V15.3 究極進化版】
+    融合進度條 (Progress) 與 深度思考感 (Spinner)
     """
-    # [新增：AI 運轉進度條]
-    p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年檔案...")
+    # [1/4] 初始化：AI 啟動
+    p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年歷史檔案...")
     
     try:
+        # [2/4] 同步全球市場
         p_bar.progress(25, text="🌐 正在同步全球市場連動與美股數據...")
+        # 假設 get_us_market_impact 已經定義
         _, stress_count = get_us_market_impact()
         
-        formatted_ticker = get_full_ticker(ticker)
+        formatted_ticker = get_full_ticker(ticker) # 假設已定義
         stock = yf.Ticker(formatted_ticker)
         h_full = stock.history(period="2y")           
         h_max = stock.history(period="max")           
         h_60m = stock.history(interval="60m", period="1mo") 
         
-        p_bar.progress(50, text="🧠 正在配對：MACD多時框/均線/八大法則...")
+        # [3/4] 技術指標配對
+        p_bar.progress(50, text="🧠 正在配對：MACD 多時框 / 均線 / 八大法則...")
+        
         def get_macd_slope(df):
             if df is None or df.empty or len(df) < 30: return 0, "觀測"
-            ema12 = df['Close'].ewm(span=12).mean(); ema26 = df['Close'].ewm(span=26).mean()
-            macd = ema12 - ema26; sig = macd.ewm(span=9).mean()
+            ema12 = df['Close'].ewm(span=12).mean()
+            ema26 = df['Close'].ewm(span=26).mean()
+            macd = ema12 - ema26
+            sig = macd.ewm(span=9).mean()
             slope = macd.iloc[-1] - macd.iloc[-2]
             return slope, ("📈翻揚" if (macd.iloc[-1] > sig.iloc[-1] and slope > 0) else "📉轉弱")
 
         _, st_60 = get_macd_slope(h_60m)
         _, st_day = get_macd_slope(h_full)
         
+        # --- [V15.3 深度思考區：融入 Spinner] ---
+        # 當進度來到 75%，進入最耗能的 AI 演算區，加入旋轉圖示增加視覺張力
         p_bar.progress(75, text="🧬 AI 正在自主歸納新法則並計算歷史回測...")
         
-        # 這裡會調用您的 ai_evolution_engine 與 ai_pattern_discovery (請確保這兩個函數已定義)
-        h_score, h_logic, win_prob = ai_evolution_engine(ticker, h_max, price)
-        new_discovery = ai_pattern_discovery(ticker, h_max)
-        
-        # 融資洗盤偵測 (Sentiment)
-        ma248 = h_full['Close'].rolling(248).mean().iloc[-1]
-        sentiment = "🔍 散戶進場"
-        if not np.isnan(ma248) and (price >= ma248 * 0.95 and price <= ma248 * 1.05):
-            # 偵測縮量洗盤邏輯
-            if h_full['Volume'].iloc[-1] < h_full['Volume'].rolling(20).mean().iloc[-1] * 0.7:
-                h_score += 20; sentiment = "💎 大戶收貨 (洗盤完成)"
-
+        with st.spinner(f"🧪 AI 正在針對 {ticker} 進行多維度背離與籌碼洗盤模擬..."):
+            # 1. 執行核心演算法 (假設函數已定義)
+            h_score, h_logic, win_prob = ai_evolution_engine(ticker, h_max, price)
+            new_discovery = ai_pattern_discovery(ticker, h_max)
+            
+            # 2. 融資洗盤偵測 (Sentiment)
+            # 計算 248 日年線
+            ma248 = h_full['Close'].rolling(248).mean().iloc[-1]
+            sentiment = "🔍 散戶進場"
+            
+            if not np.isnan(ma248) and (price >= ma248 * 0.95 and price <= ma248 * 1.05):
+                # 偵測縮量洗盤邏輯 (量能小於 20 日均量的 70%)
+                if h_full['Volume'].iloc[-1] < h_full['Volume'].rolling(20).mean().iloc[-1] * 0.7:
+                    h_score += 20
+                    sentiment = "🔥 偵測到洗盤完成，準備破新高" # 依照您的需求更新文字
+            
+            # 給予一點點運算停留感，讓 UI 更穩定
+            time.sleep(0.4)
+            
+        # [4/4] 診斷完畢
         p_bar.progress(100, text="✅ 診斷完成：已超越 35 年操盤手精確度")
-        time.sleep(0.4); p_bar.empty()
+        time.sleep(0.4)
+        p_bar.empty()
 
         # 組合最終診斷訊息
         full_msg = f"{h_logic} | MACD:{st_60}/{st_day} "
-        if new_discovery: full_msg += f" | {new_discovery}"
+        if new_discovery: 
+            full_msg += f" | {new_discovery}"
 
-        # --- [關鍵修改：診斷完畢後，立即同步到雲端大腦] ---
+        # --- [雲端同步：更新 AI 思想日誌] ---
         final_score = max(0, min(100, h_score))
-        # 這裡會觸發您在第 2 區定義的雲端寫入函數
         try:
-            update_ai_thought_log(ticker, final_score, full_msg)
+            update_ai_thought_log(ticker, final_score, full_msg) # 假設已定義
         except:
-            pass # 防止雲端寫入失敗導致整個診斷卡死
+            pass 
 
-        # 正常出口：回傳完整的診斷數據
+        # 回傳診斷結果字典
         return {
             "msg": full_msg,
             "sent": sentiment,
@@ -519,13 +537,13 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
             "target": round(price * 1.15, 1),
             "stop": round(price * 0.92, 1),
             "atr_range": f"勝率: {win_prob}%",
-            "pivot": f"V15.2 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
+            "pivot": f"V15.3 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
         }
 
-        
     except Exception as e:
-        # 保險出口：當發生錯誤（如網路斷線）時，確保 App 不會崩潰
-        if 'p_bar' in locals(): p_bar.empty()
+        # 保險出口：確保診斷失敗時不會整台當掉
+        if 'p_bar' in locals(): 
+            p_bar.empty()
         return {
             "msg": f"AI 大腦同步中: {str(e)[:15]}", 
             "score": 50, 
@@ -534,6 +552,7 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
             "target": price,
             "stop": price
         }
+
 
 
 def fetch_and_score_intel():
