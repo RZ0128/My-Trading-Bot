@@ -90,23 +90,36 @@ with st.sidebar:
 
 def init_cloud_connection():
     try:
+        # 從 st.secrets 取得並轉換為字典
         gcp_json = dict(st.secrets["GCP_JSON_KEY"])
+        
+        # 核心修復：徹底清洗 private_key
         pk = gcp_json["private_key"]
-        if "\\n" in pk:
-            pk = pk.replace("\\n", "\n")
-        pk = pk.strip()
-        if "-----BEGIN PRIVATE KEY-----" in pk and "\n" not in pk[26:30]:
-            pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-        if "-----END PRIVATE KEY-----" in pk and not pk.endswith("\n-----END PRIVATE KEY-----"):
-            pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+        
+        # 1. 處理轉義字元
+        pk = pk.replace("\\n", "\n")
+        # 2. 移除前後可能存在的「額外引號」(這是最常見的 Secrets 錯誤來源)
+        pk = pk.strip("'").strip('"').strip()
+        
+        # 3. 確保開頭與結尾格式絕對正確
+        if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
+            pk = "-----BEGIN PRIVATE KEY-----\n" + pk
+        if not pk.endswith("-----END PRIVATE KEY-----"):
+            pk = pk + "\n-----END PRIVATE KEY-----"
+            
         gcp_json["private_key"] = pk
+        
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
         gc = gspread.authorize(creds)
+        
+        # 確保對象名稱與您的試算表一致
         return gc.open("StoneManager_DB")
     except Exception as e:
+        # 顯示更具體的錯誤原因，幫助排查
         st.error(f"📡 雲端通訊啟動失敗: {str(e)}")
         return None
+
 
 def get_cloud_df(sh, sheet_name):
     try:
