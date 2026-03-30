@@ -453,10 +453,11 @@ def ai_evolution_engine(ticker, h_max, current_price):
         
     return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 常態波動", win_prob
 
-def generate_ai_tech_analysis(ticker, price, diff_pct=0):
+
+def generate_ai_tech_analysis(ticker, price, mode=0): # 這裡將 diff_pct 改為 mode，預設為 0 (掃描模式)
     """
     【AI 核心診斷大腦 - V15.3 究極進化版】
-    已修正：所有價格顯示鎖定小數點後兩位
+    已修正：導入掃描模式(mode=0)與深度模式(mode=1)雙軌制，防止 Yahoo 封鎖
     """
     # [1/4] 初始化：AI 啟動
     p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年歷史檔案...")
@@ -468,12 +469,29 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         
         formatted_ticker = get_full_ticker(ticker)
         stock = yf.Ticker(formatted_ticker)
-        h_full = stock.history(period="2y")           
-        h_max = stock.history(period="max")           
-        h_60m = stock.history(interval="60m", period="1mo") 
+        
+        # --- [V15.3 節能雙軌邏輯：核心修改點] ---
+        if mode == 0:
+            # 🚀 模式 0：板塊掃描 (快速模式)
+            # 只抓 1 個月數據，足以計算 MACD 趨勢，且極難被 Yahoo 封鎖
+            h_full = stock.history(period="1mo")
+            h_max  = h_full # 掃描時不抓 max，節省流量
+            h_60m  = h_full # 掃描時不抓 60m，節省流量
+        else:
+            # 🔍 模式 1：單股深度診斷 (完整模式)
+            # 維持原有邏輯，抓取完整歷史檔案
+            h_full = stock.history(period="2y")           
+            h_max  = stock.history(period="max")           
+            h_60m  = stock.history(interval="60m", period="1mo") 
+        # ---------------------------------------
+
+        if h_full.empty:
+            p_bar.empty()
+            return None
         
         # [3/4] 技術指標配對
         p_bar.progress(50, text="🧠 正在配對：MACD 多時框 / 均線 / 八大法則...")
+        # ... (下方原有計算邏輯完全不動) ...
         
         def get_macd_slope(df):
             if df is None or df.empty or len(df) < 30: return 0, "觀測"
