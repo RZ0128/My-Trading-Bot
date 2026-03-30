@@ -269,7 +269,7 @@ def get_stock_name(ticker):
 
 
 def get_stock_perf(ticker, period_days=0):
-    """大基石 V15.3：台股在地化戰略 (100% 使用 twstock)"""
+    """大基石 V15.3：台股雙軌動力引擎 (twstock + yfinance 備援)"""
     raw_id = str(ticker).split(".")[0].strip()
     
     # --- 優先權 1：台股在地數據 (twstock) ---
@@ -277,22 +277,25 @@ def get_stock_perf(ticker, period_days=0):
         try:
             import twstock
             stock = twstock.Stock(raw_id)
-            # 抓取最近 31 筆資料確保足以計算漲跌
-            prices = stock.price[-31:] 
-            if len(prices) >= 2:
+            # 抓取最近 5 筆，確保有資料
+            prices = stock.price[-5:] 
+            if len(prices) >= 2 and prices[-1] is not None:
                 # [價格, 漲跌額, 來源標籤]
                 return float(prices[-1]), float(prices[-1] - prices[-2]), "[T]"
-        except Exception as e:
-            print(f"twstock 抓取失敗 ({raw_id}): {e}")
+        except:
+            pass # 失敗則自動進入下方的 Yahoo 備援
 
-    # --- 優先權 2：美股/全球數據 (僅在此時保留 Yahoo) ---
-    if not raw_id.isdigit():
-        try:
-            tk = yf.Ticker(raw_id)
-            hist = tk.history(period="1mo")
-            if not hist.empty:
-                return float(hist['Close'].iloc[-1]), float(hist['Close'].iloc[-1] - hist['Close'].iloc[-2]), "[Y]"
-        except: pass
+    # --- 優先權 2：Yahoo 備援 (台股失敗或美股時觸發) ---
+    try:
+        full_tid = get_full_ticker(raw_id)
+        tk = yf.Ticker(full_tid)
+        hist = tk.history(period="2d")
+        if not hist.empty:
+            cp = hist['Close'].iloc[-1]
+            dp = hist['Close'].iloc[-1] - hist['Close'].iloc[-2]
+            return float(cp), float(dp), "[Y]"
+    except: 
+        pass
 
     return 0, 0, "[N/A]"
 
