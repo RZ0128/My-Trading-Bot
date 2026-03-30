@@ -94,17 +94,24 @@ with st.sidebar:
 # 1. 初始化 Google Sheets 高速連線 (gspread 引擎 - 安全性提升)
 def init_cloud_connection():
     try:
-        # 直接讀取 Secrets (TOML 格式)
+        # 1. 取得 Secrets 字典 (確保它是 dict 型態)
         gcp_json = dict(st.secrets["GCP_JSON_KEY"])
         
-        # 修正私鑰換行，防止 PEM 與 Padding 錯誤 (這是核心修復)
-        if "private_key" in gcp_json:
-            pk = gcp_json["private_key"].replace("\\n", "\n")
-            # 如果發現金鑰還是擠在一起，強制在開頭結尾補上換行
-            if "-----BEGIN PRIVATE KEY-----" in pk and "\n" not in pk[30:60]:
-                pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-                pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
-            gcp_json["private_key"] = pk
+        # 2. 核心修正：直接檢查 private_key 是否包含正確的換行
+        pk = gcp_json["private_key"]
+        
+        # 如果金鑰裡有實體反斜線 \n，將其轉義為真正的換行
+        if "\\n" in pk:
+            pk = pk.replace("\\n", "\n")
+            
+        # 確保開頭與結尾有正確換行，這是 PEM 檔案最挑剔的地方
+        pk = pk.strip()
+        if not pk.startswith("-----BEGIN PRIVATE KEY-----\n"):
+            pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+        if not pk.endswith("\n-----END PRIVATE KEY-----"):
+            pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+            
+        gcp_json["private_key"] = pk
             
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
@@ -112,8 +119,10 @@ def init_cloud_connection():
         
         return gc.open("StoneManager_DB")
     except Exception as e:
+        # 如果報錯，我們會看到最真實的原因
         st.error(f"📡 雲端通訊啟動失敗: {str(e)}")
         return None
+
 
 
 # 2. 獲取特定分頁數據的函數 (具備讀寫權限基礎)
