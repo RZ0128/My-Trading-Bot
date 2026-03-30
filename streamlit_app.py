@@ -861,12 +861,13 @@ with tab_scan:
                             st.progress(win_p / 100, text=f"歷史相似走勢勝率: {win_p}%")
 
         st.divider()
-        
+
+
         # --- [V15.3 板塊掃描：新增手動觸發按鈕邏輯] ---
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_v153")
 
-        # 這裡放入您要求的新邏輯：使用按鈕觸發
+        # 使用按鈕觸發，點擊後才執行下方邏輯
         if st.button(f"🔍 開始掃描 {cat_choice} 板塊 (V15.3 節能版)", use_container_width=True):
             scored_data = []
             target_pool = pool_500[cat_choice]
@@ -874,33 +875,41 @@ with tab_scan:
             
             scan_progress = st.progress(0, text=f"🚀 AI 準備掃描 {cat_choice} 共 {total_count} 檔個股...")
             
+            # 注意：with 必須在 if st.button 的縮排內
             with st.status(f"🤖 AI 正在掃描 {cat_choice} 板塊並套用 35 年戰策...", expanded=False) as status:
                 for idx, (tid, tname) in enumerate(target_pool):
                     try:
                         current_percent = int((idx + 1) / total_count * 100)
                         scan_progress.progress(current_percent, text=f"🔍 正在掃描 ({idx+1}/{total_count}): {tname}...")
                         
-                        p_s, d_s, pct_s = get_stock_perf(tid, 0)
+                        # 1. 修正：接收 twstock 回傳的 source_tag (原本為 pct_s 會導致型態錯誤)
+                        p_s, d_s, source_tag = get_stock_perf(tid, 0)
                         if p_s == 0: continue
+                        
+                        # 2. 手動計算漲跌幅 (避免字串參與四捨五入計算)
+                        calc_pct = round((d_s / (p_s - d_s) * 100), 2) if (p_s - d_s) != 0 else 0
                         
                         real_tname = get_stock_name(tid.split(".")[0])
                         res_s = generate_ai_tech_analysis(tid, p_s, 0)
                 
                         if res_s:
-                            # 存入數據時強制四捨五入至兩位
                             res_s.update({
                                 'tid': tid, 
                                 'tname': real_tname, 
                                 'price': round(p_s, 2), 
                                 'diff': round(d_s, 2), 
-                                'pct': round(pct_s, 2)
+                                'pct': calc_pct  # 使用正確計算後的數字
                             })
                             scored_data.append(res_s)
-                    except: continue 
+                    except Exception: 
+                        continue 
                 
                 status.update(label=f"✅ {cat_choice} 掃描完成！共發現 {len(scored_data)} 檔有效標的。", state="complete")
                 time.sleep(0.5)
                 scan_progress.empty()
+            
+            # 這裡之後會接顯示表格的邏輯 (例如 st.dataframe(scored_data))
+
 
             # 顯示結果清單 (當有掃描數據時)
             if scored_data:
