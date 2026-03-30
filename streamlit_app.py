@@ -628,20 +628,6 @@ def generate_ai_tech_analysis(ticker, price, mode=0): # 這裡將 diff_pct 改�
             "stop": err_price
         }
 
-    except Exception as e:
-        # 保險出口：確保診斷失敗時不會整台當掉
-        if 'p_bar' in locals(): 
-            p_bar.empty()
-        return {
-            "msg": f"AI 大腦同步中: {str(e)[:15]}", 
-            "score": 50, 
-            "win_prob": 50,
-            "sent": "🔄 重新連線中",
-            "target": price,
-            "stop": price
-        }
-
-
 
 def fetch_and_score_intel():
     import ssl, collections, re
