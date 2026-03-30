@@ -1040,6 +1040,7 @@ with tab_scan:
                                 # 重新抓取最新雲端資料確保 Index 準確
                                 raw_inv_data = ws_inv.get_all_records()
                                 temp_df = pd.DataFrame(raw_inv_data)
+                                temp_df = temp_df.astype(str)
                                 
                                 # 尋找雲端對應的列 (比對客戶名與股票代碼)
                                 # 確保您的 Sheets 欄位名稱是 'client' 和 'id'
