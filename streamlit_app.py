@@ -928,7 +928,11 @@ with tab_scan:
                         
                         # 1. 修正：接收 twstock 回傳的 source_tag (原本為 pct_s 會導致型態錯誤)
                         p_s, d_s, source_tag = get_stock_perf(tid, 0)
-                        if p_s == 0: continue
+                        if p_s == 0: continue # 抓不到資料就跳過
+        
+                        # 強制數值化，避免與字串運算
+                        p_s = float(p_s)
+                        d_s = float(d_s)
                         
                         # 2. 手動計算漲跌幅 (避免字串參與四捨五入計算)
                         calc_pct = round((d_s / (p_s - d_s) * 100), 2) if (p_s - d_s) != 0 else 0
