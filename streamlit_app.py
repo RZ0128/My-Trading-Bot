@@ -305,20 +305,47 @@ def save_data():
     st.session_state.initialized = True 
 
 def record_transaction(client, tid, action, shares, price, note):
-    """保留 V15.0 買賣紀錄函數 (後續可對位 gspread 寫入)"""
-    new_log = pd.DataFrame([{
-        'date': datetime.now().strftime("%Y-%m-%d %H:%M"),
+    """
+    【大基石 V15.3 雲端同步引擎】
+    功能：自動將買賣紀錄同步至 StoneManager_DB 的 history 分頁，並維持本地顯示。
+    """
+    # 1. 建立標準化紀錄字典
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    log_entry = {
+        'date': now_str,
         'client': client,
         'id': tid,
         'action': action,
         'shares': shares,
         'price': price,
         'note': note
-    }])
+    }
+
+    # 2. [本地同步]：更新 Streamlit session_state，讓介面即時顯示
+    new_log_df = pd.DataFrame([log_entry])
     if 'trade_history' not in st.session_state:
-        st.session_state.trade_history = new_log
+        st.session_state.trade_history = new_log_df
     else:
-        st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log], ignore_index=True)
+        st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log_df], ignore_index=True)
+
+
+    # 3. [雲端同步]：使用 gspread 引擎立即寫入 Google Sheets
+    try:
+        sh = init_cloud_connection()
+        if sh:
+            ws = sh.worksheet("history")
+            row_to_append = [now_str, client, tid, action, shares, price, note]
+            ws.append_row(row_to_append)
+            
+            # --- 💡 新增：前端亮燈通知 ---
+            st.toast(f"✅ 雲端同步成功！已紀錄至 Sheets", icon='🚀')
+        else:
+            st.error("❌ 雲端連線失敗，紀錄僅存在本地（暫時）")
+    except Exception as e:
+        # 在前端顯示具體錯誤，方便除錯
+        st.error(f"⚠️ 雲端寫入異常: {e}")
+        print(f"⚠️ 交易紀錄雲端同步失敗: {e}")
+
 
 def update_ai_thought_log(ticker, score, msg):
     """
