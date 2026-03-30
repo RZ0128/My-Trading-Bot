@@ -150,46 +150,64 @@ def check_connection():
         return False, "❌ 連線失敗：請檢查 Secrets 設定"
 
 def load_data():
-    """融合 gspread 高速讀取與 V15.3 深度進度條"""
+    """
+    融合 gspread 高速讀取與 V15.3 深度進度條
+    保持大基石 V15.2 核心佈局，僅強化視覺執行感
+    """
+    # 核心防禦：避免重複初始化
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
     
+    # --- [V15.3 雲端同步進度指揮條] ---
     # 建立進度條，顯示 AI 正在處理的深度
     progress_bar = st.progress(0, text="🤖 AI 大腦啟動：正在初始化雲端對齊程序...")
+    
     try:
+        # 0. 建立連線
         sh = init_cloud_connection()
-        if not sh: raise Exception("無法開啟試算表")
+        if not sh: 
+            raise Exception("無法開啟試算表")
 
-        # 1. 持股同步
+        # 1. 持股同步 (Inventory)
         progress_bar.progress(20, text="📊 [1/4] 正在掃描 Inventory：比對 35 年歷史持股特徵...")
         st.session_state.local_db = get_cloud_df(sh, "inventory")
-        time.sleep(0.3)
+        time.sleep(0.3) # 保持視覺停留感，展現 AI 運算深度
         
-        # 2. 交易紀錄
+        # 2. 交易紀錄 (History)
         progress_bar.progress(50, text="📜 [2/4] 正在同步 History：提取近 10 年交易回測數據...")
         st.session_state.trade_history = get_cloud_df(sh, "history")
         time.sleep(0.3)
         
-        # 3. 客戶清單
+        # 3. 客戶清單 (Clients)
         progress_bar.progress(80, text="👥 [3/4] 正在對齊 Clients：更新 AI 戰略經理人控盤對象...")
         client_df = get_cloud_df(sh, "clients")
+        
+        # 客戶名單融合邏輯 (完全保留您的原始佈局)
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
-        
-        # 客戶名單融合邏輯
-        if 'client_list' not in st.session_state: st.session_state.client_list = ["Robert"]
+        if 'client_list' not in st.session_state: 
+            st.session_state.client_list = ["Robert"]
+            
         combined = list(set(st.session_state.client_list + cloud_clients))
+        # 嚴謹過濾空值與排序
         st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ["nan", "None", None]])
+        time.sleep(0.3)
         
-        # 4. 完成
+        # 4. 完成與標記
         progress_bar.progress(100, text="✅ [4/4] 數據對齊完成！大基石戰略系統已就緒。")
-        time.sleep(0.6)
+        time.sleep(0.8) # 最後一步停留稍長，讓使用者看清完成訊息
+        
+        # 清理進度條並鎖定初始化狀態
         progress_bar.empty()
         st.session_state.initialized = True
+        
     except Exception as e:
-        # 備援模式邏輯保留
+        # 備援模式邏輯保留：即使出錯也標記為已初始化，改由本地模式運行
         st.session_state.initialized = True
-        progress_bar.empty()
-        st.sidebar.error(f"📡 雲端同步中斷，切換至本地模式: {str(e)[:20]}")
+        if 'progress_bar' in locals():
+            progress_bar.empty()
+        
+        # 在側邊欄靜默顯示錯誤，不破壞主畫面佈局
+        st.sidebar.error(f"📡 雲端同步中斷，切換至本地模式: {str(e)[:30]}...")
 
 def get_full_ticker(tid):
     """大基石 V15.3：精準後綴判斷 (與 twstock 深度綁定)"""
