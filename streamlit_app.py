@@ -934,7 +934,7 @@ with tab_scan:
                         calc_pct = round((d_s / (p_s - d_s) * 100), 2) if (p_s - d_s) != 0 else 0
                         
                         real_tname = get_stock_name(tid.split(".")[0])
-                        res_s = generate_ai_tech_analysis(tid, p_s, 0)
+                        res_s = generate_ai_tech_analysis(tid, p_s, mode=0)
                 
                         if res_s:
                             res_s.update({
