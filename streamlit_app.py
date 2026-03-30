@@ -1029,13 +1029,53 @@ with tab_scan:
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
                     exit_q = e_c1.number_input("減持數量", min_value=1, value=1, key=f"exq_{idx}_{row['id']}")
                     exit_u = e_c2.radio("單位", ["張", "股"], key=f"exu_{idx}_{row['id']}", horizontal=True)
+                                        # --- [修改後的 ❌ 執行減持 邏輯區塊] ---
                     if e_c3.button(f"❌ 執行減持", key=f"exb_{idx}_{row['id']}", use_container_width=True):
-                        if exit_u == row['unit']:
-                            if exit_q >= row['shares']: st.session_state.local_db = st.session_state.local_db.drop(idx)
-                            else: st.session_state.local_db.at[idx, 'shares'] -= exit_q
-                            record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, round(cp, 2), "手動減持")
-                            save_data(); st.rerun()
-            st.metric("📊 總未實現損益", f"NT$ {total_pnl:,.0f}")
+                        # 1. 執行原本的紀錄動作 (寫入 History 分頁)
+                        # 注意：這裡使用您獲取的 cp (即時價格)
+                        record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, round(cp, 2), "手動減持")
+                        
+                        # 2. 【大基石補丁】同步更新 Inventory 分頁 (E欄定位版)
+                        try:
+                            sh = init_cloud_connection()
+                            if sh:
+                                ws_inv = sh.worksheet("inventory")
+                                # 重新抓取最新雲端資料確保 Index 準確
+                                raw_inv_data = ws_inv.get_all_records()
+                                temp_df = pd.DataFrame(raw_inv_data)
+                                
+                                # 尋找雲端對應的列 (比對客戶名與股票代碼)
+                                # 確保您的 Sheets 欄位名稱是 'client' 和 'id'
+                                match = temp_df[(temp_df['client'] == st.session_state.cur_c) & (temp_df['id'] == row['id'])]
+                                
+                                if not match.empty:
+                                    grid_idx = match.index[0]
+                                    sheet_row = grid_idx + 2 # gspread index 從 1 開始 + 標題列
+                                    
+                                    # 計算剩餘張數
+                                    new_shares = int(row['shares']) - exit_q
+                                    
+                                    if new_shares <= 0:
+                                        # 如果賣光了，直接刪除雲端該列
+                                        ws_inv.delete_rows(sheet_row)
+                                        st.toast(f"🔥 {row['id']} 已全數清空並從雲端移除", icon='🗑️')
+                                    else:
+                                        # 如果還有剩，更新 E 欄 (第 5 欄) 的張數
+                                        ws_inv.update_cell(sheet_row, 5, new_shares)
+                                        st.toast(f"📉 {row['id']} 雲端庫存已減至 {new_shares} 張", icon='✅')
+                                    
+                                    # 同步更新本地 session_state 避免畫面延遲
+                                    if new_shares <= 0:
+                                        st.session_state.local_db = st.session_state.local_db.drop(idx)
+                                    else:
+                                        st.session_state.local_db.at[idx, 'shares'] = new_shares
+                                        
+                                    save_data()
+                                    st.rerun() # 強制刷新畫面
+                                else:
+                                    st.error("❌ 雲端找不到此筆庫存，請確認 Sheets 資料。")
+                        except Exception as e:
+                            st.error(f"⚠️ 雲端庫存同步失敗: {e}")
 
 
 
