@@ -92,37 +92,48 @@ with st.sidebar:
 # --- [第 2 區：定義監控函數與連線邏輯] ---
 
 # 1. 初始化 Google Sheets 高速連線 (gspread 引擎 - 安全性提升)
+# --- [V15.3 核心修正：Google Sheets 高速連線引擎] ---
 def init_cloud_connection():
     try:
-        # 1. 取得 Secrets 字典 (確保它是 dict 型態)
+        # 1. 取得 Secrets 並強制轉為 dict
+        # 注意：請確保在 Streamlit Secrets 中，GCP_JSON_KEY 是以 [GCP_JSON_KEY] 標籤開始的
         gcp_json = dict(st.secrets["GCP_JSON_KEY"])
         
-        # 2. 核心修正：直接檢查 private_key 是否包含正確的換行
+        # 2. 【關鍵修復邏輯】處理 private_key 的格式問題
         pk = gcp_json["private_key"]
         
-        # 如果金鑰裡有實體反斜線 \n，將其轉義為真正的換行
+        # 修正 A：處理被轉義的換行符號 (將文字 "\\n" 轉回真正的換行)
         if "\\n" in pk:
             pk = pk.replace("\\n", "\n")
             
-        # 確保開頭與結尾有正確換行，這是 PEM 檔案最挑剔的地方
+        # 修正 B：確保開頭與結尾有正確的 PEM 換行格式
         pk = pk.strip()
-        if not pk.startswith("-----BEGIN PRIVATE KEY-----\n"):
+        if "-----BEGIN PRIVATE KEY-----" in pk and "\n" not in pk[26:30]:
             pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-        if not pk.endswith("\n-----END PRIVATE KEY-----"):
+        if "-----END PRIVATE KEY-----" in pk and not pk.endswith("\n-----END PRIVATE KEY-----"):
             pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
             
         gcp_json["private_key"] = pk
             
-        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        # 3. 設定權限範圍
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets", 
+            "https://www.googleapis.com/auth/drive"
+        ]
+        
+        # 4. 授權並連線
         creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
         gc = gspread.authorize(creds)
         
+        # 5. 打開指定的資料庫檔案
         return gc.open("StoneManager_DB")
+        
     except Exception as e:
-        # 如果報錯，我們會看到最真實的原因
+        # 這裡會顯示具體的錯誤原因，方便追蹤
         st.error(f"📡 雲端通訊啟動失敗: {str(e)}")
+        # 如果是 KeyError "GCP_JSON_KEY"，代表 Secrets 沒設定好
+        # 如果是 ValueError，代表金鑰內容格式還是不對
         return None
-
 
 
 # 2. 獲取特定分頁數據的函數 (具備讀寫權限基礎)
