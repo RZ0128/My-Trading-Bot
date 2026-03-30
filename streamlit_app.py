@@ -474,43 +474,35 @@ def generate_ai_tech_analysis(ticker, price, mode=0): # 這裡將 diff_pct 改�
         raw_id = str(ticker).split(".")[0]
         
         if raw_id.isdigit():
-            # 🇹🇼 台股模式：100% 使用 twstock 在地資料庫
-            import twstock
-            ts_stock = twstock.Stock(raw_id)
-            
-            # 根據 mode 決定長度：掃描模式(0)抓 60 筆(3個月)；深度模式(1)抓 500 筆(2年)
-            fetch_len = 60 if mode == 0 else 500 
-            
-            # 提取數據並防禦 None 值 (twstock 特性)
-            raw_p = ts_stock.price[-fetch_len:]
-            if not raw_p or len(raw_p) < 10: # 如果資料太少，直接跳過以免報錯
-                p_bar.empty()
-                return None
-            
-            # 封裝為 DataFrame (對接大腦後續計算邏輯)
-            h_full = pd.DataFrame({
-                'Close': raw_p,
-                'High': ts_stock.high[-fetch_len:],
-                'Low': ts_stock.low[-fetch_len:],
-                'Volume': ts_stock.capacity[-fetch_len:]
-            }).astype(float) # 確保全部轉為數字型態
-            
-            h_max = h_full
-            h_60m = h_full # twstock 無 60m 資料，以日線替代防止大腦當機
-            
-        else:
-            # 🇺🇸 美股模式：維持使用 Yahoo Finance (美股不會被擋)
-            formatted_ticker = get_full_ticker(ticker)
-            stock = yf.Ticker(formatted_ticker)
-            
-            h_full = stock.history(period="3mo" if mode == 0 else "2y")
-            if h_full.empty:
-                p_bar.empty()
-                return None
+            # 🇹🇼 台股模式：twstock (首選) + Yahoo (備援)
+            try:
+                import twstock
+                ts_stock = twstock.Stock(raw_id)
+                fetch_len = 60 if mode == 0 else 500 
                 
-            h_max = h_full
-            # 只有在深度模式且非掃描時才去抓 60m，節省流量
-            h_60m = stock.history(interval="60m", period="1mo") if mode != 0 else h_full
+                # 取得原始 List
+                r_c = ts_stock.price[-fetch_len:]
+                r_h = ts_stock.high[-fetch_len:]
+                r_l = ts_stock.low[-fetch_len:]
+                r_v = ts_stock.capacity[-fetch_len:]
+
+                # 關鍵防禦：檢查 twstock 資料完整性
+                if len(r_c) > 10 and len(r_c) == len(r_h) == len(r_l):
+                    h_full = pd.DataFrame({
+                        'Close': r_c, 'High': r_h, 'Low': r_l, 'Volume': r_v
+                    }).astype(float).fillna(method='ffill')
+                    h_max = h_full
+                    h_60m = h_full
+                    # 標註成功從 twstock 抓取
+                else:
+                    raise ValueError("twstock 資料不齊全")
+            except Exception as e:
+                # --- 進入備援模式 ---
+                formatted_ticker = get_full_ticker(ticker)
+                stock = yf.Ticker(formatted_ticker)
+                h_full = stock.history(period="3mo" if mode == 0 else "2y")
+                h_max = h_full
+                h_60m = stock.history(interval="60m", period="1mo") if mode != 0 else h_full
 
         # --- 數據安全檢查出口 ---
         if h_full is None or len(h_full) < 2:
