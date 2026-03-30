@@ -94,18 +94,22 @@ with st.sidebar:
 # 1. 初始化 Google Sheets 高速連線 (gspread 引擎 - 安全性提升)
 def init_cloud_connection():
     try:
-        # 1. 直接讀取 Secrets，TOML 格式下它已經是字典了，不需要 json.loads
+        # 直接讀取 Secrets (TOML 格式)
         gcp_json = dict(st.secrets["GCP_JSON_KEY"])
         
-        # 2. 自動修復私鑰中的換行符號（這是最關鍵的一行，防止 PEM 錯誤）
+        # 修正私鑰換行，防止 PEM 與 Padding 錯誤 (這是核心修復)
         if "private_key" in gcp_json:
-            gcp_json["private_key"] = gcp_json["private_key"].replace("\\n", "\n")
+            pk = gcp_json["private_key"].replace("\\n", "\n")
+            # 如果發現金鑰還是擠在一起，強制在開頭結尾補上換行
+            if "-----BEGIN PRIVATE KEY-----" in pk and "\n" not in pk[30:60]:
+                pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+                pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+            gcp_json["private_key"] = pk
             
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
         gc = gspread.authorize(creds)
         
-        # 3. 開啟資料庫
         return gc.open("StoneManager_DB")
     except Exception as e:
         st.error(f"📡 雲端通訊啟動失敗: {str(e)}")
