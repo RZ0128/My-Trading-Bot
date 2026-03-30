@@ -456,7 +456,7 @@ def ai_evolution_engine(ticker, h_max, current_price):
 def generate_ai_tech_analysis(ticker, price, diff_pct=0):
     """
     【AI 核心診斷大腦 - V15.3 究極進化版】
-    融合進度條 (Progress) 與 深度思考感 (Spinner)
+    已修正：所有價格顯示鎖定小數點後兩位
     """
     # [1/4] 初始化：AI 啟動
     p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年歷史檔案...")
@@ -464,10 +464,9 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
     try:
         # [2/4] 同步全球市場
         p_bar.progress(25, text="🌐 正在同步全球市場連動與美股數據...")
-        # 假設 get_us_market_impact 已經定義
         _, stress_count = get_us_market_impact()
         
-        formatted_ticker = get_full_ticker(ticker) # 假設已定義
+        formatted_ticker = get_full_ticker(ticker)
         stock = yf.Ticker(formatted_ticker)
         h_full = stock.history(period="2y")           
         h_max = stock.history(period="max")           
@@ -489,26 +488,20 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         _, st_day = get_macd_slope(h_full)
         
         # --- [V15.3 深度思考區：融入 Spinner] ---
-        # 當進度來到 75%，進入最耗能的 AI 演算區，加入旋轉圖示增加視覺張力
         p_bar.progress(75, text="🧬 AI 正在自主歸納新法則並計算歷史回測...")
         
         with st.spinner(f"🧪 AI 正在針對 {ticker} 進行多維度背離與籌碼洗盤模擬..."):
-            # 1. 執行核心演算法 (假設函數已定義)
             h_score, h_logic, win_prob = ai_evolution_engine(ticker, h_max, price)
             new_discovery = ai_pattern_discovery(ticker, h_max)
             
-            # 2. 融資洗盤偵測 (Sentiment)
-            # 計算 248 日年線
             ma248 = h_full['Close'].rolling(248).mean().iloc[-1]
             sentiment = "🔍 散戶進場"
             
             if not np.isnan(ma248) and (price >= ma248 * 0.95 and price <= ma248 * 1.05):
-                # 偵測縮量洗盤邏輯 (量能小於 20 日均量的 70%)
                 if h_full['Volume'].iloc[-1] < h_full['Volume'].rolling(20).mean().iloc[-1] * 0.7:
                     h_score += 20
-                    sentiment = "🔥 偵測到洗盤完成，準備破新高" # 依照您的需求更新文字
+                    sentiment = "🔥 偵測到洗盤完成，準備破新高"
             
-            # 給予一點點運算停留感，讓 UI 更穩定
             time.sleep(0.4)
             
         # [4/4] 診斷完畢
@@ -524,9 +517,15 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
         # --- [雲端同步：更新 AI 思想日誌] ---
         final_score = max(0, min(100, h_score))
         try:
-            update_ai_thought_log(ticker, final_score, full_msg) # 假設已定義
+            update_ai_thought_log(ticker, final_score, full_msg)
         except:
             pass 
+
+        # --- [V15.3 數值精確化處理] ---
+        # 在回傳前，將所有價格數據進行四捨五入至小數點後兩位
+        final_price = round(float(price), 2)
+        final_target = round(float(price * 1.15), 2)
+        final_stop = round(float(price * 0.92), 2)
 
         # 回傳診斷結果字典
         return {
@@ -534,10 +533,26 @@ def generate_ai_tech_analysis(ticker, price, diff_pct=0):
             "sent": sentiment,
             "score": final_score,
             "win_prob": win_prob,
-            "target": round(price * 1.15, 1),
-            "stop": round(price * 0.92, 1),
+            "price": final_price,   # 修正後的新欄位/數值
+            "target": final_target, # 修正為兩位
+            "stop": final_stop,     # 修正為兩位
             "atr_range": f"勝率: {win_prob}%",
             "pivot": f"V15.3 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
+        }
+
+    except Exception as e:
+        if 'p_bar' in locals(): 
+            p_bar.empty()
+        # 錯誤出口也同步修正顯示格式
+        err_price = round(float(price), 2)
+        return {
+            "msg": f"AI 大腦同步中: {str(e)[:15]}", 
+            "score": 50, 
+            "win_prob": 50,
+            "sent": "🔄 重新連線中",
+            "price": err_price,
+            "target": err_price,
+            "stop": err_price
         }
 
     except Exception as e:
