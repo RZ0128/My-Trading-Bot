@@ -20,7 +20,6 @@ except ImportError:
     st.error("❌ 缺少雲端同步套件 (gspread)，請確保 requirements.txt 已更新。")
 
 # --- [第 1 區：核心配置與 CSS 樣式] ---
-# 標題更新為 V15.3 以符合最新的備援進化版本
 st.set_page_config(page_title="大基石-V15.3 自主進化雲端版", layout="wide")
 
 st.markdown("""
@@ -64,7 +63,6 @@ st.markdown("""
 
 
 # --- [V15.3 備援指揮部：多源數據狀態監控] ---
-# 這裡取代了原本散亂在 import 下方的測試代碼，統整在側邊欄最上方
 with st.sidebar:
     st.markdown("### 🛠️ 數據戰備狀態")
     
@@ -77,7 +75,6 @@ with st.sidebar:
 
     # 2. 檢查備援 B (Yahoo Finance)
     try:
-        # 這裡做一個簡單的快速測試，確保 yfinance 能運作
         st.success("✅ 備援 B (全球數據流) 已就緒")
     except:
         st.error("❌ 備援 B 連線異常")
@@ -91,52 +88,26 @@ with st.sidebar:
 
 # --- [第 2 區：定義監控函數與連線邏輯] ---
 
-# 1. 初始化 Google Sheets 高速連線 (gspread 引擎 - 安全性提升)
-# --- [V15.3 核心修正：Google Sheets 高速連線引擎] ---
 def init_cloud_connection():
     try:
-        # 1. 取得 Secrets 並強制轉為 dict
-        # 注意：請確保在 Streamlit Secrets 中，GCP_JSON_KEY 是以 [GCP_JSON_KEY] 標籤開始的
         gcp_json = dict(st.secrets["GCP_JSON_KEY"])
-        
-        # 2. 【關鍵修復邏輯】處理 private_key 的格式問題
         pk = gcp_json["private_key"]
-        
-        # 修正 A：處理被轉義的換行符號 (將文字 "\\n" 轉回真正的換行)
         if "\\n" in pk:
             pk = pk.replace("\\n", "\n")
-            
-        # 修正 B：確保開頭與結尾有正確的 PEM 換行格式
         pk = pk.strip()
         if "-----BEGIN PRIVATE KEY-----" in pk and "\n" not in pk[26:30]:
             pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
         if "-----END PRIVATE KEY-----" in pk and not pk.endswith("\n-----END PRIVATE KEY-----"):
             pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
-            
         gcp_json["private_key"] = pk
-            
-        # 3. 設定權限範圍
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets", 
-            "https://www.googleapis.com/auth/drive"
-        ]
-        
-        # 4. 授權並連線
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
         gc = gspread.authorize(creds)
-        
-        # 5. 打開指定的資料庫檔案
         return gc.open("StoneManager_DB")
-        
     except Exception as e:
-        # 這裡會顯示具體的錯誤原因，方便追蹤
         st.error(f"📡 雲端通訊啟動失敗: {str(e)}")
-        # 如果是 KeyError "GCP_JSON_KEY"，代表 Secrets 沒設定好
-        # 如果是 ValueError，代表金鑰內容格式還是不對
         return None
 
-
-# 2. 獲取特定分頁數據的函數 (具備讀寫權限基礎)
 def get_cloud_df(sh, sheet_name):
     try:
         worksheet = sh.worksheet(sheet_name)
@@ -146,7 +117,6 @@ def get_cloud_df(sh, sheet_name):
         return pd.DataFrame()
 
 def get_us_market_impact():
-    """保留 V15.0 核心美股監控邏輯"""
     try:
         tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
         impact_report = {}
@@ -163,7 +133,6 @@ def get_us_market_impact():
         return {}, 0
 
 def run_auto_cruise():
-    """【核心補件】V15.0 AI 每 10 分鐘自動學習計時器"""
     if 'last_cruise' not in st.session_state:
         st.session_state.last_cruise = datetime.now()
     else:
@@ -172,7 +141,6 @@ def run_auto_cruise():
             st.session_state.last_cruise = now
 
 def check_connection():
-    """使用 gspread 進行真實連線檢查 (取代原本的 URL 測試)"""
     try:
         sh = init_cloud_connection()
         if sh: return True, "✅ 雲端同步中：gspread 已成功對齊 StoneManager_DB"
@@ -181,142 +149,87 @@ def check_connection():
         return False, "❌ 連線失敗：請檢查 Secrets 設定"
 
 def load_data():
-    """
-    融合 gspread 高速讀取與 V15.3 深度進度條
-    保持大基石 V15.2 核心佈局，僅強化視覺執行感
-    """
-    # 核心防禦：避免重複初始化
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
-    
-    # --- [V15.3 雲端同步進度指揮條] ---
-    # 建立進度條，顯示 AI 正在處理的深度
     progress_bar = st.progress(0, text="🤖 AI 大腦啟動：正在初始化雲端對齊程序...")
-    
     try:
-        # 0. 建立連線
         sh = init_cloud_connection()
         if not sh: 
             raise Exception("無法開啟試算表")
 
-        # 1. 持股同步 (Inventory)
         progress_bar.progress(20, text="📊 [1/4] 正在掃描 Inventory：比對 35 年歷史持股特徵...")
         st.session_state.local_db = get_cloud_df(sh, "inventory")
-        time.sleep(0.3) # 保持視覺停留感，展現 AI 運算深度
+        time.sleep(0.3)
         
-        # 2. 交易紀錄 (History)
         progress_bar.progress(50, text="📜 [2/4] 正在同步 History：提取近 10 年交易回測數據...")
         st.session_state.trade_history = get_cloud_df(sh, "history")
         time.sleep(0.3)
         
-        # 3. 客戶清單 (Clients)
         progress_bar.progress(80, text="👥 [3/4] 正在對齊 Clients：更新 AI 戰略經理人控盤對象...")
         client_df = get_cloud_df(sh, "clients")
-        
-        # 客戶名單融合邏輯 (完全保留您的原始佈局)
         cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
         if 'client_list' not in st.session_state: 
             st.session_state.client_list = ["Robert"]
-            
         combined = list(set(st.session_state.client_list + cloud_clients))
-        # 嚴謹過濾空值與排序
         st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ["nan", "None", None]])
         time.sleep(0.3)
         
-        # 4. 完成與標記
         progress_bar.progress(100, text="✅ [4/4] 數據對齊完成！大基石戰略系統已就緒。")
-        time.sleep(0.8) # 最後一步停留稍長，讓使用者看清完成訊息
-        
-        # 清理進度條並鎖定初始化狀態
+        time.sleep(0.8)
         progress_bar.empty()
         st.session_state.initialized = True
-        
     except Exception as e:
-        # 備援模式邏輯保留：即使出錯也標記為已初始化，改由本地模式運行
         st.session_state.initialized = True
         if 'progress_bar' in locals():
             progress_bar.empty()
-        
-        # 在側邊欄靜默顯示錯誤，不破壞主畫面佈局
         st.sidebar.error(f"📡 雲端同步中斷，切換至本地模式: {str(e)[:30]}...")
 
 def get_full_ticker(tid):
-    """大基石 V15.3：精準後綴判斷 (與 twstock 深度綁定)"""
     tid = str(tid).strip().upper().split(".")[0]
-    if not tid.isdigit(): return tid # 美股原樣回傳
-    
+    if not tid.isdigit(): return tid
     try:
         import twstock
         if tid in twstock.codes:
-            # 根據在地資料庫自動判斷上市(.TW)或上櫃(.TWO)
             market = twstock.codes[tid].market
             return f"{tid}.TWO" if "上櫃" in market else f"{tid}.TW"
     except: pass
-    return f"{tid}.TW" # 預設
-
+    return f"{tid}.TW"
 
 def get_stock_name(ticker):
-    """
-    大基石專用：四層名稱檢索機制 (V15.3 究極版)
-    優先級：核心池 > 本地庫存 > twstock 本地庫 > Yahoo (最終備援)
-    """
-    # 統一格式：只取數字部分 (例如把 2888.TW 轉成 2888)
     raw_id = str(ticker).split(".")[0].strip()
-    
-    # --- 第一層：500 檔核心標題池 (極速 0 秒) ---
-    if raw_id in STOCK_MAP:
+    if 'STOCK_MAP' in globals() and raw_id in STOCK_MAP:
         return STOCK_MAP[raw_id]
-        
-    # --- 第二層：從本地 session 庫存尋找 ---
     if 'local_db' in st.session_state and not st.session_state.local_db.empty:
-        # 確保 id 欄位存在再進行比對
         if 'id' in st.session_state.local_db.columns:
             match = st.session_state.local_db[st.session_state.local_db['id'].astype(str).str.contains(raw_id)]
             if not match.empty:
                 name_val = str(match['name'].iloc[0])
                 if name_val not in ['nan', 'None', '', None]:
                     return name_val
-    
-    # --- 第三層：【關鍵強化】twstock 本地庫 (台股秒出名字) ---
     if raw_id.isdigit():
         try:
             import twstock
-            # 直接從 twstock 內建字典查表，這不需要聯網，速度極快
             if raw_id in twstock.codes:
                 return twstock.codes[raw_id].name
-        except:
-            # 如果 twstock 沒裝好，就跳過
-            pass
-
-    # --- 第四層：Yahoo 備援 (全球股/美股專用) ---
+        except: pass
     try:
         full_tid = get_full_ticker(raw_id)
         tk = yf.Ticker(full_tid)
-        # 這是最後一線，如果 Yahoo 又擋掉，就回傳代號
         name = tk.info.get('shortName') or tk.info.get('longName') or f"個股 {raw_id}"
         return name
     except:
         return f"個股 {raw_id}"
 
-
 def get_stock_perf(ticker, period_days=0):
-    """大基石 V15.3：台股雙軌動力引擎 (twstock + yfinance 備援)"""
     raw_id = str(ticker).split(".")[0].strip()
-    
-    # --- 優先權 1：台股在地數據 (twstock) ---
     if raw_id.isdigit():
         try:
             import twstock
             stock = twstock.Stock(raw_id)
-            # 抓取最近 5 筆，確保有資料
             prices = stock.price[-5:] 
             if len(prices) >= 2 and prices[-1] is not None:
-                # [價格, 漲跌額, 來源標籤]
                 return float(prices[-1]), float(prices[-1] - prices[-2]), "[T]"
-        except:
-            pass # 失敗則自動進入下方的 Yahoo 備援
-
-    # --- 優先權 2：Yahoo 備援 (台股失敗或美股時觸發) ---
+        except: pass
     try:
         full_tid = get_full_ticker(raw_id)
         tk = yf.Ticker(full_tid)
@@ -325,145 +238,59 @@ def get_stock_perf(ticker, period_days=0):
             cp = hist['Close'].iloc[-1]
             dp = hist['Close'].iloc[-1] - hist['Close'].iloc[-2]
             return float(cp), float(dp), "[Y]"
-    except: 
-        pass
-
+    except: pass
     return 0, 0, "[N/A]"
 
-
-def save_data():
-    """保留 V15.0 session 狀態維護"""
-    st.session_state.initialized = True 
-
 def record_transaction(client, tid, action, shares, price, note):
-    """
-    【大基石 V15.3 雲端同步引擎】
-    功能：自動將買賣紀錄同步至 StoneManager_DB 的 history 分頁，並維持本地顯示。
-    """
-    # 1. 建立標準化紀錄字典
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    log_entry = {
-        'date': now_str,
-        'client': client,
-        'id': tid,
-        'action': action,
-        'shares': shares,
-        'price': price,
-        'note': note
-    }
-
-    # 2. [本地同步]：更新 Streamlit session_state，讓介面即時顯示
+    log_entry = {'date': now_str, 'client': client, 'id': tid, 'action': action, 'shares': shares, 'price': price, 'note': note}
     new_log_df = pd.DataFrame([log_entry])
     if 'trade_history' not in st.session_state:
         st.session_state.trade_history = new_log_df
     else:
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log_df], ignore_index=True)
-
-
-    # 3. [雲端同步]：使用 gspread 引擎立即寫入 Google Sheets
     try:
         sh = init_cloud_connection()
         if sh:
             ws = sh.worksheet("history")
-            row_to_append = [now_str, client, tid, action, shares, price, note]
-            ws.append_row(row_to_append)
-            
-            # --- 💡 新增：前端亮燈通知 ---
+            ws.append_row([now_str, client, tid, action, shares, price, note])
             st.toast(f"✅ 雲端同步成功！已紀錄至 Sheets", icon='🚀')
         else:
-            st.error("❌ 雲端連線失敗，紀錄僅存在本地（暫時）")
+            st.error("❌ 雲端連線失敗")
     except Exception as e:
-        # 在前端顯示具體錯誤，方便除錯
         st.error(f"⚠️ 雲端寫入異常: {e}")
-        print(f"⚠️ 交易紀錄雲端同步失敗: {e}")
-
 
 def update_ai_thought_log(ticker, score, msg):
-    """
-    【AI 大腦雲端寫入器】V15.2 專用
-    功能：診斷完成後，自動將結果存入 StoneManager_DB 的 thought_log 分頁。
-    """
     try:
-        # 1. 初始化雲端連線
         sh = init_cloud_connection()
         if sh:
-            # 2. 指定寫入 "thought_log" 分頁
             ws = sh.worksheet("thought_log")
-            
-            # 3. 準備資料列：時間、代碼、名稱、分數、AI 診斷建議
-            new_row = [
-                datetime.now().strftime("%Y-%m-%d %H:%M"), # 時間
-                str(ticker),                                # 股票代碼
-                get_stock_name(ticker),                    # 自動轉換中文名
-                score,                                     # AI 評分
-                msg                                        # 診斷核心邏輯
-            ]
-            
-            # 4. 執行寫入動作 (這就是您說的 append_row)
-            ws.append_row(new_row)
+            ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M"), str(ticker), get_stock_name(ticker), score, msg])
             return True
-    except Exception as e:
-        # 如果寫入失敗，在後台顯示錯誤，但不影響 App 運行
-        print(f"⚠️ 大腦寫入同步失敗: {e}")
-        return False
-
-
-# --- 介面執行：頂部標題與狀態 ---
-st.title("🛡️ 大基石 - AI 戰略經理人 (V15.2)")
-
-if 'initialized' not in st.session_state:
-    load_data() 
-run_auto_cruise()
-
-is_connected, status_text = check_connection()
-
-# --- [全球看板佈局：100% 還原 V15.0 樣式] ---
-if is_connected:
-    us_impact, stress_count = get_us_market_impact()
-    if us_impact:
-        with st.container(border=True):
-            st.markdown("#### 🌍 全球戰略連動看板 (V15.2 進化版對位)")
-            u_cols = st.columns(len(us_impact))
-            
-            point_view = {"費半": "^SOX", "那指": "^IXIC", "台積電ADR": "TSM", "輝達": "NVDA"}
-            
-            for i, (name, val) in enumerate(us_impact.items()):
-                try:
-                    target_ticker = point_view.get(name)
-                    latest_price = yf.Ticker(target_ticker).fast_info['last_price']
-                    display_val = f"{latest_price:,.2f}" 
-                except:
-                    display_val = f"{val:+}%"
-
-                u_cols[i].metric(
-                    label=name, 
-                    value=display_val, 
-                    delta=f"{val}%", 
-                    delta_color="inverse"
-                )
-            
-            if stress_count >= 1:
-                st.markdown(f"""
-                    <div style="background-color: #fff5f5; border: 2px solid #ff4b4b; padding: 10px; border-radius: 8px; color: #ff4b4b; font-weight: bold; text-align: center;">
-                        🚨 AI 壓力預警：當前美股壓力值 [{stress_count}]！台股 AI 板塊可能面臨連動修正，建議防守。
-                    </div>
-                """, unsafe_allow_html=True)
-
-
+    except: return False
 
 # ==============================================================================
-# 第 3 區：大基石史詩級強大腦 V15.2 - 超越老總之「全戰策自主進化」版本
+# 第 3 區：大基石史詩級強大腦 V15.3 - 核心診斷與 MACD 斜率引擎
 # ==============================================================================
+
+def get_macd_slope(df):
+    """大基石核心：MACD 斜率共振偵測"""
+    if df is None or df.empty or len(df) < 35: 
+        return 0, "📡 數據不足"
+    exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+    exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+    macd = exp1 - exp2
+    signal = macd.ewm(span=9, adjust=False).mean()
+    slope = (macd.iloc[-1] - macd.iloc[-3]) / 2
+    if macd.iloc[-1] > signal.iloc[-1]:
+        status = "📈 翻揚" if slope > 0 else "⚠️ 高檔鈍化"
+    else:
+        status = "📉 轉弱" if slope < 0 else "🧬 底背離觀察"
+    return slope, status
 
 def ai_pattern_discovery(ticker, h_max):
-    """
-    【AI 自主法則歸納引擎】
-    功能：尋找代碼未明確定義但高勝率的「異常特徵」。
-    """
     if h_max is None or len(h_max) < 100: return None
     c, v = h_max['Close'], h_max['Volume']
-    
-    # 範例：偵測「極致縮量後的跳空」 (新法則歸納)
     recent_v_min = v.tail(10).min()
     avg_v_50 = v.tail(50).mean()
     if recent_v_min < avg_v_50 * 0.3 and c.iloc[-1] > c.iloc[-2] * 1.03:
@@ -471,10 +298,6 @@ def ai_pattern_discovery(ticker, h_max):
     return None
 
 def ai_evolution_engine(ticker, h_max, current_price):
-    """ 
-    【35年歷史對齊與經典戰策引擎】
-    包含：三角形收斂、島狀反轉、高檔巨量警示、八大法則、歷史回測
-    """
     if h_max is None or h_max.empty or len(h_max) < 250:
         return 50, "📚 數據積累中", 50.0
     
@@ -488,169 +311,112 @@ def ai_evolution_engine(ticker, h_max, current_price):
     if c.iloc[-1] > c.tail(20).max() * 0.98 and macd.iloc[-1] < macd.tail(20).max() * 0.8:
         score -= 25; intel_tags.append("🚨 偵測到指標背離")
 
-    # --- [2. 島狀反轉偵測 (Island Reversal)] ---
-    gap_up = lo.iloc[-1] > hi.iloc[-2]
-    gap_down = hi.iloc[-1] < lo.iloc[-2]
-    if gap_up: intel_tags.append("🏝️ 島狀反轉潛力(多)"); score += 15
-    if gap_down: intel_tags.append("🏚️ 島狀反轉潛力(空)"); score -= 20
+    # --- [2. 島狀反轉偵測] ---
+    if lo.iloc[-1] > hi.iloc[-2]: intel_tags.append("🏝️ 島狀反轉潛力(多)"); score += 15
+    if hi.iloc[-1] < lo.iloc[-2]: intel_tags.append("🏚️ 島狀反轉潛力(空)"); score -= 20
 
-    # --- [3. 量縮收斂三角形 (Volatility Contraction)] ---
+    # --- [3. 量縮收斂三角形] ---
     price_range = (hi.tail(20).max() - lo.tail(20).min()) / c.iloc[-1]
     if price_range < 0.05 and v.iloc[-1] < v.tail(20).mean() * 0.6:
         score += 20; intel_tags.append("📐 量縮收斂三角形")
 
-    # --- [4. 跳空高檔爆巨量 (老總級逃命訊號)] ---
+    # --- [4. 跳空高檔爆巨量] ---
     avg_v_year = v.rolling(248).mean().iloc[-1]
     if c.iloc[-1] > c.rolling(248).mean().iloc[-1] * 1.3 and v.iloc[-1] > avg_v_year * 3:
         score -= 45; intel_tags.append("💀 高檔爆巨量(出貨預警)")
 
-    # --- [5. 八大法則：均線噴發模型] ---
+    # --- [5. 八大法則與洗盤偵測模組] ---
     ma20 = c.rolling(20).mean().iloc[-1]
     if c.iloc[-1] > ma20 and v.iloc[-1] > v.rolling(20).mean().iloc[-1] * 1.5:
         score += 20; intel_tags.append("🔥 匹配噴發模型")
 
-    # 歷史回測勝率計算 (5日勝率)
+    # --- [融資/籌碼洗盤深度邏輯] ---
+    ma248 = c.rolling(248).mean().iloc[-1]
+    ma124 = c.rolling(124).mean().iloc[-1]
+    sentiment_status = "🔍 散戶進場 (融資增)" # 內部標記使用
+
+    if not np.isnan(ma248) and (current_price >= ma248 * 0.96 and current_price <= ma248 * 1.04):
+        if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.75:
+            score += 25
+            intel_tags.append("🔥 偵測到洗盤完成，準備破新高")
+            sentiment_status = "🔥 大戶收貨 (融資減)"
+    elif not np.isnan(ma124) and (current_price >= ma124 * 0.97 and current_price <= ma124 * 1.03):
+        if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.8:
+            score += 15
+            intel_tags.append("📡 半年線支撐洗盤")
+            sentiment_status = "🔥 大戶收貨 (融資減)"
+
     returns = c.pct_change(5).shift(-5)
     win_rate = (returns > 0).sum() / len(returns) * 100
     win_prob = round((win_rate * 0.6) + (score * 0.4), 1)
         
-    return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 常態波動", win_prob
+    return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 常態波動", win_prob, sentiment_status
 
-
-def generate_ai_tech_analysis(ticker, price, mode=0): # 這裡將 diff_pct 改為 mode，預設為 0 (掃描模式)
-    """
-    【AI 核心診斷大腦 - V15.3 究極進化版】
-    已修正：導入掃描模式(mode=0)與深度模式(mode=1)雙軌制，防止 Yahoo 封鎖
-    """
-    # [1/4] 初始化：AI 啟動
+def generate_ai_tech_analysis(ticker, price, mode=0):
     p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年歷史檔案...")
-    
     try:
-        # --- [2/4] 數據引擎：V15.3 台股在地化 (twstock) + 美股 (Yahoo) ---
         p_bar.progress(25, text=f"🌐 正在同步數據流：{ticker}...")
-        
         raw_id = str(ticker).split(".")[0]
+        h_full = None
         
         if raw_id.isdigit():
-            # 🇹🇼 台股模式：twstock (首選) + Yahoo (備援)
             try:
                 import twstock
                 ts_stock = twstock.Stock(raw_id)
                 fetch_len = 60 if mode == 0 else 500 
-                
-                # 取得原始 List
                 r_c = ts_stock.price[-fetch_len:]
                 r_h = ts_stock.high[-fetch_len:]
                 r_l = ts_stock.low[-fetch_len:]
                 r_v = ts_stock.capacity[-fetch_len:]
+                if len(r_c) > 10:
+                    h_full = pd.DataFrame({'Close': r_c, 'High': r_h, 'Low': r_l, 'Volume': r_v}).astype(float).fillna(method='ffill')
+                    h_60m = h_full 
+            except: pass
 
-                # 關鍵防禦：檢查 twstock 資料完整性
-                if len(r_c) > 10 and len(r_c) == len(r_h) == len(r_l):
-                    h_full = pd.DataFrame({
-                        'Close': r_c, 'High': r_h, 'Low': r_l, 'Volume': r_v
-                    }).astype(float).fillna(method='ffill')
-                    h_max = h_full
-                    h_60m = h_full
-                    # 標註成功從 twstock 抓取
-                else:
-                    raise ValueError("twstock 資料不齊全")
-            except Exception as e:
-                # --- 進入備援模式 ---
-                formatted_ticker = get_full_ticker(ticker)
-                stock = yf.Ticker(formatted_ticker)
-                h_full = stock.history(period="3mo" if mode == 0 else "2y")
-                h_max = h_full
-                h_60m = stock.history(interval="60m", period="1mo") if mode != 0 else h_full
+        if h_full is None:
+            stock = yf.Ticker(get_full_ticker(ticker))
+            h_full = stock.history(period="3mo" if mode == 0 else "2y")
+            h_60m = stock.history(interval="60m", period="1mo") if mode != 0 else h_full
 
-        # --- 數據安全檢查出口 ---
-        if h_full is None or len(h_full) < 2:
+        if h_full.empty:
             p_bar.empty()
             return None
 
-        
-        # [3/4] 技術指標配對
         p_bar.progress(50, text="🧠 正在配對：MACD 多時框 / 均線 / 八大法則...")
-        # ... (下方原有計算邏輯完全不動) ...
-        
-        def get_macd_slope(df):
-            if df is None or df.empty or len(df) < 30: return 0, "觀測"
-            ema12 = df['Close'].ewm(span=12).mean()
-            ema26 = df['Close'].ewm(span=26).mean()
-            macd = ema12 - ema26
-            sig = macd.ewm(span=9).mean()
-            slope = macd.iloc[-1] - macd.iloc[-2]
-            return slope, ("📈翻揚" if (macd.iloc[-1] > sig.iloc[-1] and slope > 0) else "📉轉弱")
-
         _, st_60 = get_macd_slope(h_60m)
         _, st_day = get_macd_slope(h_full)
         
-        # --- [V15.3 深度思考區：融入 Spinner] ---
         p_bar.progress(75, text="🧬 AI 正在自主歸納新法則並計算歷史回測...")
-        
         with st.spinner(f"🧪 AI 正在針對 {ticker} 進行多維度背離與籌碼洗盤模擬..."):
-            h_score, h_logic, win_prob = ai_evolution_engine(ticker, h_max, price)
-            new_discovery = ai_pattern_discovery(ticker, h_max)
-            
-            ma248 = h_full['Close'].rolling(248).mean().iloc[-1]
-            sentiment = "🔍 散戶進場"
-            
-            if not np.isnan(ma248) and (price >= ma248 * 0.95 and price <= ma248 * 1.05):
-                if h_full['Volume'].iloc[-1] < h_full['Volume'].rolling(20).mean().iloc[-1] * 0.7:
-                    h_score += 20
-                    sentiment = "🔥 偵測到洗盤完成，準備破新高"
-            
+            h_score, h_logic, win_prob, sentiment = ai_evolution_engine(ticker, h_full, price)
+            new_discovery = ai_pattern_discovery(ticker, h_full)
             time.sleep(0.4)
             
-        # [4/4] 診斷完畢
         p_bar.progress(100, text="✅ 診斷完成：已超越 35 年操盤手精確度")
-        time.sleep(0.4)
-        p_bar.empty()
+        time.sleep(0.4); p_bar.empty()
 
-        # 組合最終診斷訊息
         full_msg = f"{h_logic} | MACD:{st_60}/{st_day} "
-        if new_discovery: 
-            full_msg += f" | {new_discovery}"
+        if new_discovery: full_msg += f" | {new_discovery}"
 
-        # --- [雲端同步：更新 AI 思想日誌] ---
         final_score = max(0, min(100, h_score))
-        try:
-            update_ai_thought_log(ticker, final_score, full_msg)
-        except:
-            pass 
+        update_ai_thought_log(ticker, final_score, full_msg)
 
-        # --- [V15.3 數值精確化處理] ---
-        # 在回傳前，將所有價格數據進行四捨五入至小數點後兩位
-        final_price = round(float(price), 2)
-        final_target = round(float(price * 1.15), 2)
-        final_stop = round(float(price * 0.92), 2)
-
-        # 回傳診斷結果字典
         return {
-            "msg": full_msg,
-            "sent": sentiment,
-            "score": final_score,
-            "win_prob": win_prob,
-            "price": final_price,   # 修正後的新欄位/數值
-            "target": final_target, # 修正為兩位
-            "stop": final_stop,     # 修正為兩位
-            "atr_range": f"勝率: {win_prob}%",
+            "msg": full_msg, "sent": sentiment, "score": final_score, "win_prob": win_prob,
+            "price": round(float(price), 2), "target": round(float(price * 1.15), 2),
+            "stop": round(float(price * 0.92), 2), "atr_range": f"勝率: {win_prob}%",
             "pivot": f"V15.3 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
         }
-
     except Exception as e:
-        if 'p_bar' in locals(): 
-            p_bar.empty()
-        # 錯誤出口也同步修正顯示格式
-        err_price = round(float(price), 2)
-        return {
-            "msg": f"AI 大腦同步中: {str(e)[:15]}", 
-            "score": 50, 
-            "win_prob": 50,
-            "sent": "🔄 重新連線中",
-            "price": err_price,
-            "target": err_price,
-            "stop": err_price
-        }
+        if 'p_bar' in locals(): p_bar.empty()
+        return {"msg": f"AI 異常: {str(e)[:15]}", "score": 50, "win_prob": 50, "sent": "🔄 重新連線", "price": round(float(price), 2)}
+
+# --- 初始化執行 ---
+st.title("🛡️ 大基石 - AI 戰略經理人 (V15.3)")
+if 'initialized' not in st.session_state: load_data() 
+run_auto_cruise()
+is_connected, _ = check_connection()
+
 
 
 def fetch_and_score_intel():
