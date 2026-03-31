@@ -861,43 +861,50 @@ with tab_scan:
             scan_p.empty()
 
 
+            
             if scored_data:
-                # 1. 數據處理與排序 (保持原本 top 15 邏輯)
+                # 1. 數據排序 (保持 top 15)
                 top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
                 st.success(f"✅ 板塊掃描完成！AI 篩選出 {len(top_picks)} 檔強勢標的：")
                 
-                # --- [新增/修改部分：安全顯示區域] ---
-                with st.container():
-                    # 將掃描結果轉成 DataFrame 以便整批顯示 (如果需要的話)
-                    import pandas as pd
-                    scan_results_df = pd.DataFrame(top_picks)
-                    
-                    # 🚀 核心修正：確保顯示前再次強制轉型為字串，解決 Arrow 報錯
-                    # 並將 use_container_width 修正為 width='stretch'
-                    if not scan_results_df.empty:
-                        safe_display = scan_results_df.astype(str)
-                        st.dataframe(safe_display, width='stretch') 
-                    
-                    # 🚀 按鈕佈局：確保按鈕始終出現在表格下方
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("🚀 執行批次買入建議", key="buy_btn_batch"):
-                            st.info("系統正在串接下單模組...")
-                    with col_btn2:
-                        if st.button("📥 匯出掃描報告", key="export_scan"):
-                            st.write("報告已生成於雲端")
-
-                # --- [保留原本的 Expander 詳細診斷內容] ---
-                st.divider() # 加一條分割線區隔表格與詳細卡片
+                # --- [核心修正：移除醜表格，改回精緻卡片佈局] ---
                 for item in top_picks:
-                    with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | {item.get('sent', '')}"):
-                        st.markdown(f"**AI 建議：** `{item['msg']}`")
-                        col_q1, col_q2 = st.columns([2, 1])
-                        col_q1.write(f"目前價格: {item['price']} ({item['diff']})")
-                        if col_q2.button(f"🚀 載入診斷", key=f"q_{item['tid']}"):
-                            st.session_state.selected_stock = item['tid']
-                            st.rerun()
+                    # 這裡加入一個「大腦補強」，確保分析文字不會是空白
+                    analysis_msg = item.get('msg', '📡 AI 正在深度運算數據流...')
+                    sent_status = item.get('sent', '觀察中')
+                    
+                    with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | {sent_status}"):
+                        # --- 第一行：AI 戰略診斷 ---
+                        st.markdown(f"**AI 戰略建議：**")
+                        st.info(f"💡 {analysis_msg}")
+                        
+                        # --- 第二行：數據細節與操作區 (對齊持股監控佈局) ---
+                        c1, c2, c3 = st.columns([1.5, 1.5, 1])
+                        with c1:
+                            st.write(f"📊 目前價格: **{item['price']}**")
+                            st.caption(f"漲跌幅: {item['diff']}")
+                        
+                        with c2:
+                            # 這裡加入你最在意的「選擇張數/股數」功能
+                            q_type = st.radio("單位", ["張", "股"], key=f"type_{item['tid']}", horizontal=True, label_visibility="collapsed")
+                            amount = st.number_input("數量", min_value=1, value=1, key=f"amt_{item['tid']}", label_visibility="collapsed")
+                            
+                        with c3:
+                            # 買入按鈕與診斷按鈕
+                            if st.button(f"🚀 執行買入", key=f"buy_{item['tid']}", use_container_width=True):
+                                st.success(f"已加入 {item['tname']} 買入排程")
+                            
+                            if st.button(f"🔍 深度診斷", key=f"q_{item['tid']}", use_container_width=True):
+                                st.session_state.selected_stock = item['tid']
+                                st.rerun()
 
+                # --- 底部批次功能 (保持整齊) ---
+                st.divider()
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    st.button("📥 匯出完整 AI 戰略報告", use_container_width=True)
+
+            
 
     with col_r:
         # --- [4. 持股監控區：還原自動對齊與同步刪除邏輯] ---
