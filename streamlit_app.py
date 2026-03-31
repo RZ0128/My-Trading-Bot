@@ -214,6 +214,9 @@ def load_data():
         progress_bar.progress(50, text="📜 [2/4] 正在同步 History...")
         his_df = get_cloud_df(sh, "history")
         if not his_df.empty:
+            # 強制將 action 和 id 欄位轉為字串，防止數字與文字混雜
+            his_df['action'] = his_df['action'].astype(str)
+            his_df['id'] = his_df['id'].astype(str)
             st.session_state.trade_history = his_df
         
         progress_bar.progress(80, text="👥 [3/4] 正在對齊 Clients...")
