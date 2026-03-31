@@ -164,7 +164,17 @@ def check_connection():
 def load_data():
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
+    
+    # --- [核心保底：在連線前先建立變數，防止 597 行崩潰] ---
+    if 'client_list' not in st.session_state:
+        st.session_state.client_list = ["Robert"]
+    if 'local_db' not in st.session_state:
+        st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'shares', 'buy_price'])
+    if 'trade_history' not in st.session_state:
+        st.session_state.trade_history = pd.DataFrame()
+    
     progress_bar = st.progress(0, text="🤖 AI 大腦啟動：正在初始化雲端對齊程序...")
+    
     try:
         sh = init_cloud_connection()
         if not sh: 
@@ -180,22 +190,28 @@ def load_data():
         
         progress_bar.progress(80, text="👥 [3/4] 正在對齊 Clients：更新 AI 戰略經理人控盤對象...")
         client_df = get_cloud_df(sh, "clients")
-        cloud_clients = client_df['name'].tolist() if 'name' in client_df.columns else []
-        if 'client_list' not in st.session_state: 
-            st.session_state.client_list = ["Robert"]
-        combined = list(set(st.session_state.client_list + cloud_clients))
-        st.session_state.client_list = sorted([str(c) for c in combined if str(c) not in ["nan", "None", None]])
-        time.sleep(0.3)
+        
+        # 雲端抓取的客戶名單處理
+        if not client_df.empty and 'name' in client_df.columns:
+            cloud_clients = client_df['name'].dropna().astype(str).tolist()
+            # 合併本地與雲端名單，並排除無效值
+            combined = list(set(st.session_state.client_list + cloud_clients))
+            st.session_state.client_list = sorted([c for c in combined if c not in ["nan", "None", ""]])
         
         progress_bar.progress(100, text="✅ [4/4] 數據對齊完成！大基石戰略系統已就緒。")
         time.sleep(0.8)
         progress_bar.empty()
         st.session_state.initialized = True
+        
     except Exception as e:
+        # 發生錯誤時，標記已初始化，確保程式繼續往下跑，不卡在死循環
         st.session_state.initialized = True
         if 'progress_bar' in locals():
             progress_bar.empty()
-        st.sidebar.error(f"📡 雲端同步中斷，切換至本地模式: {str(e)[:30]}...")
+        # 在側邊欄顯示警告，但不讓 App 崩潰
+        st.sidebar.warning(f"📡 雲端同步中斷，目前使用本地/保底模式")
+        st.sidebar.error(f"錯誤原因: {str(e)[:50]}")
+
 
 def get_full_ticker(tid):
     tid = str(tid).strip().upper().split(".")[0]
