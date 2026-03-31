@@ -90,21 +90,28 @@ with st.sidebar:
 
 def init_cloud_connection():
     try:
-        # 1. 直接讀取您現有的 Secrets，不做任何手動更改
         if "GCP_JSON_KEY" not in st.secrets:
             return None
-        gcp_json = dict(st.secrets["GCP_JSON_KEY"])
-        pk = gcp_json["private_key"]
         
-        # 2. 【核心修復】自動修復 PEM 格式（解決 InvalidPadding 關鍵）
+        # 1. 複製一份 Secret，避免直接更動原始數據
+        gcp_json = dict(st.secrets["GCP_JSON_KEY"])
+        
+        # 2. 【核心修復邏輯】徹底清洗 Private Key
+        pk = str(gcp_json["private_key"])
+        
+        # 處理雙重轉義的換行符號
         pk = pk.replace("\\n", "\n") 
+        
+        # 去掉可能存在的頭尾引號或空白
         pk = pk.strip().strip("'").strip('"')
         
-        if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
+        # 確保標準 PEM 格式頭尾（這幾行非常關鍵）
+        if "-----BEGIN PRIVATE KEY-----" not in pk:
             pk = "-----BEGIN PRIVATE KEY-----\n" + pk
-        if not pk.endswith("-----END PRIVATE KEY-----"):
+        if "-----END PRIVATE KEY-----" not in pk:
             pk = pk + "\n-----END PRIVATE KEY-----"
             
+        # 重新賦值
         gcp_json["private_key"] = pk
         
         # 3. 執行連線
@@ -115,8 +122,10 @@ def init_cloud_connection():
         return gc.open("StoneManager_DB")
         
     except Exception as e:
-        st.sidebar.error(f"📡 雲端對齊失敗，請檢查共用權限: {str(e)[:50]}")
+        # 如果還是失敗，顯示具體的錯誤位置
+        st.sidebar.error(f"🔑 金鑰格式診斷: {str(e)}")
         return None
+
 
 def get_cloud_df(sh, sheet_name):
     try:
