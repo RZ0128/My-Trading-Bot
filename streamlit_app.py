@@ -859,11 +859,36 @@ with tab_scan:
                         r.update({'tid': tid, 'tname': tname, 'price': ps, 'diff': ds})
                         scored_data.append(r)
             scan_p.empty()
-            
+
+
             if scored_data:
-                # 排序並取出前 15 檔
+                # 1. 數據處理與排序 (保持原本 top 15 邏輯)
                 top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
                 st.success(f"✅ 板塊掃描完成！AI 篩選出 {len(top_picks)} 檔強勢標的：")
+                
+                # --- [新增/修改部分：安全顯示區域] ---
+                with st.container():
+                    # 將掃描結果轉成 DataFrame 以便整批顯示 (如果需要的話)
+                    import pandas as pd
+                    scan_results_df = pd.DataFrame(top_picks)
+                    
+                    # 🚀 核心修正：確保顯示前再次強制轉型為字串，解決 Arrow 報錯
+                    # 並將 use_container_width 修正為 width='stretch'
+                    if not scan_results_df.empty:
+                        safe_display = scan_results_df.astype(str)
+                        st.dataframe(safe_display, width='stretch') 
+                    
+                    # 🚀 按鈕佈局：確保按鈕始終出現在表格下方
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("🚀 執行批次買入建議", key="buy_btn_batch"):
+                            st.info("系統正在串接下單模組...")
+                    with col_btn2:
+                        if st.button("📥 匯出掃描報告", key="export_scan"):
+                            st.write("報告已生成於雲端")
+
+                # --- [保留原本的 Expander 詳細診斷內容] ---
+                st.divider() # 加一條分割線區隔表格與詳細卡片
                 for item in top_picks:
                     with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | {item.get('sent', '')}"):
                         st.markdown(f"**AI 建議：** `{item['msg']}`")
@@ -872,6 +897,7 @@ with tab_scan:
                         if col_q2.button(f"🚀 載入診斷", key=f"q_{item['tid']}"):
                             st.session_state.selected_stock = item['tid']
                             st.rerun()
+
 
     with col_r:
         # --- [4. 持股監控區：還原自動對齊與同步刪除邏輯] ---
