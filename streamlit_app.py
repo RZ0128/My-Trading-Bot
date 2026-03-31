@@ -594,7 +594,8 @@ with st.sidebar:
                 save_data(); st.rerun()
         
         st.markdown("---")
-        if not st.session_state.client_list:
+        # 💡 安全修正版：
+        if "client_list" not in st.session_state or not st.session_state.client_list:
             st.session_state.client_list = ["Robert"]
             
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
