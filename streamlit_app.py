@@ -91,30 +91,39 @@ with st.sidebar:
 def init_cloud_connection():
     try:
         if "GCP_JSON_KEY" not in st.secrets:
+            st.sidebar.error("❌ Secrets 中找不到 GCP_JSON_KEY 配置")
             return None
         
-        # 1. 複製一份 Secret，避免直接更動原始數據
-        gcp_json = dict(st.secrets["GCP_JSON_KEY"])
+        # 1. 取得原始數據並轉為字典
+        raw_key = st.secrets["GCP_JSON_KEY"]
+        if hasattr(raw_key, "to_dict"):
+            gcp_json = raw_key.to_dict()
+        else:
+            gcp_json = dict(raw_key)
+            
+        # 2. 【大基石專用：金鑰深度洗滌】
+        pk = str(gcp_json.get("private_key", ""))
         
-        # 2. 【核心修復邏輯】徹底清洗 Private Key
-        pk = str(gcp_json["private_key"])
+        # 移除所有可能的干擾字元
+        pk = pk.replace("\\n", "\n") # 修復雙重轉義
+        pk = pk.strip().strip("'").strip('"') # 移除前後引號
         
-        # 處理雙重轉義的換行符號
-        pk = pk.replace("\\n", "\n") 
-        
-        # 去掉可能存在的頭尾引號或空白
-        pk = pk.strip().strip("'").strip('"')
-        
-        # 確保標準 PEM 格式頭尾（這幾行非常關鍵）
+        # 確保頭尾格式正確，且中間沒有多餘空格
         if "-----BEGIN PRIVATE KEY-----" not in pk:
             pk = "-----BEGIN PRIVATE KEY-----\n" + pk
         if "-----END PRIVATE KEY-----" not in pk:
             pk = pk + "\n-----END PRIVATE KEY-----"
             
-        # 重新賦值
         gcp_json["private_key"] = pk
         
-        # 3. 執行連線
+        # 3. 驗證必要欄位是否完整
+        required_fields = ["project_id", "client_email", "private_key"]
+        for field in required_fields:
+            if not gcp_json.get(field):
+                st.sidebar.error(f"❌ 金鑰遺失欄位: {field}")
+                return None
+
+        # 4. 執行連線
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
         gc = gspread.authorize(creds)
@@ -122,8 +131,14 @@ def init_cloud_connection():
         return gc.open("StoneManager_DB")
         
     except Exception as e:
-        # 如果還是失敗，顯示具體的錯誤位置
-        st.sidebar.error(f"🔑 金鑰格式診斷: {str(e)}")
+        # 顯示更詳細的錯誤，幫助判斷是格式還是權限問題
+        err_msg = str(e)
+        if "BadStatusLine" in err_msg:
+            st.sidebar.error("🌐 網路連線不穩，請稍後再試")
+        elif "padding" in err_msg.lower():
+            st.sidebar.error("🔑 金鑰內容受損（Padding Error），請重新檢查 Secrets 內容")
+        else:
+            st.sidebar.error(f"🔑 金鑰診斷: {err_msg[:50]}")
         return None
 
 
