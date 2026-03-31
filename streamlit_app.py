@@ -150,6 +150,18 @@ def get_cloud_df(sh, sheet_name):
     except:
         return pd.DataFrame()
 
+
+# --- 在現有的 get_cloud_df 之後插入 ---
+def safe_get_df(sh, name):
+    df = get_cloud_df(sh, name)
+    if not df.empty:
+        # 強制將所有欄位轉為字串，徹底解決 ArrowTypeError
+        for col in df.columns:
+            # 這裡多做一個處理：把 'None' 或 'nan' 轉成空字串，畫面會比較乾淨
+            df[col] = df[col].astype(str).replace(['nan', 'None', '<NA>'], '')
+    return df
+
+
 def get_us_market_impact():
     try:
         tickers = {"^SOX": "費半", "^IXIC": "那指", "TSM": "台積電ADR", "NVDA": "輝達"}
