@@ -507,26 +507,44 @@ is_connected, _ = check_connection()
 
 
 def fetch_and_score_intel():
-    import ssl, collections, re
+    import ssl, collections, re, urllib.parse  # 確保 parse 有導入
     if hasattr(ssl, '_create_unverified_context'):
         ssl._create_default_https_context = ssl._create_unverified_context
+    
+    # --- 修改點 A：擴充關鍵字 (從 3 個增加到 6 個，讓搜尋範圍翻倍) ---
     strategic_map = {
-        "🇹🇼 台美日中 (地緣)": ["台海局勢 when:24h", "中共軍演 when:24h", "台積電 when:24h"],
-        "🌐 國際戰略 (全球)": ["中東戰爭 when:24h", "美聯儲 when:24h", "川普 關稅 when:24h"]
+        "🇹🇼 台美日中 (地緣)": [
+            "台海局勢 when:24h", "中共軍演 when:24h", "台積電 when:24h",
+            "半導體 供應鏈 when:24h", "美中對抗 when:24h", "日本 自衛隊 when:24h"
+        ],
+        "🌐 國際戰略 (全球)": [
+            "中東戰爭 when:24h", "美聯儲 when:24h", "川普 關稅 when:24h",
+            "俄烏戰爭 when:24h", "北約 戰略 when:24h", "全球通脹 when:24h"
+        ]
     }
+    
     news_list, seen_links = [], set()
     for cat_name, queries in strategic_map.items():
         for q in queries:
             u = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
             try:
                 feed = feedparser.parse(u)
-                for e in feed.entries[:5]:
+                # --- 修改點 B：抓取筆數從 [:5] 改為 [:10] (單個關鍵字抓取量翻倍) ---
+                for e in feed.entries[:10]: 
                     if e.link not in seen_links:
+                        # 這裡保持你原本的評分邏輯，不更動佈局
                         score = 55
                         if any(w in e.title for w in ["戰爭", "衝突", "斷鏈", "降息"]): score += 30
-                        news_list.append({'data': e, 'score': score, 'cat': cat_name, 'time': e.published[5:16] if hasattr(e, 'published') else "24H"})
+                        news_list.append({
+                            'data': e, 
+                            'score': score, 
+                            'cat': cat_name, 
+                            'time': e.published[5:16] if hasattr(e, 'published') else "24H"
+                        })
                         seen_links.add(e.link)
             except: continue
+            
+    # 保持後續的熱詞統計邏輯不變
     all_titles = " ".join([item['data'].title for item in news_list])
     words = re.findall(r'[\u4e00-\u9fa5]{2,4}', all_titles)
     hot_words = [w for w, c in collections.Counter(words).most_common(10)] 
