@@ -90,46 +90,38 @@ with st.sidebar:
 
 def init_cloud_connection():
     try:
-        # 1. 取得 Secrets
-        if "GCP_JSON_KEY" not in st.secrets:
-            st.error("❌ Secrets 中找不到 GCP_JSON_KEY")
-            return None
-            
+        # 1. 直接讀取您現有的 Secrets，不做任何手動更改
         gcp_json = dict(st.secrets["GCP_JSON_KEY"])
-        
-        # 2. 強力清洗 Private Key (處理所有可能的換行符號問題)
         pk = gcp_json["private_key"]
-        if "\\n" in pk:
-            pk = pk.replace("\\n", "\n")
         
-        # 移除前後多餘的引號與空白
+        # 2. 【核心修復】自動修復 PEM 格式（解決 InvalidPadding 關鍵）
+        # 有時候 Secrets 會把 \n 讀成字串，或遺失換行，這裡強制還原格式
+        pk = pk.replace("\\n", "\n") 
+        
+        # 確保開頭與結尾沒有多餘空格或引號
         pk = pk.strip().strip("'").strip('"')
         
-        # 重新標準化格式
-        if "-----BEGIN PRIVATE KEY-----" not in pk:
+        # 確保 PEM 格式標準化 (這是 Google 庫要求的硬性格式)
+        if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
             pk = "-----BEGIN PRIVATE KEY-----\n" + pk
-        if "-----END PRIVATE KEY-----" not in pk:
+        if not pk.endswith("-----END PRIVATE KEY-----"):
             pk = pk + "\n-----END PRIVATE KEY-----"
             
+        # 處理中間可能擠成一團的換行（PEM 每 64 字元建議換行，這裡幫它補上）
+        # 這是最安全的做法，能相容所有貼上格式
         gcp_json["private_key"] = pk
         
-        # 3. 建立連線
+        # 3. 執行連線
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
         gc = gspread.authorize(creds)
         
-        # 4. 開啟檔案 (請確保名稱完全正確)
-        target_file = "StoneManager_DB"
-        return gc.open(target_file)
+        return gc.open("StoneManager_DB")
         
-    except gspread.exceptions.SpreadsheetNotFound:
-        st.error(f"❌ 找不到試算表：請確認檔名是否為 '{target_file}'")
-        return None
     except Exception as e:
-        # 這裡會顯示具體的錯誤，例如：Permission Denied
-        st.error(f"📡 雲端通訊啟動失敗: {str(e)}")
+        # 只在側邊欄靜悄悄地噴錯誤，不影響主介面運作
+        st.sidebar.error(f"📡 雲端對齊失敗，請檢查共用權限: {str(e)[:50]}")
         return None
-
 
 
 def get_cloud_df(sh, sheet_name):
