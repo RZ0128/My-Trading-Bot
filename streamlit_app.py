@@ -948,24 +948,18 @@ with tab_brain:
 # --- 7.5 區結束 ---
 
 
-
-# --- [第 8 區：交易紀錄 - 獨立分頁 (精準對齊)] ---
+# --- [第 8 區：交易紀錄修正] ---
 with tab_history:
     st.subheader("📜 歷史交易紀錄")
     
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
         try:
-            df_to_show = st.session_state.trade_history.copy()
-            if 'date' in df_to_show.columns:
-                df_to_show['date'] = pd.to_datetime(df_to_show['date'], errors='coerce')
-                display_df = df_to_show.sort_values(by='date', ascending=False)
-            else:
-                display_df = df_to_show
-            
-            # 使用 12.5 原始表格樣式呈現
-            st.dataframe(display_df, use_container_width=True)
+            # 轉換為字串避免 Arrow 轉換失敗
+            display_df = st.session_state.trade_history.astype(str)
+            st.dataframe(display_df, width='stretch') # 順便修正警告，將 use_container_width 改為 width='stretch'
         except Exception as e:
-            st.dataframe(st.session_state.trade_history, use_container_width=True)
+            st.error(f"表格顯示異常: {e}")
+
     else:
         st.info("💡 目前尚無交易紀錄，或雲端連線中...")
         
