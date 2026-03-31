@@ -123,6 +123,12 @@ def init_cloud_connection():
         st.sidebar.error(f"📡 雲端對齊失敗，請檢查共用權限: {str(e)[:50]}")
         return None
 
+        
+    except Exception as e:
+        # 只在側邊欄靜悄悄地噴錯誤，不影響主介面運作
+        st.sidebar.error(f"📡 雲端對齊失敗，請檢查共用權限: {str(e)[:50]}")
+        return None
+
 
 def get_cloud_df(sh, sheet_name):
     try:
