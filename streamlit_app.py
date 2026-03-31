@@ -571,12 +571,13 @@ if 'pool_500' in globals():
 
 # --- [大基石 V15.3 終極雲端同步補丁：確保數據絕對安全] ---
 def save_data():
-    """取代舊版 CSV，實現 100% 雲端同步"""
+    """取代舊版 CSV，實現 100% 雲端同步 (完全還原無精簡)"""
     try:
         sh = init_cloud_connection()
         if sh:
             ws = sh.worksheet("inventory")
             ws.clear()
+            # 確保即使 local_db 只有保底結構也能正常運作
             headers = st.session_state.local_db.columns.tolist()
             # 轉換為清單格式以符合 gspread 要求
             data_to_write = [headers] + st.session_state.local_db.fillna("").values.tolist()
@@ -585,17 +586,22 @@ def save_data():
     except Exception as e:
         st.sidebar.error(f"📡 雲端寫入失敗: {str(e)[:30]}")
 
+# --- 初始化執行觸發 ---
+# 這裡對接 load_data，內含您要求的「先建立變數再對接」邏輯
+if 'initialized' not in st.session_state:
+    load_data()
+
 # ==============================================================================
 # 第 5 區：側邊欄管理與分頁定義 - 大基石 V15.3 完整佈局 (無刪減版)
 # ==============================================================================
 
 with st.sidebar:
     st.title("👤 大基石 AI 經理人")
-    st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d')}")
+    st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
-    # 確保資料已初始化
-    if 'initialized' not in st.session_state:
-        load_data()
+    # 核心守護：確保在 load_data 萬一失敗時，client_list 依然存在
+    if "client_list" not in st.session_state or not st.session_state.client_list:
+        st.session_state.client_list = ["Robert"]
 
     # --- [還原：V15.0 客戶系統設定功能] ---
     with st.expander("⚙️ 客戶系統設定 (增/改/刪)", expanded=False):
@@ -603,6 +609,7 @@ with st.sidebar:
         if st.button("➕ 確認新增", use_container_width=True):
             if new_c and new_c not in st.session_state.client_list: 
                 st.session_state.client_list.append(new_c)
+                # 建立該客戶的初始結構
                 new_row = pd.DataFrame([{
                     'client': new_c, 'id': 'INIT', 'name': '初始紀錄', 
                     'buy_price': 0, 'shares': 0, 'unit': '張', 
@@ -610,21 +617,22 @@ with st.sidebar:
                 }])
                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
                 st.session_state['cur_c'] = new_c
-                save_data(); st.rerun()
+                save_data()
+                st.rerun()
         
         st.markdown("---")
-        # 💡 安全修正版：
-        if "client_list" not in st.session_state or not st.session_state.client_list:
-            st.session_state.client_list = ["Robert"]
             
+        # 安全取得當前對象姓名
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
+        
         new_name = st.text_input("更名當前客戶", value=current_idx_name, key="rename_input")
         if st.button("📝 執行更名", use_container_width=True):
             if new_name and new_name != current_idx_name:
                 st.session_state.local_db['client'] = st.session_state.local_db['client'].replace(current_idx_name, new_name)
                 st.session_state.client_list = [new_name if x == current_idx_name else x for x in st.session_state.client_list]
                 st.session_state['cur_c'] = new_name
-                save_data(); st.rerun()
+                save_data()
+                st.rerun()
 
         if st.button("❌ 刪除當前客戶", use_container_width=True):
             if st.session_state.get('cur_c') != "Robert":
@@ -632,16 +640,24 @@ with st.sidebar:
                 st.session_state.client_list.remove(to_del)
                 st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != to_del]
                 st.session_state['cur_c'] = "Robert"
-                save_data(); st.rerun()
+                save_data()
+                st.rerun()
 
     # --- [核心：控盤選擇器] ---
+    # 確保 cur_c 變數不會因為雲端數據沒刷進來而遺失
     if st.session_state.get('cur_c') not in st.session_state.client_list:
         st.session_state['cur_c'] = st.session_state.client_list[0]
+
+    # 計算 index 以保持選擇狀態連貫
+    try:
+        c_idx = st.session_state.client_list.index(st.session_state['cur_c'])
+    except:
+        c_idx = 0
 
     st.session_state['cur_c'] = st.selectbox(
         "🎯 當前控盤對象", 
         st.session_state.client_list, 
-        index=st.session_state.client_list.index(st.session_state['cur_c']),
+        index=c_idx,
         key="client_selector"
     )
     
@@ -651,27 +667,32 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
+    # 即時顯示持股統計
     c_stocks = st.session_state.local_db[(st.session_state.local_db['client'] == st.session_state['cur_c']) & (st.session_state.local_db['id'] != 'INIT')]
     st.metric(f"{st.session_state['cur_c']} 持股總數", f"{len(c_stocks)} 檔")
 
 
 # ==============================================================================
-# 第 6 區 ：大基石史詩全功能還原版 (V15.3 終極進化形態)
+# 第 6 區 ：大基石史詩全功能還原版 (V15.3 終極進化形態) - 完全不精簡版
 # ==============================================================================
+
+# 1. 建立分頁 (由原本第六區第一行啟動)
 tab_scan, tab_intel, tab_brain, tab_history = st.tabs(["📊 戰策指揮所", "🌐 全球情報室", "🧠 AI 進化大腦", "📜 交易紀錄"])
 
 with tab_scan:
+    # 完全保留原始標題與佈局
     st.title(f"🛡️ 戰略指揮所: [{st.session_state.get('cur_c', 'Robert')}]")
     col_l, col_r = st.columns([1.6, 1.4]) 
     
     with col_l:
-        # 1. 搜尋區 (還原模糊匹配與自動識別)
+        # --- [1. 搜尋區：還原模糊匹配與自動識別] ---
         with st.container(border=True):
             st.subheader("🔍 全球個股戰略搜索")
             s_input = st.text_input("輸入名稱或代號", placeholder="例如：2330 或 台積電", key="global_search_full")
             
             if s_input:
                 s_raw = s_input.strip()
+                # 數字代號識別
                 if s_raw.isdigit():
                     real_name = get_stock_name(s_raw) 
                     sel_sid = get_full_ticker(s_raw)
@@ -679,8 +700,10 @@ with tab_scan:
                         st.session_state.selected_stock = sel_sid
                         st.rerun()
                 else:
+                    # 名稱模糊匹配邏輯 (完全還原按鈕佈局)
                     matches = [tid for tid, name in STOCK_MAP.items() if s_raw in name]
                     if matches:
+                        st.write("🎯 找到相關個股，請選擇：")
                         m_cols = st.columns(3)
                         for idx, m_sid in enumerate(list(set(matches))[:9]):
                             with m_cols[idx % 3]:
@@ -688,25 +711,31 @@ with tab_scan:
                                     st.session_state.selected_stock = get_full_ticker(m_sid)
                                     st.rerun()
 
-        # 2. AI 診斷呈現 (還原所有標籤與視覺效果)
+        # --- [2. AI 診斷呈現：還原所有標籤、顏色判斷與視覺效果] ---
         sel_sid = st.session_state.get('selected_stock')
         if sel_sid:
             p, d, cc = get_stock_perf(sel_sid, 0)
+            # 調用強大大腦
             res = generate_ai_tech_analysis(sel_sid, p, 0)
             if res:
                 st.markdown(f"### 🧠 V15.3 AI 進化診斷: {get_stock_name(sel_sid)} ({sel_sid})")
                 with st.container(border=True):
                     sc1, sc2 = st.columns([1.5, 1])
                     with sc1:
+                        # 分數顏色邏輯
                         score_color = "red" if res['score'] >= 80 else ("orange" if res['score'] >= 60 else "green")
                         st.markdown(f"#### **AI 綜合評分: <span style='color:{score_color};'>{res['score']}</span>**", unsafe_allow_html=True)
                         
+                        # 指令警示框
                         if res['score'] >= 80: st.error(f"🔥 **戰略指令：** {res['msg']}")
                         elif res['score'] <= 40: st.warning(f"🚨 **戰略指令：** {res['msg']}")
                         else: st.info(f"💡 **戰略指令：** {res['msg']}")
                         
+                        # 籌碼洗盤標籤
                         st.markdown(f"<span class='sentiment-tag'>{res.get('sent', '觀測中')}</span>", unsafe_allow_html=True)
                         st.write("---")
+                        
+                        # 佈局輸入區
                         u_c1, u_c2 = st.columns(2)
                         q_val = u_c1.number_input("佈局數量", min_value=1, value=1, key=f"q_buy_{sel_sid}")
                         u_val = u_c2.radio("單位", ["張", "股"], key=f"u_buy_{sel_sid}", horizontal=True)
@@ -719,19 +748,24 @@ with tab_scan:
                                 'sentiment': res.get('sent', '觀測中')
                             }])
                             st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                            # 寫入交易紀錄
                             record_transaction(st.session_state.cur_c, sel_sid, "買入", q_val, round(p, 2), f"AI評分:{res['score']} | {res['msg']}")
                             save_data(); st.rerun()
 
                     with sc2:
+                        # 右側數據指標
                         st.metric("即時股價", f"{round(p, 2)}", f"{round(d, 2)}", delta_color="inverse")
                         st.markdown(f"**🎯 目標價：** `NT$ {round(res.get('target', 0), 2)}`")
                         st.markdown(f"**🛡️ 停損價：** `NT$ {round(res.get('stop', 0), 2)}`")
+                        
+                        # 勝率進度條
                         win_p = res.get('win_prob', 50.0)
                         st.progress(win_p / 100, text=f"歷史相似走勢勝率: {win_p}%")
                         st.write(f"📈 預期波動: `{res.get('atr_range', '計算中')}`")
+                        st.caption(f"📍 {res.get('pivot', '大基石診斷器')}")
 
         st.divider()
-        # 3. 板塊掃描區 (還原完整進度條與 top 15 邏輯)
+        # --- [3. 板塊掃描區：還原完整進度條與 top 15 邏輯] ---
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_full")
         
@@ -739,10 +773,12 @@ with tab_scan:
             scored_data = []
             target_pool = pool_500[cat_choice]
             total_count = len(target_pool)
+            
+            # 完整保留掃描日誌文字
             scan_p = st.progress(0, text="AI 大腦正在掃描板塊...")
             
             for idx, (tid, tname) in enumerate(target_pool):
-                scan_p.progress((idx+1)/total_count, text=f"正在分析 ({idx+1}/{total_count}): {tname}")
+                scan_p.progress((idx+1)/total_count, text=f"正在分析 ({idx+1}/{total_count}): {tname}...")
                 ps, ds, _ = get_stock_perf(tid)
                 if ps > 0:
                     r = generate_ai_tech_analysis(tid, ps)
@@ -752,27 +788,36 @@ with tab_scan:
             scan_p.empty()
             
             if scored_data:
+                # 排序並取出前 15 檔
                 top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
+                st.success(f"✅ 板塊掃描完成！AI 篩選出 {len(top_picks)} 檔強勢標的：")
                 for item in top_picks:
                     with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | {item.get('sent', '')}"):
                         st.markdown(f"**AI 建議：** `{item['msg']}`")
-                        if st.button(f"🚀 快速佈局 {item['tname']}", key=f"q_{item['tid']}"):
+                        col_q1, col_q2 = st.columns([2, 1])
+                        col_q1.write(f"目前價格: {item['price']} ({item['diff']})")
+                        if col_q2.button(f"🚀 載入診斷", key=f"q_{item['tid']}"):
                             st.session_state.selected_stock = item['tid']
                             st.rerun()
 
     with col_r:
-        # 4. 持股監控區 (還原自動對齊與同步刪除邏輯)
+        # --- [4. 持股監控區：還原自動對齊與同步刪除邏輯] ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
+        # 過濾當前客戶持股
         my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.cur_c]
+        
         if not my_h.empty:
             for idx, row in my_h.iterrows():
+                # 跳過初始紀錄行
                 if row['id'] == 'INIT': continue
+                
                 cp, cd, cc = get_stock_perf(row['id'], 0)
                 with st.container(border=True):
                     st.markdown(f"**{row['name']}** `{row['id']}`")
                     st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {round(float(row['buy_price']), 2)}")
                     st.markdown(f"📌 **籌碼動向:** `{row.get('sentiment', '偵測中')}`")
                     
+                    # 減持功能區
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
                     exit_q = e_c1.number_input("數量", min_value=1, value=int(row['shares']), key=f"exq_{idx}")
                     exit_u = e_c2.radio("單位", ["張", "股"], key=f"exu_{idx}", horizontal=True)
@@ -788,20 +833,26 @@ with tab_scan:
         else:
             st.info("💡 目前無持股，請從左側搜尋或掃描板塊。")
 
+# --- 其他分頁還原 ---
 with tab_intel:
     st.subheader("🌐 全球市場即時情報系統")
-    st.info("情報室正在對接中，將整合 V15.2 宏觀數據流...")
+    st.info("情報室正在對接中，將整合 V15.2 宏觀數據流 (包含 SOX/IXIC 監控)...")
 
 with tab_brain:
     st.subheader("🧠 AI 進化大腦：神經元權重控制")
     st.write("目前模型版本：大基石 V15.3 (自主進化版)")
-    st.slider("技術指標權重", 0, 100, 60)
-    st.slider("籌碼流向權重", 0, 100, 40)
+    st.slider("技術指標權重 (MACD/斜率/背離)", 0, 100, 60)
+    st.slider("籌碼流向權重 (洗盤/融資/大戶)", 0, 100, 40)
+    st.divider()
+    st.write("🧬 已啟用核心模組：")
+    st.markdown("- `get_multi_timeframe_data` (多時框共振)\n- `detect_divergence` (指標背離偵測)\n- `calculate_cost_zone` (成本區計算)\n- `historical_surge_analysis` (歷史飆股特徵分析)")
 
 with tab_history:
     st.subheader("📜 全球戰略交易紀錄回溯")
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
         st.dataframe(st.session_state.trade_history.sort_index(ascending=False), use_container_width=True)
+    else:
+        st.info("💡 目前尚無交易紀錄數據。")
 
 
 
