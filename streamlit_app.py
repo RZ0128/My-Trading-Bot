@@ -230,6 +230,20 @@ def load_data():
             his_df['action'] = his_df['action'].astype(str)
             his_df['id'] = his_df['id'].astype(str)
             st.session_state.trade_history = his_df
+            
+        
+        # --- 修改這裡：同步庫存 ---
+        progress_bar.progress(30, text="📊 [2/4] 同步庫存 (Inventory)...")
+        # 原本可能是 st.session_state.inventory = get_cloud_df(sh, "inventory")
+        # 改成下面這行：
+        st.session_state.inventory = safe_get_df(sh, "inventory")
+
+        # --- 修改這裡：同步歷史 ---
+        progress_bar.progress(60, text="📜 [3/4] 同步歷史 (History)...")
+        # 原本可能是 st.session_state.trade_history = get_cloud_df(sh, "history")
+        # 改成下面這行：
+        st.session_state.trade_history = safe_get_df(sh, "history")
+        
         
         progress_bar.progress(80, text="👥 [3/4] 正在對齊 Clients...")
         client_df = get_cloud_df(sh, "clients")
