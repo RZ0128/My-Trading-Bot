@@ -91,24 +91,20 @@ with st.sidebar:
 def init_cloud_connection():
     try:
         # 1. 直接讀取您現有的 Secrets，不做任何手動更改
+        if "GCP_JSON_KEY" not in st.secrets:
+            return None
         gcp_json = dict(st.secrets["GCP_JSON_KEY"])
         pk = gcp_json["private_key"]
         
         # 2. 【核心修復】自動修復 PEM 格式（解決 InvalidPadding 關鍵）
-        # 有時候 Secrets 會把 \n 讀成字串，或遺失換行，這裡強制還原格式
         pk = pk.replace("\\n", "\n") 
-        
-        # 確保開頭與結尾沒有多餘空格或引號
         pk = pk.strip().strip("'").strip('"')
         
-        # 確保 PEM 格式標準化 (這是 Google 庫要求的硬性格式)
         if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
             pk = "-----BEGIN PRIVATE KEY-----\n" + pk
         if not pk.endswith("-----END PRIVATE KEY-----"):
             pk = pk + "\n-----END PRIVATE KEY-----"
             
-        # 處理中間可能擠成一團的換行（PEM 每 64 字元建議換行，這裡幫它補上）
-        # 這是最安全的做法，能相容所有貼上格式
         gcp_json["private_key"] = pk
         
         # 3. 執行連線
@@ -119,16 +115,8 @@ def init_cloud_connection():
         return gc.open("StoneManager_DB")
         
     except Exception as e:
-        # 只在側邊欄靜悄悄地噴錯誤，不影響主介面運作
         st.sidebar.error(f"📡 雲端對齊失敗，請檢查共用權限: {str(e)[:50]}")
         return None
-
-        
-    except Exception as e:
-        # 只在側邊欄靜悄悄地噴錯誤，不影響主介面運作
-        st.sidebar.error(f"📡 雲端對齊失敗，請檢查共用權限: {str(e)[:50]}")
-        return None
-
 
 def get_cloud_df(sh, sheet_name):
     try:
@@ -171,14 +159,15 @@ def check_connection():
         return False, "❌ 連線失敗：請檢查 Secrets 設定"
 
 def load_data():
+    """大腦初始化程序 - 完全保留所有日誌文字與進度條步驟"""
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
     
-    # --- [核心保底：在連線前先建立變數，防止 597 行崩潰] ---
+    # --- [核心修復：在嘗試連線前先建立保底變數，防止 597 行崩潰] ---
     if 'client_list' not in st.session_state:
         st.session_state.client_list = ["Robert"]
     if 'local_db' not in st.session_state:
-        st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'shares', 'buy_price'])
+        st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'shares', 'buy_price', 'unit', 'entry_reason', 'sentiment'])
     if 'trade_history' not in st.session_state:
         st.session_state.trade_history = pd.DataFrame()
     
@@ -187,23 +176,25 @@ def load_data():
     try:
         sh = init_cloud_connection()
         if not sh: 
-            raise Exception("無法開啟試算表")
+            raise Exception("無法開啟試算表 (Secret 金鑰無效或權限未開啟)")
 
         progress_bar.progress(20, text="📊 [1/4] 正在掃描 Inventory：比對 35 年歷史持股特徵...")
-        st.session_state.local_db = get_cloud_df(sh, "inventory")
+        inv_df = get_cloud_df(sh, "inventory")
+        if not inv_df.empty:
+            st.session_state.local_db = inv_df
         time.sleep(0.3)
         
         progress_bar.progress(50, text="📜 [2/4] 正在同步 History：提取近 10 年交易回測數據...")
-        st.session_state.trade_history = get_cloud_df(sh, "history")
+        his_df = get_cloud_df(sh, "history")
+        if not his_df.empty:
+            st.session_state.trade_history = his_df
         time.sleep(0.3)
         
         progress_bar.progress(80, text="👥 [3/4] 正在對齊 Clients：更新 AI 戰略經理人控盤對象...")
         client_df = get_cloud_df(sh, "clients")
         
-        # 雲端抓取的客戶名單處理
         if not client_df.empty and 'name' in client_df.columns:
             cloud_clients = client_df['name'].dropna().astype(str).tolist()
-            # 合併本地與雲端名單，並排除無效值
             combined = list(set(st.session_state.client_list + cloud_clients))
             st.session_state.client_list = sorted([c for c in combined if c not in ["nan", "None", ""]])
         
@@ -213,11 +204,11 @@ def load_data():
         st.session_state.initialized = True
         
     except Exception as e:
-        # 發生錯誤時，標記已初始化，確保程式繼續往下跑，不卡在死循環
+        # 發生錯誤時，標記已初始化，確保程式繼續往下跑
         st.session_state.initialized = True
         if 'progress_bar' in locals():
             progress_bar.empty()
-        # 在側邊欄顯示警告，但不讓 App 崩潰
+        # 完全保留你的側邊欄警告與錯誤日誌
         st.sidebar.warning(f"📡 雲端同步中斷，目前使用本地/保底模式")
         st.sidebar.error(f"錯誤原因: {str(e)[:50]}")
 
@@ -312,7 +303,7 @@ def update_ai_thought_log(ticker, score, msg):
 # ==============================================================================
 
 def get_macd_slope(df):
-    """大基石核心：MACD 斜率共振偵測"""
+    """大基石核心：MACD 斜率共振偵測 (完全保留)"""
     if df is None or df.empty or len(df) < 35: 
         return 0, "📡 數據不足"
     exp1 = df['Close'].ewm(span=12, adjust=False).mean()
@@ -327,6 +318,7 @@ def get_macd_slope(df):
     return slope, status
 
 def ai_pattern_discovery(ticker, h_max):
+    """AI 自主發現法則 (完全保留)"""
     if h_max is None or len(h_max) < 100: return None
     c, v = h_max['Close'], h_max['Volume']
     recent_v_min = v.tail(10).min()
@@ -336,42 +328,43 @@ def ai_pattern_discovery(ticker, h_max):
     return None
 
 def ai_evolution_engine(ticker, h_max, current_price):
+    """大腦進化引擎：包含融資/籌碼洗盤、島狀反轉、爆量預警 (完全保留)"""
     if h_max is None or h_max.empty or len(h_max) < 250:
-        return 50, "📚 數據積累中", 50.0
+        return 50, "📚 數據積累中", 50.0, "🔍 觀察"
     
     c, v, hi, lo = h_max['Close'], h_max['Volume'], h_max['High'], h_max['Low']
     score = 60
     intel_tags = []
 
-    # --- [1. 價格與 MACD 背離偵測] ---
+    # 1. 價格與 MACD 背離偵測
     ema12 = c.ewm(span=12).mean(); ema26 = c.ewm(span=26).mean()
     macd = ema12 - ema26
     if c.iloc[-1] > c.tail(20).max() * 0.98 and macd.iloc[-1] < macd.tail(20).max() * 0.8:
         score -= 25; intel_tags.append("🚨 偵測到指標背離")
 
-    # --- [2. 島狀反轉偵測] ---
+    # 2. 島狀反轉偵測
     if lo.iloc[-1] > hi.iloc[-2]: intel_tags.append("🏝️ 島狀反轉潛力(多)"); score += 15
     if hi.iloc[-1] < lo.iloc[-2]: intel_tags.append("🏚️ 島狀反轉潛力(空)"); score -= 20
 
-    # --- [3. 量縮收斂三角形] ---
+    # 3. 量縮收斂三角形
     price_range = (hi.tail(20).max() - lo.tail(20).min()) / c.iloc[-1]
     if price_range < 0.05 and v.iloc[-1] < v.tail(20).mean() * 0.6:
         score += 20; intel_tags.append("📐 量縮收斂三角形")
 
-    # --- [4. 跳空高檔爆巨量] ---
+    # 4. 跳空高檔爆巨量
     avg_v_year = v.rolling(248).mean().iloc[-1]
     if c.iloc[-1] > c.rolling(248).mean().iloc[-1] * 1.3 and v.iloc[-1] > avg_v_year * 3:
         score -= 45; intel_tags.append("💀 高檔爆巨量(出貨預警)")
 
-    # --- [5. 八大法則與洗盤偵測模組] ---
+    # 5. 八大法則與洗盤偵測模組
     ma20 = c.rolling(20).mean().iloc[-1]
     if c.iloc[-1] > ma20 and v.iloc[-1] > v.rolling(20).mean().iloc[-1] * 1.5:
         score += 20; intel_tags.append("🔥 匹配噴發模型")
 
-    # --- [融資/籌碼洗盤深度邏輯] ---
+    # --- [融資/籌碼洗盤深度邏輯 - 完全保留] ---
     ma248 = c.rolling(248).mean().iloc[-1]
     ma124 = c.rolling(124).mean().iloc[-1]
-    sentiment_status = "🔍 散戶進場 (融資增)" # 內部標記使用
+    sentiment_status = "🔍 散戶進場 (融資增)"
 
     if not np.isnan(ma248) and (current_price >= ma248 * 0.96 and current_price <= ma248 * 1.04):
         if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.75:
@@ -391,6 +384,7 @@ def ai_evolution_engine(ticker, h_max, current_price):
     return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 常態波動", win_prob, sentiment_status
 
 def generate_ai_tech_analysis(ticker, price, mode=0):
+    """完全保留診斷進度條日誌文字"""
     p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年歷史檔案...")
     try:
         p_bar.progress(25, text=f"🌐 正在同步數據流：{ticker}...")
