@@ -552,19 +552,22 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
 
 
 # ==============================================================================
-# 【新增】大基石 V15.3 高效掃描引擎 (帶 20 分鐘記憶功能)
+# 【更新】大基石 V15.3 高效掃描引擎 (中文進度條 + 隱藏英文版)
 # ==============================================================================
 
-@st.cache_data(ttl=1200) # ✅ 設定 20 分鐘(1200秒)內不重複跑，解決你說的浪費時間問題
+@st.cache_data(ttl=1200, show_spinner=False) # 👈 徹底關閉 Streamlit 預設英文提示
 def get_cached_sector_scan(sector_name, target_pool):
-    """
-    這個函數會被 Streamlit 記住。只要 sector_name 沒變，就不會進入循環重跑。
-    """
     scored_data = []
     total_count = len(target_pool)
     
-    # 這裡執行真正的掃描邏輯
+    # 在這裡建立中文進度條，這樣只有在「第一次掃描」時會出現
+    scan_p = st.progress(0, text=f"🚀 大基石 AI 開始分析 {sector_name} 板塊...")
+    
     for idx, (tid, tname) in enumerate(target_pool):
+        # 更新百分比與中文進度文字
+        progress_val = (idx + 1) / total_count
+        scan_p.progress(progress_val, text=f"📡 正在深度診斷 ({idx+1}/{total_count}): {tname}...")
+        
         ps, ds, _ = get_stock_perf(tid)
         if ps > 0:
             r = generate_ai_tech_analysis(tid, ps)
@@ -572,9 +575,9 @@ def get_cached_sector_scan(sector_name, target_pool):
                 r.update({'tid': tid, 'tname': tname, 'price': ps, 'diff': ds})
                 scored_data.append(r)
     
-    # 排序並取出前 15 檔返回
+    # 跑完後清除進度條
+    scan_p.empty()
     return sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
-
 
 
 # --- 初始化執行 ---
