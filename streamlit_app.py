@@ -551,6 +551,32 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
         return {"msg": f"AI 異常: {str(e)[:15]}", "score": 50, "win_prob": 50, "sent": "🔄 重新連線", "price": round(float(price), 2)}
 
 
+# ==============================================================================
+# 【新增】大基石 V15.3 高效掃描引擎 (帶 20 分鐘記憶功能)
+# ==============================================================================
+
+@st.cache_data(ttl=1200) # ✅ 設定 20 分鐘(1200秒)內不重複跑，解決你說的浪費時間問題
+def get_cached_sector_scan(sector_name, target_pool):
+    """
+    這個函數會被 Streamlit 記住。只要 sector_name 沒變，就不會進入循環重跑。
+    """
+    scored_data = []
+    total_count = len(target_pool)
+    
+    # 這裡執行真正的掃描邏輯
+    for idx, (tid, tname) in enumerate(target_pool):
+        ps, ds, _ = get_stock_perf(tid)
+        if ps > 0:
+            r = generate_ai_tech_analysis(tid, ps)
+            if r:
+                r.update({'tid': tid, 'tname': tname, 'price': ps, 'diff': ds})
+                scored_data.append(r)
+    
+    # 排序並取出前 15 檔返回
+    return sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
+
+
+
 # --- 初始化執行 ---
 st.title("🛡️ 大基石 - AI 戰略經理人 (V15.3)")
 if 'initialized' not in st.session_state: load_data() 
