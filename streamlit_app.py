@@ -153,13 +153,19 @@ def get_cloud_df(sh, sheet_name):
 
 # --- 在現有的 get_cloud_df 之後插入 ---
 def safe_get_df(sh, name):
-    df = get_cloud_df(sh, name)
-    if not df.empty:
-        # 強制將所有欄位轉為字串，徹底解決 ArrowTypeError
-        for col in df.columns:
-            # 這裡多做一個處理：把 'None' 或 'nan' 轉成空字串，畫面會比較乾淨
-            df[col] = df[col].astype(str).replace(['nan', 'None', '<NA>'], '')
-    return df
+    try:
+        df = get_cloud_df(sh, name)
+        if not df.empty:
+            # 💡 大基石修復：強制將所有欄位轉為字串，並過濾掉可能導致 Arrow 崩潰的類型
+            for col in df.columns:
+                # 先轉為物件類型，處理 nan 後再轉字串
+                df[col] = df[col].astype(object).replace([np.nan, None, 'nan', 'None', '<NA>'], '')
+                df[col] = df[col].astype(str)
+            return df
+        return pd.DataFrame()
+    except Exception as e:
+        st.sidebar.warning(f"⚠️ {name} 讀取異常: {str(e)[:20]}")
+        return pd.DataFrame()
 
 
 def get_us_market_impact():
