@@ -223,43 +223,41 @@ def load_data():
             # 如果金鑰失效，直接報錯跳到 except 區塊
             raise Exception("無法辨認 Secrets 金鑰或 Google Sheets 權限未開啟")
 
-        progress_bar.progress(20, text="📊 [1/4] 正在掃描 Inventory...")
-        inv_df = get_cloud_df(sh, "inventory")
+                # --- [1/4] 正在掃描 Inventory (庫存) ---
+        progress_bar.progress(25, text="📊 [1/4] 正在對齊 Inventory 雲端數據...")
+        inv_df = safe_get_df(sh, "inventory")
         if not inv_df.empty:
-            # 確保欄位對齊
+            # 強制將關鍵欄位轉為字串，徹底防止 ArrowTypeError
+            for col in ['id', 'client', 'name']:
+                if col in inv_df.columns:
+                    inv_df[col] = inv_df[col].astype(str)
+            # 同步至大腦核心與備援變數
             st.session_state.local_db = inv_df
+            st.session_state.inventory = inv_df
         
-        progress_bar.progress(50, text="📜 [2/4] 正在同步 History...")
-        his_df = get_cloud_df(sh, "history")
+        # --- [2/4] 正在同步 History (交易紀錄) ---
+        progress_bar.progress(50, text="📜 [2/4] 正在對齊 History 交易紀錄...")
+        his_df = safe_get_df(sh, "history")
         if not his_df.empty:
             # 強制將 action 和 id 欄位轉為字串，防止數字與文字混雜
-            his_df['action'] = his_df['action'].astype(str)
-            his_df['id'] = his_df['id'].astype(str)
+            for col in ['action', 'id', 'client']:
+                if col in his_df.columns:
+                    his_df[col] = his_df[col].astype(str)
             st.session_state.trade_history = his_df
             
-        
-        # --- 修改這裡：同步庫存 ---
-        progress_bar.progress(30, text="📊 [2/4] 同步庫存 (Inventory)...")
-        # 原本可能是 st.session_state.inventory = get_cloud_df(sh, "inventory")
-        # 改成下面這行：
-        st.session_state.inventory = safe_get_df(sh, "inventory")
-
-        # --- 修改這裡：同步歷史 ---
-        progress_bar.progress(60, text="📜 [3/4] 同步歷史 (History)...")
-        # 原本可能是 st.session_state.trade_history = get_cloud_df(sh, "history")
-        # 改成下面這行：
-        st.session_state.trade_history = safe_get_df(sh, "history")
-        
-        
-        progress_bar.progress(80, text="👥 [3/4] 正在對齊 Clients...")
-        client_df = get_cloud_df(sh, "clients")
+        # --- [3/4] 正在對齊 Clients (客戶清單) ---
+        progress_bar.progress(75, text="👥 [3/4] 正在同步客戶名單系統...")
+        client_df = safe_get_df(sh, "clients")
         if not client_df.empty and 'name' in client_df.columns:
             cloud_clients = client_df['name'].dropna().astype(str).tolist()
+            # 確保以 Robert 為基準進行合併
             combined = list(set(["Robert"] + cloud_clients))
             st.session_state.client_list = sorted([c for c in combined if c not in ["nan", "None", ""]])
         
+        # --- [4/4] 雲端對齊完成 ---
         progress_bar.progress(100, text="✅ [4/4] 雲端對齊成功！")
         time.sleep(0.5)
+
         
     except Exception as e:
         # --- [第三步：如果失敗，確保側邊欄有警示，但程式不卡住] ---
