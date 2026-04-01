@@ -965,86 +965,85 @@ with tab_scan:
             
     
     with col_r:
-        # --- [4. 持股監控區：大基石核心佈局 - 實裝洗盤偵測與自動診斷] ---
+        # --- [4. 持股監控區：大基石 V15.3 強化版] ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
         
-        # 1. 雲端對齊：精準過濾當前客戶持股，排除 INIT 行
         mask = (st.session_state.local_db['client'] == st.session_state.cur_c) & \
                (st.session_state.local_db['id'] != 'INIT')
         my_h = st.session_state.local_db[mask]
 
+        total_profit_loss = 0.0  # 初始化總損益
+
         if not my_h.empty:
             for idx, row in my_h.iterrows():
-                # 2. 獲取即時行情 (保持原有名稱與功能)
+                # 獲取行情：cp(現價), cd(漲跌), cc(漲幅)
                 cp, cd, cc = get_stock_perf(row['id'], 0) 
                 
-                # 3. AI 持續監控：自動籌碼診斷核心邏輯
-                # 優先讀取資料庫現有標籤，若為空則觸發【洗盤偵測邏輯】
+                # 計算單筆損益：(現價 - 成本) * 股數
+                # 判斷單位：張=1000股
+                multiplier = 1000 if row['unit'] == "張" else 1
+                shares_val = float(row['shares'])
+                buy_p = float(row['buy_price'])
+                individual_pl = (cp - buy_p) * shares_val * multiplier
+                total_profit_loss += individual_pl
+
+                # AI 籌碼診斷邏輯
                 sentiment_val = row.get('sentiment', '偵測中')
-                
                 if sentiment_val in ['偵測中', '', None]:
-                    # 💡 這裡未來可對接 get_multi_timeframe_data 作更深層判斷
-                    # 目前實裝：股價回檔至成本以下 + 觸發洗盤邏輯
-                    try:
-                        buy_p = float(row['buy_price'])
-                        if cp < buy_p:
-                            sentiment_val = "🔥 偵測到洗盤完成，準備破新高"
-                        else:
-                            sentiment_val = "💰 大戶收貨 (融資減)"
-                    except:
-                        sentiment_val = "🔍 數據分析中"
+                    if cp < buy_p:
+                        sentiment_val = "🔥 偵測到洗盤完成，準備破新高"
+                    else:
+                        sentiment_val = "💰 大戶收貨 (融資減)"
         
-                # 4. 強化版監控佈局 (絕不精簡按鈕)
                 with st.container(border=True):
-                    col_t1, col_t2 = st.columns([2.5, 1])
+                    col_t1, col_t2 = st.columns([2, 1])
                     col_t1.markdown(f"### **{row['name']}** `{row['id']}`")
                     
-                    # 顯示即時漲跌幅 (視覺強化)
-                    delta_color = "red" if cd > 0 else "green"
-                    col_t2.markdown(f"<h4 style='text-align:right;color:{delta_color};'>{cp}</h4>", unsafe_allow_html=True)
+                    # 修正問題 2：限制小數點兩位，並顯示損益點數
+                    delta_color = "red" if cd >= 0 else "green"
+                    prefix = "+" if cd > 0 else ""
+                    col_t2.markdown(
+                        f"<div style='text-align:right;'><span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{round(cp, 2)}</span><br>"
+                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{round(cd, 2)} ({cc}%)</span></div>", 
+                        unsafe_allow_html=True
+                    )
             
                     st.markdown(f"🚩 **AI 籌碼診斷：** :orange[{sentiment_val}]")
                     
-                    # 數據對齊展示
-                    st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: **{round(float(row['buy_price']), 2)}**")
+                    # 修正問題 1：顯示單筆損益
+                    pl_color = "red" if individual_pl >= 0 else "green"
+                    st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {round(buy_p, 2)}")
+                    st.markdown(f"💰 當前盈虧: <span style='color:{pl_color}; font-weight:bold;'>{format(int(individual_pl), ',')} TWD</span>", unsafe_allow_html=True)
             
-                    # --- 減持功能區：保持精美佈局與雲端同步 ---
+                    # --- 減持功能區 (保持佈局，防止 ID 重複使用 idx) ---
                     st.divider()
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
-                    
-                    # 數值安全處理
-                    try:
-                        curr_shares = int(float(row['shares']))
-                    except:
-                        curr_shares = 1
-                        
-                    exit_q = e_c1.number_input("數量", min_value=1, value=curr_shares, key=f"exq_{idx}", label_visibility="collapsed")
-                    exit_u = e_c2.radio("單位", ["張", "股"], key=f"exu_{idx}", horizontal=True, label_visibility="collapsed")
+                    exit_q = e_c1.number_input("數量", min_value=1, value=int(shares_val), key=f"exq_v15_{idx}", label_visibility="collapsed")
+                    exit_u = e_c2.radio("單位", ["張", "股"], index=0 if row['unit']=="張" else 1, key=f"exu_v15_{idx}", horizontal=True, label_visibility="collapsed")
             
-                    # 執行按鈕：確保 record_transaction 正常寫入 sentiment 狀態
-                    if e_c3.button(f"❌ 執行減持", key=f"exb_{idx}", use_container_width=True):
-                        # 紀錄交易並將當前 AI 診斷寫入備註
-                        record_transaction(
-                            st.session_state.cur_c, 
-                            row['id'], 
-                            "賣出", 
-                            exit_q, 
-                            round(cp, 2), 
-                            f"AI診斷:{sentiment_val}"
-                        )
-                        
-                        # 雲端同步更新：更新本地 DataFrame 並存檔
-                        new_shares = curr_shares - exit_q
+                    if e_c3.button(f"❌ 執行減持", key=f"exb_v15_{idx}", use_container_width=True):
+                        record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, round(cp, 2), f"AI診斷:{sentiment_val}")
+                        new_shares = shares_val - exit_q
                         if new_shares <= 0:
                             st.session_state.local_db = st.session_state.local_db.drop(idx)
                         else:
                             st.session_state.local_db.at[idx, 'shares'] = new_shares
-                        
-                        save_data() # 立即保存至 CSV/雲端
-                        st.toast(f"✅ {row['name']} 交易已同步至雲端")
+                        save_data()
                         st.rerun()
+
+            # 修正問題 1：持股區最下方顯示總損益金額
+            st.divider()
+            total_color = "red" if total_profit_loss >= 0 else "green"
+            st.markdown(
+                f"<div style='background-color:#f0f2f6; padding:20px; border-radius:10px; text-align:center;'>"
+                f"<h4>總持股估計盈虧</h4>"
+                f"<h2 style='color:{total_color};'>{format(int(total_profit_loss), ',')} TWD</h2>"
+                f"</div>", 
+                unsafe_allow_html=True
+            )
         else:
             st.info("💡 目前無持股，請從左側搜尋或掃描板塊。")
+
 
 
 # --- 其他分頁還原 ---
