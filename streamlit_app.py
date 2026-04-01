@@ -917,31 +917,21 @@ with tab_scan:
                         st.caption(f"📍 {res.get('pivot', '大基石診斷器')}")
 
         st.divider()
+
+
         # --- [3. 板塊掃描區：精確修復版 - 刪除醜表格、還原買入功能、修復籌碼顯示] ---
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_full")
         
+        # ✅ 修改點：點擊按鈕後，不再現場跑長迴圈，而是調用緩存函數
         if st.button(f"🔍 啟動 {cat_choice} 板塊診斷", use_container_width=True):
-            scored_data = []
-            target_pool = pool_500[cat_choice]
-            total_count = len(target_pool)
             
-            scan_p = st.progress(0, text="AI 大腦正在掃描板塊...")
+            # --- 啟動緩存提取 ---
+            with st.spinner(f"📡 大基石 AI 正在調取 {cat_choice} 板塊緩存數據 (20分鐘內有效)..."):
+                # 調用我們定義在「初始化執行」上方的緩存函數
+                top_picks = get_cached_sector_scan(cat_choice, pool_500[cat_choice])
             
-            for idx, (tid, tname) in enumerate(target_pool):
-                scan_p.progress((idx+1)/total_count, text=f"正在分析 ({idx+1}/{total_count}): {tname}...")
-                ps, ds, _ = get_stock_perf(tid)
-                if ps > 0:
-                    # 確保這裡調用 generate_ai_tech_analysis 獲取真實 AI 數據
-                    r = generate_ai_tech_analysis(tid, ps)
-                    if r:
-                        r.update({'tid': tid, 'tname': tname, 'price': ps, 'diff': ds})
-                        scored_data.append(r)
-            scan_p.empty()
-            
-            if scored_data:
-                # 排序並取出前 15 檔
-                top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
+            if top_picks:
                 st.success(f"✅ 板塊掃描完成！AI 篩選出 {len(top_picks)} 檔強勢標的：")
 
                 # --- [重點 1：這裡絕對不放 st.dataframe，直接進入精美卡片迴圈] ---
@@ -986,7 +976,6 @@ with tab_scan:
                                 st.rerun()
 
                 st.divider()
-
 
             
     
