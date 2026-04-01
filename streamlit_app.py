@@ -1100,7 +1100,7 @@ with tab_brain:
                 if targets:
                     for tid, tname in targets:
                         # 調用系統內建的 update_ai_thought_log (確保此函數已定義在上方工具區)
-                        update_ai_thought_log(tid, f"完成針對 {tname} ({tid}) 的 35 年特徵提取。目前模型偵測到與 2008/2020 年歷史走勢高度契合，權重已同步。")
+                        update_ai_thought_log(tid, 99, f"完成針對 {tname} ({tid}) 的 35 年特徵提取。目前模型偵測到與 2008/2020 年歷史走勢高度契合，權重已同步。")
                     st.success(f"✅ 已完成 {len(targets)} 檔標的的思維進化同步！")
                     time.sleep(1)
                     st.rerun()
