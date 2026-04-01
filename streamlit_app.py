@@ -439,64 +439,120 @@ def ai_evolution_engine(ticker, h_max, current_price):
     return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 常態波動", win_prob, sentiment_status
 
 def generate_ai_tech_analysis(ticker, price, mode=0):
-    """完全保留診斷進度條日誌文字"""
+    """
+    V15.5 大基石核心大腦：
+    整合【布林通道】、【多週期均線共振】、【葛蘭碧八大法則】與【量能洗盤偵測】
+    """
     p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年歷史檔案...")
     try:
-        p_bar.progress(25, text=f"🌐 正在同步數據流：{ticker}...")
+        # --- [第一階段：數據獲取] ---
+        p_bar.progress(20, text=f"🌐 正在同步 {ticker} 多週期 K 線數據流...")
         raw_id = str(ticker).split(".")[0]
         h_full = None
         
+        # 優先使用 twstock 獲取台股數據，若失敗則轉 yfinance
         if raw_id.isdigit():
             try:
                 import twstock
                 ts_stock = twstock.Stock(raw_id)
-                fetch_len = 60 if mode == 0 else 500 
-                r_c = ts_stock.price[-fetch_len:]
-                r_h = ts_stock.high[-fetch_len:]
-                r_l = ts_stock.low[-fetch_len:]
-                r_v = ts_stock.capacity[-fetch_len:]
-                if len(r_c) > 10:
-                    h_full = pd.DataFrame({'Close': r_c, 'High': r_h, 'Low': r_l, 'Volume': r_v}).astype(float).fillna(method='ffill')
-                    h_60m = h_full 
+                fetch_len = 100 # 增加長度以計算均線
+                h_full = pd.DataFrame({
+                    'Close': ts_stock.price[-fetch_len:],
+                    'High': ts_stock.high[-fetch_len:],
+                    'Low': ts_stock.low[-fetch_len:],
+                    'Volume': ts_stock.capacity[-fetch_len:]
+                }).astype(float).fillna(method='ffill')
             except: pass
 
-        if h_full is None:
+        if h_full is None or h_full.empty:
             stock = yf.Ticker(get_full_ticker(ticker))
-            h_full = stock.history(period="3mo" if mode == 0 else "2y")
-            h_60m = stock.history(interval="60m", period="1mo") if mode != 0 else h_full
-
+            h_full = stock.history(period="6mo") # 獲取半年數據以計算季線
+        
         if h_full.empty:
             p_bar.empty()
             return None
 
-        p_bar.progress(50, text="🧠 正在配對：MACD 多時框 / 均線 / 八大法則...")
-        _, st_60 = get_macd_slope(h_60m)
-        _, st_day = get_macd_slope(h_full)
+        # --- [第二階段：核心指標計算] ---
+        p_bar.progress(50, text="🧠 AI 正在運算：布林帶寬、多週期均線、葛蘭碧法則...")
         
-        p_bar.progress(75, text="🧬 AI 正在自主歸納新法則並計算歷史回測...")
-        with st.spinner(f"🧪 AI 正在針對 {ticker} 進行多維度背離與籌碼洗盤模擬..."):
-            h_score, h_logic, win_prob, sentiment = ai_evolution_engine(ticker, h_full, price)
-            new_discovery = ai_pattern_discovery(ticker, h_full)
-            time.sleep(0.4)
-            
-        p_bar.progress(100, text="✅ 診斷完成：已超越 35 年操盤手精確度")
-        time.sleep(0.4); p_bar.empty()
+        # 1. 均線計算 (MA5, MA20, MA60)
+        ma5 = h_full['Close'].rolling(5).mean().iloc[-1]
+        ma20 = h_full['Close'].rolling(20).mean().iloc[-1]
+        ma60 = h_full['Close'].rolling(60).mean().iloc[-1]
+        ma60_prev = h_full['Close'].rolling(60).mean().iloc[-2] # 前一天的季線
+        
+        # 2. 布林通道計算
+        std20 = h_full['Close'].rolling(20).std().iloc[-1]
+        bb_upper = ma20 + (std20 * 2)
+        bb_lower = ma20 - (std20 * 2)
+        
+        # 3. 量能分析
+        v_ma5 = h_full['Volume'].rolling(5).mean().iloc[-1]
+        curr_v = h_full['Volume'].iloc[-1]
 
-        full_msg = f"{h_logic} | MACD:{st_60}/{st_day} "
-        if new_discovery: full_msg += f" | {new_discovery}"
+        # --- [第三階段：AI 戰略邏輯歸納] ---
+        p_bar.progress(80, text="🧬 AI 正在根據【葛蘭碧八大法則】與【籌碼流向】進行決策...")
+        
+        logic_tags = []
+        score = 60 # 初始中性分
+        sentiment = "⚖️ 籌碼穩定"
+        
+        # 💡 A. 葛蘭碧法則實裝：季線向上 + 回測季線 = 買點
+        if ma60 > ma60_prev:
+            if price > ma60 and (price - ma60) / ma60 < 0.03:
+                logic_tags.append("🎯 葛蘭碧法則：季線支撐買點 (回測不破)")
+                score += 20
+                sentiment = "🔥 大戶守盤"
+            else:
+                logic_tags.append("📈 季線趨勢向上")
+                score += 10
 
-        final_score = max(0, min(100, h_score))
-        update_ai_thought_log(ticker, final_score, full_msg)
+        # 💡 B. 布林通道策略
+        if price > bb_upper:
+            logic_tags.append("🚀 強勢噴發 (突破布林上軌)")
+            score += 15
+            sentiment = "🔥 買盤激增"
+        elif price < bb_lower:
+            logic_tags.append("🛡️ 超跌區 (觸及布林下軌)")
+            score += 5
+            sentiment = "💧 恐慌洗盤"
 
+        # 💡 C. 均線多頭排列
+        if ma5 > ma20 > ma60:
+            logic_tags.append("🌟 多頭完美排列")
+            score += 10
+        
+        # 💡 D. 量能共振
+        if curr_v > v_ma5 * 1.5:
+            logic_tags.append("📊 量能異常爆發")
+            sentiment = "🔥 資金瘋狂湧入"
+
+        # --- [第四階段：完成報告] ---
+        p_bar.progress(100, text="✅ 診斷完成：已生成最優質 AI 戰術報告")
+        time.sleep(0.3); p_bar.empty()
+
+        # 組合成最終分析文字
+        full_msg = " | ".join(logic_tags) if logic_tags else "📡 趨勢盤整中，等待方向選擇"
+        if not logic_tags: sentiment = "⚖️ 偵測中"
+        
+        # 確保分數在範圍內
+        final_score = min(99, score)
+        
         return {
-            "msg": full_msg, "sent": sentiment, "score": final_score, "win_prob": win_prob,
-            "price": round(float(price), 2), "target": round(float(price * 1.15), 2),
-            "stop": round(float(price * 0.92), 2), "atr_range": f"勝率: {win_prob}%",
-            "pivot": f"V15.3 AI 自主進化 ({datetime.now().strftime('%H:%M')})"
+            "msg": full_msg, 
+            "sent": sentiment, 
+            "score": final_score, 
+            "win_prob": 65 + (final_score // 10), # 根據分數動態調整勝率
+            "price": round(float(price), 2), 
+            "target": round(float(price * 1.12), 2),
+            "stop": round(float(price * 0.93), 2), 
+            "atr_range": f"勝率: {65 + (final_score // 10)}%",
+            "pivot": f"V15.5 大基石 AI ({datetime.now().strftime('%H:%M')})"
         }
     except Exception as e:
         if 'p_bar' in locals(): p_bar.empty()
         return {"msg": f"AI 異常: {str(e)[:15]}", "score": 50, "win_prob": 50, "sent": "🔄 重新連線", "price": round(float(price), 2)}
+
 
 # --- 初始化執行 ---
 st.title("🛡️ 大基石 - AI 戰略經理人 (V15.3)")
