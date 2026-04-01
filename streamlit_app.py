@@ -342,13 +342,51 @@ def record_transaction(client, tid, action, shares, price, note):
         st.error(f"⚠️ 雲端寫入異常: {e}")
 
 def update_ai_thought_log(ticker, score, msg):
+    """
+    大基石核心思維同步：同時寫入雲端試算表與本地前端日誌
+    """
     try:
+        # 1. 取得基本資訊
+        tname = get_stock_name(ticker)
+        now_time = datetime.now()
+        
+        # 2. 同步至本地前端 Session State (確保 tab_brain 有反應)
+        if 'ai_logs' not in st.session_state:
+            st.session_state.ai_logs = []
+        
+        # 建立一筆新的日誌紀錄
+        new_log = {
+            "time": now_time.strftime("%H:%M:%S"),
+            "target": f"{tname} ({ticker})",
+            "content": msg
+        }
+        
+        # 避免重複寫入（如果是同秒發生的重複更新）
+        st.session_state.ai_logs.append(new_log)
+        
+        # 限制本地日誌數量（例如只保留最近 50 條，防止網頁過重）
+        if len(st.session_state.ai_logs) > 50:
+            st.session_state.ai_logs.pop(0)
+
+        # 3. 同步至雲端 Google Sheets (原始功能)
         sh = init_cloud_connection()
         if sh:
             ws = sh.worksheet("thought_log")
-            ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M"), str(ticker), get_stock_name(ticker), score, msg])
+            # 依照您的雲端格式：時間, 代號, 名稱, 分數, 訊息
+            ws.append_row([
+                now_time.strftime("%Y-%m-%d %H:%M"), 
+                str(ticker), 
+                tname, 
+                score, 
+                msg
+            ])
             return True
-    except: return False
+        
+    except Exception as e:
+        # 這裡不報錯，避免雲端斷線導致整個 AI 大腦卡死
+        print(f"Thought Log Error: {e}")
+        return False
+
 
 # ==============================================================================
 # 第 3 區：大基石史詩級強大腦 V15.3 - 核心診斷與 MACD 斜率引擎
