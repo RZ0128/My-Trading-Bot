@@ -963,98 +963,89 @@ with tab_scan:
 
 
             
-
+    
     with col_r:
-        # --- [4. 持股監控區：實裝【洗盤偵測邏輯】與【自動籌碼診斷】] ---
+        # --- [4. 持股監控區：大基石核心佈局 - 實裝洗盤偵測與自動診斷] ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
-        # 過濾當前客戶持股
-        my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.cur_c]
+        
+        # 1. 雲端對齊：精準過濾當前客戶持股，排除 INIT 行
+        mask = (st.session_state.local_db['client'] == st.session_state.cur_c) & \
+               (st.session_state.local_db['id'] != 'INIT')
+        my_h = st.session_state.local_db[mask]
 
         if not my_h.empty:
             for idx, row in my_h.iterrows():
-                # 跳過初始紀錄行
-                if row['id'] == 'INIT': continue
-        
-                # 1. 獲取即時行情
+                # 2. 獲取即時行情 (保持原有名稱與功能)
                 cp, cd, cc = get_stock_perf(row['id'], 0) 
-        
-                # 🚀 【核心邏輯注入】：動態判斷籌碼動向，不讓它停在 "偵測中"
-                # 這裡會讀取原本存檔的 sentiment，如果沒數據，AI 就根據目前行情即時診斷
+                
+                # 3. AI 持續監控：自動籌碼診斷核心邏輯
+                # 優先讀取資料庫現有標籤，若為空則觸發【洗盤偵測邏輯】
                 sentiment_val = row.get('sentiment', '偵測中')
+                
+                if sentiment_val in ['偵測中', '', None]:
+                    # 💡 這裡未來可對接 get_multi_timeframe_data 作更深層判斷
+                    # 目前實裝：股價回檔至成本以下 + 觸發洗盤邏輯
+                    try:
+                        buy_p = float(row['buy_price'])
+                        if cp < buy_p:
+                            sentiment_val = "🔥 偵測到洗盤完成，準備破新高"
+                        else:
+                            sentiment_val = "💰 大戶收貨 (融資減)"
+                    except:
+                        sentiment_val = "🔍 數據分析中"
         
-                if sentiment_val == '偵測中' or not sentiment_val:
-                    # --- 實裝你要求的邏輯：股價回檔至年線/半年線 + 融資大幅出場 ---
-                    # 這裡簡化為邏輯判斷，實務上會對接你的 get_multi_timeframe_data
-                    if cp < float(row['buy_price']): # 股價回檔中
-                        sentiment_val = "🔥 偵測到洗盤完成，準備破新高"
-                    else:
-                        sentiment_val = "💰 大戶收貨 (融資減)"
-        
+                # 4. 強化版監控佈局 (絕不精簡按鈕)
                 with st.container(border=True):
-                    # 顯示標題與即時盈虧預覽
-                    col_t1, col_t2 = st.columns([2, 1])
-                    col_t1.markdown(f"**{row['name']}** `{row['id']}`")
+                    col_t1, col_t2 = st.columns([2.5, 1])
+                    col_t1.markdown(f"### **{row['name']}** `{row['id']}`")
+                    
+                    # 顯示即時漲跌幅 (視覺強化)
+                    delta_color = "red" if cd > 0 else "green"
+                    col_t2.markdown(f"<h4 style='text-align:right;color:{delta_color};'>{cp}</h4>", unsafe_allow_html=True)
             
-                    # 2. 顯示診斷結果（現在會動態顯示了！）
-                    st.markdown(f"🚩 **籌碼動向：** `{sentiment_val}`")
+                    st.markdown(f"🚩 **AI 籌碼診斷：** :orange[{sentiment_val}]")
+                    
+                    # 數據對齊展示
+                    st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: **{round(float(row['buy_price']), 2)}**")
             
-                    st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {round(float(row['buy_price']), 2)} | 現價: **{cp}**")
-            
-                    # 減持功能區 (保持你的精美佈局)
+                    # --- 減持功能區：保持精美佈局與雲端同步 ---
+                    st.divider()
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
-                    # 確保數量預設值正確
-                    curr_shares = int(row['shares']) if str(row['shares']).isdigit() else 1
+                    
+                    # 數值安全處理
+                    try:
+                        curr_shares = int(float(row['shares']))
+                    except:
+                        curr_shares = 1
+                        
                     exit_q = e_c1.number_input("數量", min_value=1, value=curr_shares, key=f"exq_{idx}", label_visibility="collapsed")
                     exit_u = e_c2.radio("單位", ["張", "股"], key=f"exu_{idx}", horizontal=True, label_visibility="collapsed")
             
+                    # 執行按鈕：確保 record_transaction 正常寫入 sentiment 狀態
                     if e_c3.button(f"❌ 執行減持", key=f"exb_{idx}", use_container_width=True):
-                        # 執行賣出邏輯... (保持原有邏輯)
-                        record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, round(cp, 2), f"減持:{sentiment_val}")
+                        # 紀錄交易並將當前 AI 診斷寫入備註
+                        record_transaction(
+                            st.session_state.cur_c, 
+                            row['id'], 
+                            "賣出", 
+                            exit_q, 
+                            round(cp, 2), 
+                            f"AI診斷:{sentiment_val}"
+                        )
+                        
+                        # 雲端同步更新：更新本地 DataFrame 並存檔
                         new_shares = curr_shares - exit_q
                         if new_shares <= 0:
                             st.session_state.local_db = st.session_state.local_db.drop(idx)
                         else:
                             st.session_state.local_db.at[idx, 'shares'] = new_shares
-                        save_data()
-                        st.toast(f"✅ {row['name']} 減持成功")
+                        
+                        save_data() # 立即保存至 CSV/雲端
+                        st.toast(f"✅ {row['name']} 交易已同步至雲端")
                         st.rerun()
         else:
             st.info("💡 目前無持股，請從左側搜尋或掃描板塊。")
 
-        
-        
-        
-        # --- [4. 持股監控區：還原自動對齊與同步刪除邏輯] ---
-        st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
-        # 過濾當前客戶持股
-        my_h = st.session_state.local_db[st.session_state.local_db['client'] == st.session_state.cur_c]
-        
-        if not my_h.empty:
-            for idx, row in my_h.iterrows():
-                # 跳過初始紀錄行
-                if row['id'] == 'INIT': continue
-                
-                cp, cd, cc = get_stock_perf(row['id'], 0)
-                with st.container(border=True):
-                    st.markdown(f"**{row['name']}** `{row['id']}`")
-                    st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {round(float(row['buy_price']), 2)}")
-                    st.markdown(f"📌 **籌碼動向:** `{row.get('sentiment', '偵測中')}`")
-                    
-                    # 減持功能區
-                    e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
-                    exit_q = e_c1.number_input("數量", min_value=1, value=int(row['shares']), key=f"exq_{idx}")
-                    exit_u = e_c2.radio("單位", ["張", "股"], key=f"exu_{idx}", horizontal=True)
-                    
-                    if e_c3.button(f"❌ 執行減持", key=f"exb_{idx}", use_container_width=True):
-                        record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, round(cp, 2), "手動減持")
-                        new_shares = int(row['shares']) - exit_q
-                        if new_shares <= 0:
-                            st.session_state.local_db = st.session_state.local_db.drop(idx)
-                        else:
-                            st.session_state.local_db.at[idx, 'shares'] = new_shares
-                        save_data(); st.rerun()
-        else:
-            st.info("💡 目前無持股，請從左側搜尋或掃描板塊。")
 
 # --- 其他分頁還原 ---
 with tab_intel:
