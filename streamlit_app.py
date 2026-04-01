@@ -838,7 +838,7 @@ with tab_scan:
                         st.caption(f"📍 {res.get('pivot', '大基石診斷器')}")
 
         st.divider()
-        # --- [3. 板塊掃描區：還原完整進度條與 top 15 邏輯] ---
+        # --- [3. 板塊掃描區：精確修復版 - 刪除醜表格、還原買入功能、修復籌碼顯示] ---
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_full")
         
@@ -847,62 +847,67 @@ with tab_scan:
             target_pool = pool_500[cat_choice]
             total_count = len(target_pool)
             
-            # 完整保留掃描日誌文字
             scan_p = st.progress(0, text="AI 大腦正在掃描板塊...")
             
             for idx, (tid, tname) in enumerate(target_pool):
                 scan_p.progress((idx+1)/total_count, text=f"正在分析 ({idx+1}/{total_count}): {tname}...")
                 ps, ds, _ = get_stock_perf(tid)
                 if ps > 0:
+                    # 確保這裡調用 generate_ai_tech_analysis 獲取真實 AI 數據
                     r = generate_ai_tech_analysis(tid, ps)
                     if r:
                         r.update({'tid': tid, 'tname': tname, 'price': ps, 'diff': ds})
                         scored_data.append(r)
             scan_p.empty()
-
-
             
             if scored_data:
-                # 1. 數據排序 (保持 top 15)
+                # 排序並取出前 15 檔
                 top_picks = sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
                 st.success(f"✅ 板塊掃描完成！AI 篩選出 {len(top_picks)} 檔強勢標的：")
-                
-                # --- [核心修正：移除醜表格，改回精緻卡片佈局] ---
+
+                # --- [重點 1：這裡絕對不放 st.dataframe，直接進入精美卡片迴圈] ---
                 for item in top_picks:
-                    # 這裡加入一個「大腦補強」，確保分析文字不會是空白
+                    # 確保數據不為空，若 AI 未給出則顯示預設
                     analysis_msg = item.get('msg', '📡 AI 正在深度運算數據流...')
-                    sent_status = item.get('sent', '觀察中')
+                    sent_status = item.get('sent', '⚖️ 籌碼穩定')
                     
                     with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | {sent_status}"):
                         # --- 第一行：AI 戰略診斷 ---
-                        st.markdown(f"**AI 戰略建議：**")
-                        st.info(f"💡 {analysis_msg}")
+                        st.info(f"💡 **AI 指令：** {analysis_msg}")
                         
-                        # --- 第二行：數據細節與操作區 (對齊持股監控佈局) ---
-                        c1, c2, c3 = st.columns([1.5, 1.5, 1])
+                        # --- 第二行：數據細節與操作區 (對齊右側持股監控) ---
+                        c1, c2, c3 = st.columns([1.2, 1.8, 1.2])
                         with c1:
                             st.write(f"📊 目前價格: **{item['price']}**")
                             st.caption(f"漲跌幅: {item['diff']}")
                         
                         with c2:
-                            # 這裡加入你最在意的「選擇張數/股數」功能
-                            q_type = st.radio("單位", ["張", "股"], key=f"type_{item['tid']}", horizontal=True, label_visibility="collapsed")
-                            amount = st.number_input("數量", min_value=1, value=1, key=f"amt_{item['tid']}", label_visibility="collapsed")
+                            # 🚀 修復：這是你要求的「買入張數/股數」選擇案件
+                            buy_col1, buy_col2 = st.columns([1, 1])
+                            u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}", horizontal=True, label_visibility="collapsed")
+                            q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}", label_visibility="collapsed")
                             
                         with c3:
-                            # 買入按鈕與診斷按鈕
-                            if st.button(f"🚀 執行買入", key=f"buy_{item['tid']}", use_container_width=True):
-                                st.success(f"已加入 {item['tname']} 買入排程")
-                            
-                            if st.button(f"🔍 深度診斷", key=f"q_{item['tid']}", use_container_width=True):
+                            # 🚀 修復：執行買入案件，串接 record_transaction 與 save_data
+                            if st.button(f"🚀 執行買入", key=f"btn_buy_{item['tid']}", use_container_width=True):
+                                new_entry = pd.DataFrame([{
+                                    'client': st.session_state.cur_c, 'id': item['tid'], 'name': item['tname'], 
+                                    'buy_price': item['price'], 'shares': q_val, 'unit': u_val, 'entry_reason': analysis_msg, 
+                                    'sentiment': sent_status
+                                }])
+                                st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val, item['price'], f"掃描買入:{analysis_msg}")
+                                save_data()
+                                st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
+                                time.sleep(1)
+                                st.rerun()
+
+                            if st.button(f"🔍 深度診斷", key=f"btn_diag_{item['tid']}", use_container_width=True):
                                 st.session_state.selected_stock = item['tid']
                                 st.rerun()
 
-                # --- 底部批次功能 (保持整齊) ---
                 st.divider()
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    st.button("📥 匯出完整 AI 戰略報告", use_container_width=True)
+
 
             
 
