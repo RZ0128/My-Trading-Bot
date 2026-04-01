@@ -1036,13 +1036,14 @@ with tab_scan:
                     st.markdown(f"💰 當前盈虧: <span style='color:{pl_color}; font-weight:bold;'>{format(int(individual_pl), ',')} TWD</span>", unsafe_allow_html=True)
             
                     # --- 減持功能區 (保持佈局，防止 ID 重複使用 idx) ---
+                                        # --- 減持功能區 (修正變數名 e_c1) ---
                     st.divider()
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
-                    # 確保 key 包含個股代碼 {idx} 以維持唯一性
-                    exit_q = e_cl.number_input("數量", min_value=1, value=int(row['shares']), key=f"exq_{idx}")
+                    # 將 e_cl 改為 e_c1
+                    exit_q = e_c1.number_input("數量", min_value=1, value=int(row['shares']), key=f"exq_{idx}")
                     exit_u = e_c2.radio("單位", ["張", "股"], index=0 if row['unit']=="張" else 1, key=f"exu_v15_{idx}", horizontal=True, label_visibility="collapsed")
             
-                    if e_c3.button(f"❌ 執行減持", key=f"exb_v15_{idx}", use_container_width=True):
+                    if e_c3.button(f"❌ 執行減持", key=f"exb_v15_{idx}", use_container_width=True)
                         record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, round(cp, 2), f"AI診斷:{sentiment_val}")
                         new_shares = shares_val - exit_q
                         if new_shares <= 0:
