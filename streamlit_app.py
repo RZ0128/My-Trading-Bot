@@ -1038,7 +1038,8 @@ with tab_scan:
                     # --- 減持功能區 (保持佈局，防止 ID 重複使用 idx) ---
                     st.divider()
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
-                    exit_q = e_c1.number_input("數量", min_value=1, value=int(shares_val), key=f"exq_v15_{idx}", label_visibility="collapsed")
+                    # 確保 key 包含個股代碼 {idx} 以維持唯一性
+                    exit_q = e_cl.number_input("數量", min_value=1, value=int(row['shares']), key=f"exq_{idx}")
                     exit_u = e_c2.radio("單位", ["張", "股"], index=0 if row['unit']=="張" else 1, key=f"exu_v15_{idx}", horizontal=True, label_visibility="collapsed")
             
                     if e_c3.button(f"❌ 執行減持", key=f"exb_v15_{idx}", use_container_width=True):
