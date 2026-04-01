@@ -220,18 +220,15 @@ def load_data():
         # --- [第二步：嘗試對接 GCP] ---
         sh = init_cloud_connection()
         if not sh: 
-            # 如果金鑰失效，直接報錯跳到 except 區塊
             raise Exception("無法辨認 Secrets 金鑰或 Google Sheets 權限未開啟")
 
-                # --- [1/4] 正在掃描 Inventory (庫存) ---
+        # --- [1/4] 正在掃描 Inventory (庫存) ---
         progress_bar.progress(25, text="📊 [1/4] 正在對齊 Inventory 雲端數據...")
         inv_df = safe_get_df(sh, "inventory")
         if not inv_df.empty:
-            # 強制將關鍵欄位轉為字串，徹底防止 ArrowTypeError
             for col in ['id', 'client', 'name']:
                 if col in inv_df.columns:
                     inv_df[col] = inv_df[col].astype(str)
-            # 同步至大腦核心與備援變數
             st.session_state.local_db = inv_df
             st.session_state.inventory = inv_df
         
@@ -239,7 +236,6 @@ def load_data():
         progress_bar.progress(50, text="📜 [2/4] 正在對齊 History 交易紀錄...")
         his_df = safe_get_df(sh, "history")
         if not his_df.empty:
-            # 強制將 action 和 id 欄位轉為字串，防止數字與文字混雜
             for col in ['action', 'id', 'client']:
                 if col in his_df.columns:
                     his_df[col] = his_df[col].astype(str)
@@ -250,7 +246,6 @@ def load_data():
         client_df = safe_get_df(sh, "clients")
         if not client_df.empty and 'name' in client_df.columns:
             cloud_clients = client_df['name'].dropna().astype(str).tolist()
-            # 確保以 Robert 為基準進行合併
             combined = list(set(["Robert"] + cloud_clients))
             st.session_state.client_list = sorted([c for c in combined if c not in ["nan", "None", ""]])
         
@@ -258,12 +253,10 @@ def load_data():
         progress_bar.progress(100, text="✅ [4/4] 雲端對齊成功！")
         time.sleep(0.5)
 
-        
     except Exception as e:
-        # --- [第三步：如果失敗，確保側邊欄有警示，但程式不卡住] ---
         st.sidebar.warning(f"📡 雲端目前離線：使用本地模式")
-        # 這裡不刪除 error，保留讓你除錯，但 initialized 設為 True 讓 UI 跑出來
         st.sidebar.error(f"金鑰診斷: {str(e)[:40]}")
+
     
     # 無論成功失敗，都標記為已初始化，防止無限循環
     st.session_state.initialized = True
