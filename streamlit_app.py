@@ -391,11 +391,11 @@ def update_ai_thought_log(ticker, score, msg):
 
 
 # ==============================================================================
-# 第 3 區：大基石史詩級強大腦 V15.3 - 核心診斷與 MACD 斜率引擎
+# 第 3 區：大基石史詩級強大腦 V16.0 - 核心診斷與 MACD 斜率引擎 (老總增強完全體)
 # ==============================================================================
 
 def get_macd_slope(df):
-    """大基石核心：MACD 斜率共振偵測 (完全保留)"""
+    """大基石核心：MACD 斜率共振偵測 (完全保留，嚴禁簡化)"""
     if df is None or df.empty or len(df) < 35: 
         return 0, "📡 數據不足"
     exp1 = df['Close'].ewm(span=12, adjust=False).mean()
@@ -410,7 +410,7 @@ def get_macd_slope(df):
     return slope, status
 
 def ai_pattern_discovery(ticker, h_max):
-    """AI 自主發現法則 (完全保留)"""
+    """AI 自主發現法則：極致窒息量模型 (完全保留)"""
     if h_max is None or len(h_max) < 100: return None
     c, v = h_max['Close'], h_max['Volume']
     recent_v_min = v.tail(10).min()
@@ -420,48 +420,82 @@ def ai_pattern_discovery(ticker, h_max):
     return None
 
 def ai_evolution_engine(ticker, h_max, current_price):
-    """大腦進化引擎：包含融資/籌碼洗盤、島狀反轉、爆量預警 (完全保留)"""
+    """
+    大腦進化引擎 V16.0：
+    整合【老總級回檔】、【融資洗盤偵測】、【斜率補償】與【島狀反轉】
+    這是整個大基石最核心的邏輯運算區，嚴禁簡化邏輯分支。
+    """
     if h_max is None or h_max.empty or len(h_max) < 250:
         return 50, "📚 數據積累中", 50.0, "🔍 觀察"
     
     c, v, hi, lo = h_max['Close'], h_max['Volume'], h_max['High'], h_max['Low']
-    score = 60
+    score = 60 # 初始中性基準分
     intel_tags = []
 
-    # 1. 價格與 MACD 背離偵測
+    # --- [1. MACD 與核心均線預算] ---
     ema12 = c.ewm(span=12).mean(); ema26 = c.ewm(span=26).mean()
-    macd = ema12 - ema26
-    if c.iloc[-1] > c.tail(20).max() * 0.98 and macd.iloc[-1] < macd.tail(20).max() * 0.8:
+    macd_series = ema12 - ema26
+    macd_sig = macd_series.ewm(span=9).mean()
+    macd_hist = macd_series - macd_sig
+    
+    ma20 = c.rolling(20).mean().iloc[-1]
+    ma60 = c.rolling(60).mean().iloc[-1]
+    ma124 = c.rolling(124).mean().iloc[-1]
+    ma248 = c.rolling(248).mean().iloc[-1]
+
+    # --- [2. 價格與 MACD 背離偵測] ---
+    if c.iloc[-1] > c.tail(20).max() * 0.98 and macd_series.iloc[-1] < macd_series.tail(20).max() * 0.8:
         score -= 25; intel_tags.append("🚨 偵測到指標背離")
 
-    # 2. 島狀反轉偵測
+    # --- [3. 島狀反轉偵測] ---
     if lo.iloc[-1] > hi.iloc[-2]: intel_tags.append("🏝️ 島狀反轉潛力(多)"); score += 15
     if hi.iloc[-1] < lo.iloc[-2]: intel_tags.append("🏚️ 島狀反轉潛力(空)"); score -= 20
 
-    # 3. 量縮收斂三角形
+    # --- [4. 量縮收斂三角形判斷] ---
     price_range = (hi.tail(20).max() - lo.tail(20).min()) / c.iloc[-1]
     if price_range < 0.05 and v.iloc[-1] < v.tail(20).mean() * 0.6:
         score += 20; intel_tags.append("📐 量縮收斂三角形")
 
-    # 4. 跳空高檔爆巨量
+    # --- [5. 高檔警戒與斜率補償 (修正僵化邏輯)] ---
     avg_v_year = v.rolling(248).mean().iloc[-1]
-    if c.iloc[-1] > c.rolling(248).mean().iloc[-1] * 1.3 and v.iloc[-1] > avg_v_year * 3:
-        score -= 45; intel_tags.append("💀 高檔爆巨量(出貨預警)")
+    if c.iloc[-1] > ma248 * 1.3 and v.iloc[-1] > avg_v_year * 3:
+        # 如果 MACD 斜率還在增加，代表是強勢妖股，減輕扣分
+        macd_slope = macd_hist.iloc[-1] - macd_hist.iloc[-2]
+        if macd_slope > 0:
+            score -= 20 
+            intel_tags.append("🚀 妖股模式：高位斜率加速")
+        else:
+            score -= 45; intel_tags.append("💀 高檔爆巨量(出貨預警)")
 
-    # 5. 八大法則與洗盤偵測模組
-    ma20 = c.rolling(20).mean().iloc[-1]
+    # --- [6. 噴發模型偵測] ---
     if c.iloc[-1] > ma20 and v.iloc[-1] > v.rolling(20).mean().iloc[-1] * 1.5:
         score += 20; intel_tags.append("🔥 匹配噴發模型")
 
-    # --- [融資/籌碼洗盤深度邏輯 - 完全保留] ---
-    ma248 = c.rolling(248).mean().iloc[-1]
-    ma124 = c.rolling(124).mean().iloc[-1]
+    # --- [7. 老總級：強勢股回檔與洗盤偵測核心 (V16.0 重點)] ---
     sentiment_status = "🔍 散戶進場 (融資增)"
+    
+    # A. 強勢回檔條件：多頭排列 (ma60 > ma124) 且股價在季線上、月線下
+    if current_price > ma60 and ma60 > ma124:
+        if current_price < ma20:
+            # 判斷量縮：今日成交量小於 10 日均量 75% (窒息量)
+            is_volume_dry = v.iloc[-1] < v.rolling(10).mean().iloc[-1] * 0.75
+            if is_volume_dry:
+                dist_to_annual_line = (current_price - ma248) / ma248
+                # 位階判定
+                if dist_to_annual_line < 0.15: # 歷史地位洗盤完成 (如：大江)
+                    score += 40
+                    intel_tags.append("🔥 偵測到洗盤完成，準備破新高")
+                    sentiment_status = "🔥 大戶收貨 (融資減)"
+                else: # 強勢股中繼縮量回測 (如：勤誠、漢唐)
+                    score += 30
+                    intel_tags.append("🔥 老總級回檔買點 (強勢股縮量回測)")
+                    sentiment_status = "🔥 大戶收貨 (融資減)"
 
-    if not np.isnan(ma248) and (current_price >= ma248 * 0.96 and current_price <= ma248 * 1.04):
+    # B. 補足原有的年線/半年線支撐洗盤邏輯
+    elif not np.isnan(ma248) and (current_price >= ma248 * 0.96 and current_price <= ma248 * 1.04):
         if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.75:
             score += 25
-            intel_tags.append("🔥 偵測到洗盤完成，準備破新高")
+            intel_tags.append("🔥 年線位階洗盤偵測")
             sentiment_status = "🔥 大戶收貨 (融資減)"
     elif not np.isnan(ma124) and (current_price >= ma124 * 0.97 and current_price <= ma124 * 1.03):
         if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.8:
@@ -469,6 +503,7 @@ def ai_evolution_engine(ticker, h_max, current_price):
             intel_tags.append("📡 半年線支撐洗盤")
             sentiment_status = "🔥 大戶收貨 (融資減)"
 
+    # --- [8. 勝率回測模擬] ---
     returns = c.pct_change(5).shift(-5)
     win_rate = (returns > 0).sum() / len(returns) * 100
     win_prob = round((win_rate * 0.6) + (score * 0.4), 1)
@@ -477,118 +512,65 @@ def ai_evolution_engine(ticker, h_max, current_price):
 
 def generate_ai_tech_analysis(ticker, price, mode=0):
     """
-    V15.5 大基石核心大腦：
-    整合【布林通道】、【多週期均線共振】、【葛蘭碧八大法則】與【量能洗盤偵測】
+    V15.5 大基石核心大腦 UI 與 多指標整合 (完全保留所有佈局與按鍵)
     """
     p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年歷史檔案...")
     try:
-        # --- [第一階段：數據獲取] ---
+        # --- [數據同步區] ---
         p_bar.progress(20, text=f"🌐 正在同步 {ticker} 多週期 K 線數據流...")
         raw_id = str(ticker).split(".")[0]
         h_full = None
         
-        # 優先使用 twstock 獲取台股數據，若失敗則轉 yfinance
-        if raw_id.isdigit():
-            try:
-                import twstock
-                ts_stock = twstock.Stock(raw_id)
-                fetch_len = 100 # 增加長度以計算均線
-                h_full = pd.DataFrame({
-                    'Close': ts_stock.price[-fetch_len:],
-                    'High': ts_stock.high[-fetch_len:],
-                    'Low': ts_stock.low[-fetch_len:],
-                    'Volume': ts_stock.capacity[-fetch_len:]
-                }).astype(float).fillna(method='ffill')
-            except: pass
-
-        if h_full is None or h_full.empty:
-            stock = yf.Ticker(get_full_ticker(ticker))
-            h_full = stock.history(period="6mo") # 獲取半年數據以計算季線
+        # 這裡根據你的需求保持 6mo 或更長的 fetch 確保年線計算
+        stock = yf.Ticker(get_full_ticker(ticker))
+        h_full = stock.history(period="1y") # 擴充至一年確保 ma248 準確
         
         if h_full.empty:
             p_bar.empty()
             return None
 
-        # --- [第二階段：核心指標計算] ---
+        # --- [核心指標預算區] ---
         p_bar.progress(50, text="🧠 AI 正在運算：布林帶寬、多週期均線、葛蘭碧法則...")
-        
-        # 1. 均線計算 (MA5, MA20, MA60)
         ma5 = h_full['Close'].rolling(5).mean().iloc[-1]
         ma20 = h_full['Close'].rolling(20).mean().iloc[-1]
         ma60 = h_full['Close'].rolling(60).mean().iloc[-1]
-        ma60_prev = h_full['Close'].rolling(60).mean().iloc[-2] # 前一天的季線
+        ma60_prev = h_full['Close'].rolling(60).mean().iloc[-2]
         
-        # 2. 布林通道計算
         std20 = h_full['Close'].rolling(20).std().iloc[-1]
         bb_upper = ma20 + (std20 * 2)
         bb_lower = ma20 - (std20 * 2)
         
-        # 3. 量能分析
-        v_ma5 = h_full['Volume'].rolling(5).mean().iloc[-1]
-        curr_v = h_full['Volume'].iloc[-1]
-
-        # --- [第三階段：AI 戰略邏輯歸納] ---
-        p_bar.progress(80, text="🧬 AI 正在根據【葛蘭碧八大法則】與【籌碼流向】進行決策...")
+        # --- [大腦引擎調用區] ---
+        p_bar.progress(80, text="🧬 AI 正在根據【老總級回檔】與【籌碼流向】進行決策...")
         
-        logic_tags = []
-        score = 60 # 初始中性分
-        sentiment = "⚖️ 籌碼穩定"
+        # 呼叫上面的進階引擎
+        final_score, intel_msg, win_prob, sentiment = ai_evolution_engine(ticker, h_full, price)
         
-        # 💡 A. 葛蘭碧法則實裝：季線向上 + 回測季線 = 買點
-        if ma60 > ma60_prev:
-            if price > ma60 and (price - ma60) / ma60 < 0.03:
-                logic_tags.append("🎯 葛蘭碧法則：季線支撐買點 (回測不破)")
-                score += 20
-                sentiment = "🔥 大戶守盤"
-            else:
-                logic_tags.append("📈 季線趨勢向上")
-                score += 10
-
-        # 💡 B. 布林通道策略
+        # 額外 UI 邏輯標籤 (葛蘭碧與布林)
+        ui_tags = []
+        if ma60 > ma60_prev and price > ma60 and (price - ma60)/ma60 < 0.03:
+            ui_tags.append("🎯 葛蘭碧支撐")
         if price > bb_upper:
-            logic_tags.append("🚀 強勢噴發 (突破布林上軌)")
-            score += 15
-            sentiment = "🔥 買盤激增"
-        elif price < bb_lower:
-            logic_tags.append("🛡️ 超跌區 (觸及布林下軌)")
-            score += 5
-            sentiment = "💧 恐慌洗盤"
-
-        # 💡 C. 均線多頭排列
-        if ma5 > ma20 > ma60:
-            logic_tags.append("🌟 多頭完美排列")
-            score += 10
+            ui_tags.append("🚀 突破布林")
         
-        # 💡 D. 量能共振
-        if curr_v > v_ma5 * 1.5:
-            logic_tags.append("📊 量能異常爆發")
-            sentiment = "🔥 資金瘋狂湧入"
-
-        # --- [第四階段：完成報告] ---
-        p_bar.progress(100, text="✅ 診斷完成：已生成最優質 AI 戰術報告")
+        # --- [回傳報告] ---
+        p_bar.progress(100, text="✅ 診斷完成")
         time.sleep(0.3); p_bar.empty()
 
-        # 組合成最終分析文字
-        full_msg = " | ".join(logic_tags) if logic_tags else "📡 趨勢盤整中，等待方向選擇"
-        if not logic_tags: sentiment = "⚖️ 偵測中"
-        
-        # 確保分數在範圍內
-        final_score = min(99, score)
-        
         return {
-            "msg": full_msg, 
+            "msg": f"{intel_msg} | {' | '.join(ui_tags)}" if ui_tags else intel_msg, 
             "sent": sentiment, 
             "score": final_score, 
-            "win_prob": 65 + (final_score // 10), # 根據分數動態調整勝率
+            "win_prob": win_prob, 
             "price": round(float(price), 2), 
-            "target": round(float(price * 1.12), 2),
-            "stop": round(float(price * 0.93), 2), 
-            "atr_range": f"勝率: {65 + (final_score // 10)}%",
-            "pivot": f"V15.5 大基石 AI ({datetime.now().strftime('%H:%M')})"
+            "target": round(float(price * 1.15), 2),
+            "stop": round(float(price * 0.92), 2), 
+            "atr_range": f"勝率: {win_prob}%",
+            "pivot": f"V16.0 大基石 AI ({datetime.now().strftime('%H:%M')})"
         }
     except Exception as e:
         if 'p_bar' in locals(): p_bar.empty()
-        return {"msg": f"AI 異常: {str(e)[:15]}", "score": 50, "win_prob": 50, "sent": "🔄 重新連線", "price": round(float(price), 2)}
+        return {"msg": f"AI 異常: {str(e)[:15]}", "score": 50, "sent": "🔄 錯誤"}
 
 
 # ==============================================================================
