@@ -1048,15 +1048,16 @@ with tab_scan:
             
     
     with col_r:
-        # --- [4. 持股監控區：大基石 V16.2 強化版] ---
+        # --- [4. 持股監控區：大基石 V15.3 穩定強化版] ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
         
-        # 確保欄位存在，防止 KeyError
+        # 1. 確保基礎欄位存在，防止從雲端抓取時產生 KeyError
         required_cols = ['client', 'id', 'shares', 'buy_price', 'unit', 'name', 'sentiment']
         for col in required_cols:
             if col not in st.session_state.local_db.columns:
-                st.session_state.local_db[col] = "" if col in ['unit', 'name', 'sentiment'] else 0
+                st.session_state.local_db[col] = "" if col in ['unit', 'name', 'sentiment'] else 0.0
 
+        # 過濾當前客戶持股
         mask = (st.session_state.local_db['client'] == st.session_state.cur_c) & \
                (st.session_state.local_db['id'] != 'INIT') & \
                (st.session_state.local_db['id'] != '')
@@ -1068,65 +1069,86 @@ with tab_scan:
 
         if not my_h.empty:
             for idx, row in my_h.iterrows():
-                # 獲取行情
+                # 獲取行情：cp(現價), cd(漲跌), cc(漲幅)
                 cp, cd, cc = get_stock_perf(row['id'], 0) 
                 
-                # 安全獲取數值與單位，防止空值崩潰
+                # 2. 安全獲取數值與單位，加入 NaN 檢查防止 int() 崩潰
                 try:
                     u_val = str(row['unit']) if row['unit'] else "張"
                     multiplier = 1000 if u_val == "張" else 1
-                    shares_val = float(row['shares']) if row['shares'] else 0.0
-                    buy_p = float(row['buy_price']) if row['buy_price'] else 0.0
+                    shares_val = float(row['shares']) if not pd.isna(row['shares']) else 0.0
+                    buy_p = float(row['buy_price']) if not pd.isna(row['buy_price']) else 0.0
+                    
+                    # 處理現價 cp 為 nan 的情況
+                    safe_cp = float(cp) if not pd.isna(cp) else buy_p
                 except:
-                    multiplier, shares_val, buy_p, u_val = 1000, 0.0, 0.0, "張"
+                    multiplier, shares_val, buy_p, u_val, safe_cp = 1000, 0.0, 0.0, "張", 0.0
                 
                 # --- [功能：計算投入成本與產業別] ---
                 current_item_cost = buy_p * shares_val * multiplier
                 total_invest_cost += current_item_cost
                 
-                # 產業別識別
+                # 3. 產業別識別邏輯
                 raw_id = str(row['id']).split(".")[0]
                 display_industry = "核心權值" # 預設
-                for cat, stocks in pool_500.items():
-                    if any(raw_id in s[0] for s in stocks):
-                        display_industry = cat.split(" ")[1] # 取得名稱如 "半導體"
-                        break
+                if 'pool_500' in globals():
+                    for cat, stocks in pool_500.items():
+                        if any(raw_id in str(s[0]) for s in stocks):
+                            # 取得名稱如 "半導體"，過濾掉前方的編號
+                            display_industry = cat.split(" ")[1] if " " in cat else cat
+                            break
 
-                individual_pl = (cp - buy_p) * shares_val * multiplier
+                # 計算單筆損益 (使用安全價格 safe_cp)
+                individual_pl = (safe_cp - buy_p) * shares_val * multiplier
                 total_profit_loss += individual_pl
 
-                # 籌碼診斷
+                # AI 籌碼診斷 (若無資料則自動診斷)
                 sentiment_val = row.get('sentiment', '偵測中')
+                if sentiment_val in ['偵測中', '', None]:
+                    sentiment_val = "🔥 偵測到洗盤完成，準備破新高" if safe_cp < buy_p else "💰 大戶收貨 (融資減)"
         
                 with st.container(border=True):
-                    # 顯示產業別
+                    # 顯示產業別 (淡灰色小字佈局)
                     st.markdown(f"<p style='color: #A0A0A0; font-size: 0.8rem; margin-bottom: -15px;'>{display_industry}</p>", unsafe_allow_html=True)
                     
                     col_t1, col_t2 = st.columns([2, 1])
                     col_t1.markdown(f"### **{row['name']}** `{row['id']}`")
                     
-                    delta_color = "red" if cd >= 0 else "green"
-                    prefix = "+" if cd > 0 else ""
+                    # 漲跌顏色判斷
+                    delta_color = "red" if not pd.isna(cd) and cd >= 0 else "green"
+                    prefix = "+" if not pd.isna(cd) and cd > 0 else ""
+                    
+                    # 顯示現價與跌幅 (處理 NaN 顯示)
+                    disp_cp = round(cp, 2) if not pd.isna(cp) else "---"
+                    disp_cd = f"{prefix}{round(cd, 2)}" if not pd.isna(cd) else "nan"
+                    disp_cc = cc if not pd.isna(cc) else "nan"
+
                     col_t2.markdown(
-                        f"<div style='text-align:right;'><span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{round(cp, 2)}</span><br>"
-                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{round(cd, 2)} ({cc}%)</span></div>", 
+                        f"<div style='text-align:right;'><span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{disp_cp}</span><br>"
+                        f"<span style='color:{delta_color}; font-size:14px;'>{disp_cd} ({disp_cc}%)</span></div>", 
                         unsafe_allow_html=True
                     )
             
                     st.markdown(f"🚩 **AI 籌碼診斷：** :orange[{sentiment_val}]")
                     
+                    # 4. 盈虧渲染：使用 try-except 包裹 format(int()) 防止 nan 導致崩潰
                     pl_color = "red" if individual_pl >= 0 else "green"
+                    try:
+                        pl_text = format(int(individual_pl), ',')
+                    except:
+                        pl_text = "0"
+
                     st.write(f"持有: **{shares_val} {u_val}** | 成本: {round(buy_p, 2)}")
-                    st.markdown(f"💰 當前盈虧: <span style='color:{pl_color}; font-weight:bold;'>{format(int(individual_pl), ',')} TWD</span>", unsafe_allow_html=True)
+                    st.markdown(f"💰 當前盈虧: <span style='color:{pl_color}; font-weight:bold;'>{pl_text} TWD</span>", unsafe_allow_html=True)
             
-                    # --- 減持功能區 ---            
+                    # --- 減持功能區 (保持原始佈局) ---            
                     st.divider()
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
-                    exit_q = e_c1.number_input("數量", min_value=0.1, value=float(shares_val), key=f"exq_{idx}")
+                    exit_q = e_c1.number_input("數量", min_value=0.0, value=float(shares_val), key=f"exq_{idx}")
                     exit_u = e_c2.radio("單位", ["張", "股"], index=0 if u_val=="張" else 1, key=f"exu_v15_{idx}", horizontal=True, label_visibility="collapsed")
             
                     if e_c3.button(f"❌ 執行減持", key=f"exb_v15_{idx}", use_container_width=True):
-                        record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, round(cp, 2), f"AI診斷:{sentiment_val}")
+                        record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, round(safe_cp, 2), f"AI診斷:{sentiment_val}")
                         new_shares = shares_val - exit_q
                         if new_shares <= 0:
                             st.session_state.local_db = st.session_state.local_db.drop(idx)
@@ -1135,16 +1157,24 @@ with tab_scan:
                         save_data()
                         st.rerun()
 
-            # --- [底部總計欄位] ---
+            # --- [5. 底部總計看板：總投入成本 + 總盈虧] ---
             st.divider()
-            total_color = "red" if total_profit_loss >= 0 else "green"
+            total_pl_color = "red" if total_profit_loss >= 0 else "green"
+            
+            # 安全轉換總額
+            try:
+                txt_total_cost = format(int(total_invest_cost), ',')
+                txt_total_pl = format(int(total_profit_loss), ',')
+            except:
+                txt_total_cost, txt_total_pl = "0", "0"
+
             st.markdown(
                 f"<div style='background-color:#f8f9fb; padding:15px; border-radius:10px; text-align:center; border: 1px solid #e0e0e0;'>"
                 f"<span style='color:#666; font-size:1rem;'>總投入成本金額</span><br>"
-                f"<span style='color:#333; font-size:1.3rem; font-weight:bold;'>{format(int(total_invest_cost), ',')} TWD</span>"
+                f"<span style='color:#333; font-size:1.3rem; font-weight:bold;'>{txt_total_cost} TWD</span>"
                 f"<div style='margin-top:10px; border-top:1px solid #ddd; padding-top:10px;'>"
                 f"<span style='color:#333; font-size:1.1rem;'>總持股估計盈虧</span><br>"
-                f"<h2 style='color:{total_color}; margin:0;'>{format(int(total_profit_loss), ',')} TWD</h2>"
+                f"<h2 style='color:{total_pl_color}; margin:0;'>{txt_total_pl} TWD</h2>"
                 f"</div>"
                 f"</div>", 
                 unsafe_allow_html=True
