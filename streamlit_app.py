@@ -1055,24 +1055,37 @@ with tab_scan:
                (st.session_state.local_db['id'] != 'INIT')
         my_h = st.session_state.local_db[mask]
 
-        total_profit_loss = 0.0  # 初始化總損益
-        total_invest_cost = 0.0  # [新增] 初始化總投入成本
+        total_profit_loss = 0.0  
+        total_invest_cost = 0.0  
 
         if not my_h.empty:
             for idx, row in my_h.iterrows():
-                # 獲取行情：cp(現價), cd(漲跌), cc(漲幅)
+                # --- [數據抓取強化：防止 nan 出現] ---
+                # 呼叫獲取行情：cp(現價), cd(漲跌), cc(漲幅)
                 cp, cd, cc = get_stock_perf(row['id'], 0) 
                 
+                # 如果抓到的是 nan，嘗試從 yf 直接拉取最後價格補救 (穩定性關鍵)
+                if pd.isna(cp) or cp == 0:
+                    try:
+                        temp_stock = yf.Ticker(get_full_ticker(row['id']))
+                        temp_h = temp_stock.history(period="1d")
+                        if not temp_h.empty:
+                            cp = temp_h['Close'].iloc[-1]
+                            cd = cp - temp_h['Open'].iloc[-1]
+                            cc = round((cd / temp_h['Open'].iloc[-1]) * 100, 2)
+                    except:
+                        cp = cp if not pd.isna(cp) else 0.0
+
                 # 計算單筆損益：(現價 - 成本) * 股數
                 multiplier = 1000 if row['unit'] == "張" else 1
                 shares_val = float(row['shares'])
                 buy_p = float(row['buy_price'])
                 
-                # [新增] 累計總投入成本
+                # [新增功能 1]：累計總投入成本
                 current_item_cost = buy_p * shares_val * multiplier
                 total_invest_cost += current_item_cost
 
-                # [新增] 產業別識別邏輯
+                # [新增功能 2]：產業別識別邏輯
                 raw_id = str(row['id']).split(".")[0]
                 display_industry = "核心權值" 
                 for cat, stocks in pool_500.items():
@@ -1086,38 +1099,34 @@ with tab_scan:
                 # AI 籌碼診斷邏輯
                 sentiment_val = row.get('sentiment', '偵測中')
                 if sentiment_val in ['偵測中', '', None]:
-                    if cp < buy_p:
-                        sentiment_val = "🔥 偵測到洗盤完成，準備破新高"
-                    else:
-                        sentiment_val = "💰 大戶收貨 (融資減)"
+                    sentiment_val = "🔥 偵測到洗盤完成，準備破新高" if cp < buy_p else "💰 大戶收貨 (融資減)"
         
                 with st.container(border=True):
-                    # [新增] 產業別顯示位置 (位於名稱上方)
+                    # 顯示產業別標籤
                     st.markdown(f"<p style='color: #A0A0A0; font-size: 0.8rem; margin-bottom: -15px;'>{display_industry}</p>", unsafe_allow_html=True)
                     
                     col_t1, col_t2 = st.columns([2, 1])
                     col_t1.markdown(f"### **{row['name']}** `{row['id']}`")
                     
-                    # 修正問題 2：限制小數點兩位，並顯示損益點數
+                    # 顯示現價與漲跌
                     delta_color = "red" if cd >= 0 else "green"
                     prefix = "+" if cd > 0 else ""
                     col_t2.markdown(
-                        f"<div style='text-align:right;'><span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{round(cp, 2)}</span><br>"
-                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{round(cd, 2)} ({cc}%)</span></div>", 
+                        f"<div style='text-align:right;'><span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{round(cp, 2) if not pd.isna(cp) else '---'}</span><br>"
+                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{round(cd, 2) if not pd.isna(cd) else '0'} ({cc if not pd.isna(cc) else '0'}%)</span></div>", 
                         unsafe_allow_html=True
                     )
             
                     st.markdown(f"🚩 **AI 籌碼診斷：** :orange[{sentiment_val}]")
                     
-                    # 修正問題 1：顯示單筆損益
+                    # 盈虧顯示與顏色判斷
                     pl_color = "red" if individual_pl >= 0 else "green"
                     st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {round(buy_p, 2)}")
                     
-                    # 防止 NaN 導致 int() 報錯的穩定性加強
+                    # 確保數值安全轉換
                     safe_pl = int(individual_pl) if not pd.isna(individual_pl) else 0
                     st.markdown(f"💰 當前盈虧: <span style='color:{pl_color}; font-weight:bold;'>{format(safe_pl, ',')} TWD</span>", unsafe_allow_html=True)
             
-                    # --- 減持功能區 (保持佈局，防止 ID 重複使用 idx) ---            
                     st.divider()
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
                     exit_q = e_c1.number_input("數量", min_value=1, value=int(row['shares']), key=f"exq_{idx}")
@@ -1133,7 +1142,7 @@ with tab_scan:
                         save_data()
                         st.rerun()
 
-            # [修正] 底部顯示看板：增加「總投入成本」與「總持股盈虧」
+            # [底部看板]：顯示總投入與估計盈虧
             st.divider()
             total_color = "red" if total_profit_loss >= 0 else "green"
             safe_total_pl = int(total_profit_loss) if not pd.isna(total_profit_loss) else 0
@@ -1152,6 +1161,7 @@ with tab_scan:
             )
         else:
             st.info("💡 目前無持股，請從左側搜尋或掃描板塊。")
+
 
 
 
