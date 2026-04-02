@@ -512,30 +512,54 @@ def ai_evolution_engine(ticker, h_max, current_price):
 
 def generate_ai_tech_analysis(ticker, price, mode=0):
     """
-    V15.5 大基石核心大腦 UI 與 多指標整合 (完全保留所有佈局與按鍵)
+    V16.1 大基石核心大腦 UI 與 多指標整合 (時區修正與穩定性強化版)
     """
+    import pytz  # 確保導入時區套件
+    
+    # --- [大基石核心：時區對齊邏輯] ---
+    # 定義台北時區，確保雲端佈署時間顯示一致
+    tw_tz = pytz.timezone('Asia/Taipei')
+    now_tw = datetime.now(tw_tz)
+    time_str = now_tw.strftime('%H:%M')
+
     p_bar = st.progress(0, text=f"🤖 AI 大腦啟動：正在調閱 {ticker} 35年歷史檔案...")
+    
     try:
         # --- [數據同步區] ---
         p_bar.progress(20, text=f"🌐 正在同步 {ticker} 多週期 K 線數據流...")
         raw_id = str(ticker).split(".")[0]
         h_full = None
         
-        # 這裡根據你的需求保持 6mo 或更長的 fetch 確保年線計算
+        # 建立 Ticker 物件並設定 10 秒超時緩衝防止掛起
         stock = yf.Ticker(get_full_ticker(ticker))
-        h_full = stock.history(period="1y") # 擴充至一年確保 ma248 準確
+        
+        # 獲取一年數據以支撐 ma248 年線與 ma124 半年線運算
+        h_full = stock.history(period="1y", timeout=10) 
         
         if h_full.empty:
             p_bar.empty()
-            return None
+            return {
+                "msg": "📡 數據源連線逾時，請刷新重試", 
+                "sent": "🔄 離線", 
+                "score": 50, 
+                "win_prob": 0, 
+                "price": price, 
+                "target": price, 
+                "stop": price, 
+                "atr_range": "N/A", 
+                "pivot": f"系統超時 ({time_str})"
+            }
 
         # --- [核心指標預算區] ---
         p_bar.progress(50, text="🧠 AI 正在運算：布林帶寬、多週期均線、葛蘭碧法則...")
+        
+        # 基礎指標計算
         ma5 = h_full['Close'].rolling(5).mean().iloc[-1]
         ma20 = h_full['Close'].rolling(20).mean().iloc[-1]
         ma60 = h_full['Close'].rolling(60).mean().iloc[-1]
         ma60_prev = h_full['Close'].rolling(60).mean().iloc[-2]
         
+        # 布林通道計算
         std20 = h_full['Close'].rolling(20).std().iloc[-1]
         bb_upper = ma20 + (std20 * 2)
         bb_lower = ma20 - (std20 * 2)
@@ -543,20 +567,29 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
         # --- [大腦引擎調用區] ---
         p_bar.progress(80, text="🧬 AI 正在根據【老總級回檔】與【籌碼流向】進行決策...")
         
-        # 呼叫上面的進階引擎
+        # 執行核心進化引擎 (V16.0 邏輯)
         final_score, intel_msg, win_prob, sentiment = ai_evolution_engine(ticker, h_full, price)
         
-        # 額外 UI 邏輯標籤 (葛蘭碧與布林)
+        # --- [額外 UI 邏輯標籤：葛蘭碧與布林特徵捕捉] ---
         ui_tags = []
+        # 1. 葛蘭碧法則：均線翻揚且股價回測支撐 (3%以內)
         if ma60 > ma60_prev and price > ma60 and (price - ma60)/ma60 < 0.03:
             ui_tags.append("🎯 葛蘭碧支撐")
+        
+        # 2. 強勢擴張：突破布林上軌
         if price > bb_upper:
             ui_tags.append("🚀 突破布林")
         
-        # --- [回傳報告] ---
+        # 3. 乖離警示：低於布林下軌
+        if price < bb_lower:
+            ui_tags.append("🛡️ 超跌乖離")
+        
+        # --- [回傳報告整合] ---
         p_bar.progress(100, text="✅ 診斷完成")
-        time.sleep(0.3); p_bar.empty()
+        time.sleep(0.3)
+        p_bar.empty()
 
+        # 最終診斷回傳字典
         return {
             "msg": f"{intel_msg} | {' | '.join(ui_tags)}" if ui_tags else intel_msg, 
             "sent": sentiment, 
@@ -566,11 +599,25 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
             "target": round(float(price * 1.15), 2),
             "stop": round(float(price * 0.92), 2), 
             "atr_range": f"勝率: {win_prob}%",
-            "pivot": f"V16.0 大基石 AI ({datetime.now().strftime('%H:%M')})"
+            # 使用修正後的台北時間顯示
+            "pivot": f"V16.1 大基石 AI ({time_str})" 
         }
+        
     except Exception as e:
         if 'p_bar' in locals(): p_bar.empty()
-        return {"msg": f"AI 異常: {str(e)[:15]}", "score": 50, "sent": "🔄 錯誤"}
+        # 異常狀態下仍維持台北時間顯示
+        err_time = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%H:%M')
+        return {
+            "msg": f"AI 異常: {str(e)[:20]}", 
+            "score": 50, 
+            "sent": "🔄 錯誤",
+            "price": price,
+            "target": price,
+            "stop": price,
+            "win_prob": 0,
+            "atr_range": "N/A",
+            "pivot": f"修復中 ({err_time})"
+        }
 
 
 # ==============================================================================
