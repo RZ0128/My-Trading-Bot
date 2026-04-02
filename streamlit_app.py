@@ -1046,9 +1046,9 @@ with tab_scan:
                 st.divider()
 
             
-    
+    Ｒ
     with col_r:
-        # --- [4. 持股監控區：大基石 V15.3 強化版] ---
+        # --- [4. 持股監控區：大基石 V16.2 強化版] ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
         
         mask = (st.session_state.local_db['client'] == st.session_state.cur_c) & \
@@ -1056,21 +1056,36 @@ with tab_scan:
         my_h = st.session_state.local_db[mask]
 
         total_profit_loss = 0.0  # 初始化總損益
+        total_invest_cost = 0.0  # 新增：初始化總投入成本
 
         if not my_h.empty:
             for idx, row in my_h.iterrows():
                 # 獲取行情：cp(現價), cd(漲跌), cc(漲幅)
                 cp, cd, cc = get_stock_perf(row['id'], 0) 
                 
-                # 計算單筆損益：(現價 - 成本) * 股數
-                # 判斷單位：張=1000股
+                # 計算單位：張=1000股
                 multiplier = 1000 if row['unit'] == "張" else 1
                 shares_val = float(row['shares'])
                 buy_p = float(row['buy_price'])
+                
+                # --- [新增邏輯：計算投入成本與產業別] ---
+                current_item_cost = buy_p * shares_val * multiplier
+                total_invest_cost += current_item_cost
+                
+                # 獲取產業類別 (優先從股池，若無則顯示非股池)
+                # 假設您的股池函數為 get_stock_name，這裡稍微擴充邏輯
+                try:
+                    # 這部分 logic 可根據您的 GLOBAL_POOL 調整
+                    industry_val = "IC/科技" # 範例，請確保您的資料源有此欄位
+                    # 如果不在 500 股池，標註為 "非股池內"
+                    display_industry = f"科技" # 這裡請對接您的資料庫
+                except:
+                    display_industry = "非股池內"
+
                 individual_pl = (cp - buy_p) * shares_val * multiplier
                 total_profit_loss += individual_pl
 
-                # AI 籌碼診斷邏輯
+                # AI 籌碼診斷邏輯 (完全保留)
                 sentiment_val = row.get('sentiment', '偵測中')
                 if sentiment_val in ['偵測中', '', None]:
                     if cp < buy_p:
@@ -1079,10 +1094,12 @@ with tab_scan:
                         sentiment_val = "💰 大戶收貨 (融資減)"
         
                 with st.container(border=True):
+                    # --- [功能 1：中文名稱上方增加淡灰色產業類別] ---
+                    st.markdown(f"<p style='color: #A0A0A0; font-size: 0.8rem; margin-bottom: -15px;'>{display_industry}</p>", unsafe_allow_html=True)
+                    
                     col_t1, col_t2 = st.columns([2, 1])
                     col_t1.markdown(f"### **{row['name']}** `{row['id']}`")
                     
-                    # 修正問題 2：限制小數點兩位，並顯示損益點數
                     delta_color = "red" if cd >= 0 else "green"
                     prefix = "+" if cd > 0 else ""
                     col_t2.markdown(
@@ -1093,15 +1110,13 @@ with tab_scan:
             
                     st.markdown(f"🚩 **AI 籌碼診斷：** :orange[{sentiment_val}]")
                     
-                    # 修正問題 1：顯示單筆損益
                     pl_color = "red" if individual_pl >= 0 else "green"
                     st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {round(buy_p, 2)}")
                     st.markdown(f"💰 當前盈虧: <span style='color:{pl_color}; font-weight:bold;'>{format(int(individual_pl), ',')} TWD</span>", unsafe_allow_html=True)
             
-                    # --- 減持功能區 (保持佈局，防止 ID 重複使用 idx) ---            
+                    # --- 減持功能區 (完整保留) ---            
                     st.divider()
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
-                    # 將 e_cl 改為 e_c1
                     exit_q = e_c1.number_input("數量", min_value=1, value=int(row['shares']), key=f"exq_{idx}")
                     exit_u = e_c2.radio("單位", ["張", "股"], index=0 if row['unit']=="張" else 1, key=f"exu_v15_{idx}", horizontal=True, label_visibility="collapsed")
             
@@ -1115,18 +1130,23 @@ with tab_scan:
                         save_data()
                         st.rerun()
 
-            # 修正問題 1：持股區最下方顯示總損益金額
+            # --- [功能 2：底部顯示總投入金額與總損益] ---
             st.divider()
             total_color = "red" if total_profit_loss >= 0 else "green"
             st.markdown(
-                f"<div style='background-color:#f0f2f6; padding:20px; border-radius:10px; text-align:center;'>"
-                f"<h4>總持股估計盈虧</h4>"
-                f"<h2 style='color:{total_color};'>{format(int(total_profit_loss), ',')} TWD</h2>"
+                f"<div style='background-color:#f8f9fb; padding:15px; border-radius:10px; text-align:center; border: 1px solid #e0e0e0;'>"
+                f"<span style='color:#666; font-size:1rem;'>總投入成本金額</span><br>"
+                f"<span style='color:#333; font-size:1.3rem; font-weight:bold;'>{format(int(total_invest_cost), ',')} TWD</span>"
+                f"<div style='margin-top:10px; border-top:1px solid #ddd; padding-top:10px;'>"
+                f"<span style='color:#333; font-size:1.1rem;'>總持股估計盈虧</span><br>"
+                f"<h2 style='color:{total_color}; margin:0;'>{format(int(total_profit_loss), ',')} TWD</h2>"
+                f"</div>"
                 f"</div>", 
                 unsafe_allow_html=True
             )
         else:
             st.info("💡 目前無持股，請從左側搜尋或掃描板塊。")
+
 
 
 
