@@ -512,12 +512,11 @@ def ai_evolution_engine(ticker, h_max, current_price):
 
 def generate_ai_tech_analysis(ticker, price, mode=0):
     """
-    V16.1 大基石核心大腦 UI 與 多指標整合 (時區修正與穩定性強化版)
+    V16.2 大基石核心大腦 UI 與 多指標整合 (完全保留所有佈局與按鍵，含時區穩定性強化)
     """
     import pytz  # 確保導入時區套件
     
     # --- [大基石核心：時區對齊邏輯] ---
-    # 定義台北時區，確保雲端佈署時間顯示一致
     tw_tz = pytz.timezone('Asia/Taipei')
     now_tw = datetime.now(tw_tz)
     time_str = now_tw.strftime('%H:%M')
@@ -528,12 +527,11 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
         # --- [數據同步區] ---
         p_bar.progress(20, text=f"🌐 正在同步 {ticker} 多週期 K 線數據流...")
         raw_id = str(ticker).split(".")[0]
-        h_full = None
         
-        # 建立 Ticker 物件並設定 10 秒超時緩衝防止掛起
+        # 建立 Ticker 物件並設定 10 秒超時緩衝
         stock = yf.Ticker(get_full_ticker(ticker))
         
-        # 獲取一年數據以支撐 ma248 年線與 ma124 半年線運算
+        # 獲取一年數據以支撐 ma248 年線與 ma124 半年線運算，確保數據完整不簡化
         h_full = stock.history(period="1y", timeout=10) 
         
         if h_full.empty:
@@ -553,7 +551,7 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
         # --- [核心指標預算區] ---
         p_bar.progress(50, text="🧠 AI 正在運算：布林帶寬、多週期均線、葛蘭碧法則...")
         
-        # 基礎指標計算
+        # 基礎指標計算 (完整保留)
         ma5 = h_full['Close'].rolling(5).mean().iloc[-1]
         ma20 = h_full['Close'].rolling(20).mean().iloc[-1]
         ma60 = h_full['Close'].rolling(60).mean().iloc[-1]
@@ -567,7 +565,7 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
         # --- [大腦引擎調用區] ---
         p_bar.progress(80, text="🧬 AI 正在根據【老總級回檔】與【籌碼流向】進行決策...")
         
-        # 執行核心進化引擎 (V16.0 邏輯)
+        # 執行核心進化引擎
         final_score, intel_msg, win_prob, sentiment = ai_evolution_engine(ticker, h_full, price)
         
         # --- [額外 UI 邏輯標籤：葛蘭碧與布林特徵捕捉] ---
@@ -586,10 +584,8 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
         
         # --- [回傳報告整合] ---
         p_bar.progress(100, text="✅ 診斷完成")
-        time.sleep(0.3)
-        p_bar.empty()
+        time.sleep(0.3); p_bar.empty()
 
-        # 最終診斷回傳字典
         return {
             "msg": f"{intel_msg} | {' | '.join(ui_tags)}" if ui_tags else intel_msg, 
             "sent": sentiment, 
@@ -599,13 +595,11 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
             "target": round(float(price * 1.15), 2),
             "stop": round(float(price * 0.92), 2), 
             "atr_range": f"勝率: {win_prob}%",
-            # 使用修正後的台北時間顯示
-            "pivot": f"V16.1 大基石 AI ({time_str})" 
+            "pivot": f"V16.2 大基石 AI ({time_str})" 
         }
         
     except Exception as e:
         if 'p_bar' in locals(): p_bar.empty()
-        # 異常狀態下仍維持台北時間顯示
         err_time = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%H:%M')
         return {
             "msg": f"AI 異常: {str(e)[:20]}", 
