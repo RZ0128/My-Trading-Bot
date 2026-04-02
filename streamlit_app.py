@@ -1051,50 +1051,55 @@ with tab_scan:
         # --- [4. 持股監控區：大基石 V16.2 強化版] ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
         
+        # 確保欄位存在，防止 KeyError
+        required_cols = ['client', 'id', 'shares', 'buy_price', 'unit', 'name', 'sentiment']
+        for col in required_cols:
+            if col not in st.session_state.local_db.columns:
+                st.session_state.local_db[col] = "" if col in ['unit', 'name', 'sentiment'] else 0
+
         mask = (st.session_state.local_db['client'] == st.session_state.cur_c) & \
-               (st.session_state.local_db['id'] != 'INIT')
+               (st.session_state.local_db['id'] != 'INIT') & \
+               (st.session_state.local_db['id'] != '')
+        
         my_h = st.session_state.local_db[mask]
 
-        total_profit_loss = 0.0  # 初始化總損益
-        total_invest_cost = 0.0  # 新增：初始化總投入成本
+        total_profit_loss = 0.0  
+        total_invest_cost = 0.0  
 
         if not my_h.empty:
             for idx, row in my_h.iterrows():
-                # 獲取行情：cp(現價), cd(漲跌), cc(漲幅)
+                # 獲取行情
                 cp, cd, cc = get_stock_perf(row['id'], 0) 
                 
-                # 計算單位：張=1000股
-                multiplier = 1000 if row['unit'] == "張" else 1
-                shares_val = float(row['shares'])
-                buy_p = float(row['buy_price'])
+                # 安全獲取數值與單位，防止空值崩潰
+                try:
+                    u_val = str(row['unit']) if row['unit'] else "張"
+                    multiplier = 1000 if u_val == "張" else 1
+                    shares_val = float(row['shares']) if row['shares'] else 0.0
+                    buy_p = float(row['buy_price']) if row['buy_price'] else 0.0
+                except:
+                    multiplier, shares_val, buy_p, u_val = 1000, 0.0, 0.0, "張"
                 
-                # --- [新增邏輯：計算投入成本與產業別] ---
+                # --- [功能：計算投入成本與產業別] ---
                 current_item_cost = buy_p * shares_val * multiplier
                 total_invest_cost += current_item_cost
                 
-                # 獲取產業類別 (優先從股池，若無則顯示非股池)
-                # 假設您的股池函數為 get_stock_name，這裡稍微擴充邏輯
-                try:
-                    # 這部分 logic 可根據您的 GLOBAL_POOL 調整
-                    industry_val = "IC/科技" # 範例，請確保您的資料源有此欄位
-                    # 如果不在 500 股池，標註為 "非股池內"
-                    display_industry = f"科技" # 這裡請對接您的資料庫
-                except:
-                    display_industry = "非股池內"
+                # 產業別識別
+                raw_id = str(row['id']).split(".")[0]
+                display_industry = "核心權值" # 預設
+                for cat, stocks in pool_500.items():
+                    if any(raw_id in s[0] for s in stocks):
+                        display_industry = cat.split(" ")[1] # 取得名稱如 "半導體"
+                        break
 
                 individual_pl = (cp - buy_p) * shares_val * multiplier
                 total_profit_loss += individual_pl
 
-                # AI 籌碼診斷邏輯 (完全保留)
+                # 籌碼診斷
                 sentiment_val = row.get('sentiment', '偵測中')
-                if sentiment_val in ['偵測中', '', None]:
-                    if cp < buy_p:
-                        sentiment_val = "🔥 偵測到洗盤完成，準備破新高"
-                    else:
-                        sentiment_val = "💰 大戶收貨 (融資減)"
         
                 with st.container(border=True):
-                    # --- [功能 1：中文名稱上方增加淡灰色產業類別] ---
+                    # 顯示產業別
                     st.markdown(f"<p style='color: #A0A0A0; font-size: 0.8rem; margin-bottom: -15px;'>{display_industry}</p>", unsafe_allow_html=True)
                     
                     col_t1, col_t2 = st.columns([2, 1])
@@ -1111,14 +1116,14 @@ with tab_scan:
                     st.markdown(f"🚩 **AI 籌碼診斷：** :orange[{sentiment_val}]")
                     
                     pl_color = "red" if individual_pl >= 0 else "green"
-                    st.write(f"持有: **{row['shares']} {row['unit']}** | 成本: {round(buy_p, 2)}")
+                    st.write(f"持有: **{shares_val} {u_val}** | 成本: {round(buy_p, 2)}")
                     st.markdown(f"💰 當前盈虧: <span style='color:{pl_color}; font-weight:bold;'>{format(int(individual_pl), ',')} TWD</span>", unsafe_allow_html=True)
             
-                    # --- 減持功能區 (完整保留) ---            
+                    # --- 減持功能區 ---            
                     st.divider()
                     e_c1, e_c2, e_c3 = st.columns([1.2, 1.2, 1.5])
-                    exit_q = e_c1.number_input("數量", min_value=1, value=int(row['shares']), key=f"exq_{idx}")
-                    exit_u = e_c2.radio("單位", ["張", "股"], index=0 if row['unit']=="張" else 1, key=f"exu_v15_{idx}", horizontal=True, label_visibility="collapsed")
+                    exit_q = e_c1.number_input("數量", min_value=0.1, value=float(shares_val), key=f"exq_{idx}")
+                    exit_u = e_c2.radio("單位", ["張", "股"], index=0 if u_val=="張" else 1, key=f"exu_v15_{idx}", horizontal=True, label_visibility="collapsed")
             
                     if e_c3.button(f"❌ 執行減持", key=f"exb_v15_{idx}", use_container_width=True):
                         record_transaction(st.session_state.cur_c, row['id'], "賣出", exit_q, round(cp, 2), f"AI診斷:{sentiment_val}")
@@ -1130,7 +1135,7 @@ with tab_scan:
                         save_data()
                         st.rerun()
 
-            # --- [功能 2：底部顯示總投入金額與總損益] ---
+            # --- [底部總計欄位] ---
             st.divider()
             total_color = "red" if total_profit_loss >= 0 else "green"
             st.markdown(
@@ -1146,6 +1151,7 @@ with tab_scan:
             )
         else:
             st.info("💡 目前無持股，請從左側搜尋或掃描板塊。")
+
 
 
 
