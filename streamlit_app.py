@@ -1046,7 +1046,7 @@ with tab_scan:
                 st.divider()
 
             
-    Ｒ
+    
     with col_r:
         # --- [4. 持股監控區：大基石 V16.2 強化版] ---
         st.subheader(f"💼 持股監控: [{st.session_state.cur_c}]")
