@@ -10,6 +10,8 @@ import numpy as np
 import collections
 import re
 import time
+import random
+
 
 # --- [V15.2 雲端安全通訊官：Google Sheets 同步模組] ---
 try:
