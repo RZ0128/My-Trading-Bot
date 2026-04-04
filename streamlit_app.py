@@ -303,26 +303,56 @@ def get_stock_name(ticker):
     except:
         return f"個股 {raw_id}"
 
+# --- [修改後的 get_stock_perf：首選 TW Stock 策略] ---
+
 def get_stock_perf(ticker, period_days=0):
+    """
+    大基石核心行情引擎：優先使用 twstock (在地數據)，yf 作為備援
+    """
+    # 1. 提取純數字代號 (例如從 2330.TW 提取 2330)
     raw_id = str(ticker).split(".")[0].strip()
+    
+    # 2. 【首選策略】嘗試使用 twstock 抓取即時行情
     if raw_id.isdigit():
         try:
             import twstock
+            # 建立 stock 物件，只抓取最近數據以加快掃描速度
             stock = twstock.Stock(raw_id)
-            prices = stock.price[-5:] 
-            if len(prices) >= 2 and prices[-1] is not None:
-                return float(prices[-1]), float(prices[-1] - prices[-2]), "[T]"
-        except: pass
+            
+            # 檢查是否有獲取到價格數據
+            if stock and len(stock.price) >= 2:
+                current_p = stock.price[-1]
+                prev_p = stock.price[-2]
+                
+                # 確保數值有效且非 None (twstock 有時會回傳 None)
+                if current_p is not None and prev_p is not None:
+                    diff = current_p - prev_p
+                    return float(current_p), float(diff), "[TW]" # 標註來源為 TW Stock
+        except Exception as e:
+            # 僅在偵錯模式顯示，不干擾 UI
+            pass
+
+    # 3. 【備援策略】若 TW Stock 失敗或非台股代號，使用 Yahoo Finance
     try:
         full_tid = get_full_ticker(raw_id)
         tk = yf.Ticker(full_tid)
-        hist = tk.history(period="2d")
-        if not hist.empty:
+        # 僅抓取 2 天數據以極致化掃描速度
+        hist = tk.history(period="2d", timeout=5) 
+        
+        if not hist.empty and len(hist) >= 2:
             cp = hist['Close'].iloc[-1]
             dp = hist['Close'].iloc[-1] - hist['Close'].iloc[-2]
-            return float(cp), float(dp), "[Y]"
-    except: pass
-    return 0, 0, "[N/A]"
+            return float(cp), float(dp), "[YF]" # 標註來源為 Yahoo Finance
+        elif not hist.empty:
+            # 只有一天數據的情況
+            cp = hist['Close'].iloc[-1]
+            return float(cp), 0.0, "[YF-S]"
+    except:
+        pass
+
+    # 4. 【最終保底】若全部失敗
+    return 0.0, 0.0, "[N/A]"
+
 
 def record_transaction(client, tid, action, shares, price, note):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
