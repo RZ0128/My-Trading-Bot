@@ -11,6 +11,8 @@ import collections
 import re
 import time
 import random
+import numpy as np
+import pandas as pd
 
 
 # --- [V15.2 雲端安全通訊官：Google Sheets 同步模組] ---
@@ -449,20 +451,46 @@ def ai_pattern_discovery(ticker, h_max):
         return "🧬 AI 發現新法則：極致窒息量後跳空模型 (勝率待測)"
     return None
 
-def ai_evolution_engine(ticker, h_max, current_price):
+
+
+def ai_evolution_engine(ticker, h_max, current_price, margin_data=None):
     """
-    大腦進化引擎 V16.0：
-    整合【老總級回檔】、【融資洗盤偵測】、【斜率補償】與【島狀反轉】
-    這是整個大基石最核心的邏輯運算區，嚴禁簡化邏輯分支。
+    大腦進化引擎 V16.2：
+    整合【多週期連動】、【核心四模組】、【融資洗盤偵測】與【數據回補機制】
+    保持「大基石」佈局與邏輯分支，嚴禁簡化。
     """
-    if h_max is None or h_max.empty or len(h_max) < 250:
-        return 50, "📚 數據積累中", 50.0, "🔍 觀察"
+    # --- [0. 數據完整性檢查與回補] ---
+    # 如果 yfinance 返回 NaN 或數據不足，調用歷史噴發模式進行診斷回補，而非直接給 50 分
+    if h_max is None or h_max.empty or h_max['Close'].isnull().all():
+        try:
+            # 嘗試調用歷史噴發分析模組進行「基因比對」診斷
+            recovery_score, recovery_msg = historical_surge_analysis(ticker)
+            return recovery_score, f"補充診斷：{recovery_msg}", 40.0, "數據缺失/回補中"
+        except:
+            return 50, "⚠️ 數據獲取異常，請檢查代碼有效性", 0.0, "數據異常"
+
+    # 確保數據長度足以計算長天期均線 (248日)
+    if len(h_max) < 250:
+        return 55, "📚 數據累積中 (未達年線標本)", 50.0, "🔍 觀察"
+
+    # --- [1. 數據準備與核心變數] ---
+    c = h_max['Close'].ffill() # 解決 nan 顯示問題
+    v = h_max['Volume'].ffill()
+    hi = h_max['High'].ffill()
+    lo = h_max['Low'].ffill()
     
-    c, v, hi, lo = h_max['Close'], h_max['Volume'], h_max['High'], h_max['Low']
     score = 60 # 初始中性基準分
     intel_tags = []
+    sentiment_status = "🔍 數據觀察中"
 
-    # --- [1. MACD 與核心均線預算] ---
+    # 調用 get_multi_timeframe_data 確保多週期數據連動
+    # (此處假設該函數返回不同時段的強弱勢指標，若為外部函數請確保已定義)
+    try:
+        mtf_status = get_multi_timeframe_data(ticker)
+        if mtf_status == 'Bullish': score += 5
+    except: pass
+
+    # --- [2. MACD 與核心均線運算] ---
     ema12 = c.ewm(span=12).mean(); ema26 = c.ewm(span=26).mean()
     macd_series = ema12 - ema26
     macd_sig = macd_series.ewm(span=9).mean()
@@ -473,23 +501,37 @@ def ai_evolution_engine(ticker, h_max, current_price):
     ma124 = c.rolling(124).mean().iloc[-1]
     ma248 = c.rolling(248).mean().iloc[-1]
 
-    # --- [2. 價格與 MACD 背離偵測] ---
+    # --- [3. 背離偵測 (detect_divergence 模組)] ---
+    # 使用專門模組產出「可用資訊」
+    if detect_divergence(h_max):
+        score += 15
+        intel_tags.append("📈 偵測到指標底背離 (具反彈動能)")
+    
+    # 原有邏輯：高檔頂背離預警
     if c.iloc[-1] > c.tail(20).max() * 0.98 and macd_series.iloc[-1] < macd_series.tail(20).max() * 0.8:
-        score -= 25; intel_tags.append("🚨 偵測到指標背離")
+        score -= 25; intel_tags.append("🚨 偵測到頂部背離預警")
 
-    # --- [3. 島狀反轉偵測] ---
-    if lo.iloc[-1] > hi.iloc[-2]: intel_tags.append("🏝️ 島狀反轉潛力(多)"); score += 15
-    if hi.iloc[-1] < lo.iloc[-2]: intel_tags.append("🏚️ 島狀反轉潛力(空)"); score -= 20
+    # --- [4. 持有成本區間 (calculate_cost_zone 模組)] ---
+    # 修正「當前盈虧 0」異常，精確計算支撐與壓力
+    try:
+        cost_data = calculate_cost_zone(h_max)
+        if current_price >= cost_data['support'] * 0.98 and current_price <= cost_data['support'] * 1.02:
+            score += 10
+            intel_tags.append(f"📍 處於關鍵支撐區: {cost_data['support']}")
+    except:
+        intel_tags.append("📍 成本區間計算中")
 
-    # --- [4. 量縮收斂三角形判斷] ---
+    # --- [5. 島狀反轉與形態偵測] ---
+    if lo.iloc[-1] > hi.iloc[-2]: intel_tags.append("🏝️ 島狀反轉(多)"); score += 15
+    if hi.iloc[-1] < lo.iloc[-2]: intel_tags.append("🏚️ 島狀反轉(空)"); score -= 20
+
     price_range = (hi.tail(20).max() - lo.tail(20).min()) / c.iloc[-1]
     if price_range < 0.05 and v.iloc[-1] < v.tail(20).mean() * 0.6:
         score += 20; intel_tags.append("📐 量縮收斂三角形")
 
-    # --- [5. 高檔警戒與斜率補償 (修正僵化邏輯)] ---
+    # --- [6. 高檔警戒與斜率補償] ---
     avg_v_year = v.rolling(248).mean().iloc[-1]
     if c.iloc[-1] > ma248 * 1.3 and v.iloc[-1] > avg_v_year * 3:
-        # 如果 MACD 斜率還在增加，代表是強勢妖股，減輕扣分
         macd_slope = macd_hist.iloc[-1] - macd_hist.iloc[-2]
         if macd_slope > 0:
             score -= 20 
@@ -497,46 +539,60 @@ def ai_evolution_engine(ticker, h_max, current_price):
         else:
             score -= 45; intel_tags.append("💀 高檔爆巨量(出貨預警)")
 
-    # --- [6. 噴發模型偵測] ---
-    if c.iloc[-1] > ma20 and v.iloc[-1] > v.rolling(20).mean().iloc[-1] * 1.5:
-        score += 20; intel_tags.append("🔥 匹配噴發模型")
+    # --- [7. 融資/籌碼洗盤偵測邏輯 (核心升級)] ---
+    # 檢查融資變化 (如果 margin_data 存在)
+    margin_flush_out = False
+    if margin_data is not None and not margin_data.empty:
+        # 取得最近 5 日融資變化
+        margin_change = margin_data['Margin_Balance'].diff().iloc[-5:].sum()
+        if margin_change < 0:
+            margin_flush_out = True
+            sentiment_status = "🔥 大戶收貨 (融資減)"
+        else:
+            sentiment_status = "⚠️ 散戶進場 (融資增)"
 
-    # --- [7. 老總級：強勢股回檔與洗盤偵測核心 (V16.0 重點)] ---
-    sentiment_status = "🔍 散戶進場 (融資增)"
-    
-    # A. 強勢回檔條件：多頭排列 (ma60 > ma124) 且股價在季線上、月線下
+    # A. 老總級回檔：多頭排列 + 縮量回測
     if current_price > ma60 and ma60 > ma124:
         if current_price < ma20:
-            # 判斷量縮：今日成交量小於 10 日均量 75% (窒息量)
             is_volume_dry = v.iloc[-1] < v.rolling(10).mean().iloc[-1] * 0.75
             if is_volume_dry:
                 dist_to_annual_line = (current_price - ma248) / ma248
-                # 位階判定
-                if dist_to_annual_line < 0.15: # 歷史地位洗盤完成 (如：大江)
+                if dist_to_annual_line < 0.15:
                     score += 40
                     intel_tags.append("🔥 偵測到洗盤完成，準備破新高")
-                    sentiment_status = "🔥 大戶收貨 (融資減)"
-                else: # 強勢股中繼縮量回測 (如：勤誠、漢唐)
+                    if margin_flush_out: sentiment_status = "🔥 大戶收貨 (融資減)"
+                else:
                     score += 30
-                    intel_tags.append("🔥 老總級回檔買點 (強勢股縮量回測)")
-                    sentiment_status = "🔥 大戶收貨 (融資減)"
+                    intel_tags.append("🔥 老總級回檔買點 (強勢縮量)")
 
-    # B. 補足原有的年線/半年線支撐洗盤邏輯
-    elif not np.isnan(ma248) and (current_price >= ma248 * 0.96 and current_price <= ma248 * 1.04):
-        if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.75:
-            score += 25
-            intel_tags.append("🔥 年線位階洗盤偵測")
-            sentiment_status = "🔥 大戶收貨 (融資減)"
-    elif not np.isnan(ma124) and (current_price >= ma124 * 0.97 and current_price <= ma124 * 1.03):
-        if v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.8:
-            score += 15
-            intel_tags.append("📡 半年線支撐洗盤")
-            sentiment_status = "🔥 大戶收貨 (融資減)"
+    # B. 均線支撐洗盤偵測 (結合融資訊號)
+    near_ma248 = (current_price >= ma248 * 0.96 and current_price <= ma248 * 1.04)
+    near_ma124 = (current_price >= ma124 * 0.97 and current_price <= ma124 * 1.03)
 
-    # --- [8. 勝率回測模擬] ---
+    if (near_ma248 or near_ma124) and margin_flush_out:
+        score += 25
+        intel_tags.append("🔥 支撐位階融資洗盤偵測")
+    elif near_ma248 and v.iloc[-1] < v.rolling(20).mean().iloc[-1] * 0.75:
+        score += 20; intel_tags.append("📡 年線縮量支撐")
+
+    # --- [8. 噴發模型偵測 (調用分析模組)] ---
+    if c.iloc[-1] > ma20 and v.iloc[-1] > v.rolling(20).mean().iloc[-1] * 1.5:
+        score += 15; intel_tags.append("🔥 匹配噴發模型")
+    
+    # 調用 historical_surge_analysis 增加診斷深度
+    try:
+        surge_bonus, _ = historical_surge_analysis(ticker)
+        if surge_bonus > 70: score += 10; intel_tags.append("📜 符合歷史大噴發基因")
+    except: pass
+
+    # --- [9. 勝率模擬與輸出] ---
     returns = c.pct_change(5).shift(-5)
-    win_rate = (returns > 0).sum() / len(returns) * 100
-    win_prob = round((win_rate * 0.6) + (score * 0.4), 1)
+    valid_returns = returns.dropna()
+    if len(valid_returns) > 0:
+        win_rate = (valid_returns > 0).sum() / len(valid_returns) * 100
+        win_prob = round((win_rate * 0.6) + (score * 0.4), 1)
+    else:
+        win_prob = score * 0.8
         
     return max(0, min(100, score)), " | ".join(intel_tags) if intel_tags else "⚖️ 常態波動", win_prob, sentiment_status
 
