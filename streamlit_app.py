@@ -1108,6 +1108,7 @@ with tab_scan:
                             # 🚀 買入張數/股數選擇按鍵（完全保留）
                             buy_col1, buy_col2 = st.columns([1, 1])
                             # 請修改為（加入 enumerate 的索引 i 確保絕對唯一）：
+                            # 第 1111 行修改如下：
                             u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}", horizontal=True, label_visibility="collapsed")
                             q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}")
                     
