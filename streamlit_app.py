@@ -1084,12 +1084,12 @@ with tab_scan:
             with st.spinner(f"📡 大基石 AI 正在調取 {cat_choice} 板塊數據，請稍後..."):
                 # 調用上方定義的緩存函數（大腦核心）
                 top_picks = get_cached_sector_scan(cat_choice, pool_500[cat_choice])
-    
+                  
             if top_picks:
                 st.success(f"✅ 板塊掃描完成！AI 篩選出 {len(top_picks)} 檔強勢標的：")
 
-                # ✅ 2. 進入卡片迴圈，這裡 100% 保留你最滿意的佈局
-                for item in top_picks:
+                # ✅ 將原本的 for item in top_picks: 改成下面這行帶有 enumerate 的版本
+                for i, item in enumerate(top_picks): 
                     # 數據解析與籌碼狀態
                     analysis_msg = item.get('msg', '📡 AI 正在深度運算數據流...')
                     sent_status = item.get('sent', '⚖️ 籌碼穩定')
@@ -1105,12 +1105,11 @@ with tab_scan:
                             st.caption(f"漲跌幅: {item['diff']}")
                 
                         with c2:
-                            # 🚀 買入張數/股數選擇按鍵（完全保留）
+                            # 🚀 這裡就是用到 i 的地方，確保每一筆結果的 Key 都是唯一的
                             buy_col1, buy_col2 = st.columns([1, 1])
-                            # 請修改為（加入 enumerate 的索引 i 確保絕對唯一）：
-                            # 第 1111 行修改如下：
                             u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}", horizontal=True, label_visibility="collapsed")
                             q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}")
+
                     
                         with c3:
                             # 🚀 執行買入案件：完整紀錄 record_transaction, save_data
