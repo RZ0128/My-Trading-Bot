@@ -441,6 +441,30 @@ def get_macd_slope(df):
         status = "📉 轉弱" if slope < 0 else "🧬 底背離觀察"
     return slope, status
 
+# --- [補回缺失的核心四模組保底定義] ---
+
+def detect_divergence(df):
+    """指標背離偵測模組"""
+    try:
+        # 這裡應放置您原本的背離偵測邏輯
+        # 暫時回傳 False 以確保代碼能跑通
+        return False 
+    except:
+        return False
+
+def get_multi_timeframe_data(ticker):
+    """多時框共振模組"""
+    return "Neutral"
+
+def calculate_cost_zone(df):
+    """成本區計算模組"""
+    return {"support": df['Close'].min(), "resistance": df['Close'].max()}
+
+def historical_surge_analysis(ticker):
+    """歷史飆股特徵分析"""
+    return 0, "無歷史數據"
+
+
 def ai_pattern_discovery(ticker, h_max):
     """AI 自主發現法則：極致窒息量模型 (完全保留)"""
     if h_max is None or len(h_max) < 100: return None
