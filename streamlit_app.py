@@ -608,22 +608,37 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
         # --- [數據同步區：V16.3 強韌版] ---
         p_bar.progress(20, text=f"🌐 正在同步 {ticker} 多週期 K 線數據流...")
         stock = yf.Ticker(get_full_ticker(ticker))
-
-        # 修正點：將 period 從 "1y" 改為 "2y"，並強制指定獲取方式，確保即便在連假也能抓到足夠的歷史資料
-        h_full = stock.history(period="2y", interval="1d", timeout=15) 
-
-        # 如果 2y 還是空的，嘗試暴力獲取所有數據
+        
+        # 1. 第一波嘗試：抓取 2 年數據 (確保越過連假與年線門檻)
+        h_full = stock.history(period="2y", timeout=15) 
+        
+        # 2. 第二波嘗試：如果 2y 是空的，暴力抓取 max
         if h_full.empty:
             h_full = stock.history(period="max", timeout=15)
 
-        # 關鍵修正：徹底移除 NaN 行，避免影響 len(h_full) 的判斷
-        h_full = h_full.dropna(subset=['Close'])
-        
+        # 3. 關鍵過濾：移除所有包含 NaN 的行 (避免連假當天產生的空數據干擾長度計算)
+        if not h_full.empty:
+            h_full = h_full.dropna(subset=['Close'])
+
+        # --- [這就是你問的那幾行：防護網邏輯] ---
         if h_full.empty:
             p_bar.empty()
-            return {"msg": "📡 數據源連線逾時", "sent": "🔄 離線", "score": 50, "win_prob": 0, "price": price, "target": price, "stop": price, "atr_range": "N/A", "pivot": f"系統超時 ({time_str})"}
+            # 這裡保留 50 分，是因為「完全沒數據」時，AI 無法給出任何建議
+            return {
+                "msg": "📡 數據源連線逾時或代號錯誤", 
+                "sent": "🔄 離線", 
+                "score": 50, 
+                "win_prob": 0, 
+                "price": price, 
+                "target": price, 
+                "stop": price, 
+                "atr_range": "N/A", 
+                "pivot": f"連線異常 ({time_str})"
+            }
 
+        # 如果通過了上面的檢查，代表數據抓到了，繼續往下跑 AI 運算
         p_bar.progress(50, text="🧠 AI 正在運算：布林帶寬、多週期均線、葛蘭碧法則...")
+
         
         # 基礎 UI 標籤運算 (保留原有邏輯)
         ma20 = h_full['Close'].rolling(20).mean().iloc[-1]
