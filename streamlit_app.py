@@ -1101,10 +1101,8 @@ with tab_scan:
                         # --- 第二行：數據細節與操作區 ---
                         c1, c2, c3 = st.columns([1.2, 1.8, 1.2])
                         with c1:
-                            # 限制股價顯示至小數點後兩位
-                            st.write(f"目前價格: {price:.2f}")
-                            # 限制漲跌幅顯示至小數點後兩位
-                            st.write(f"漲跌幅: {change:.2f}")
+                            st.write(f"📊 目前價格: **{item['price:.2f']}**")
+                            st.caption(f"漲跌幅: {item['diff:.2f']}")
 
                 
                         with c2:
