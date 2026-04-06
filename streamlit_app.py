@@ -1101,8 +1101,9 @@ with tab_scan:
                         # --- 第二行：數據細節與操作區 ---
                         c1, c2, c3 = st.columns([1.2, 1.8, 1.2])
                         with c1:
-                            st.write(f"📊 目前價格: **{item['price:.2f']}**")
-                            st.caption(f"漲跌幅: {item['diff:.2f']}")
+                            # 注意：:.2f 要放在 item['price'] 之後，變數的大括號內
+                            st.write(f"📊 目前價格: **{item['price']:.2f}**")
+                            st.caption(f"漲跌幅: {item['diff']:.2f}")
 
                 
                         with c2:
