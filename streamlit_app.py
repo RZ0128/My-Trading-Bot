@@ -1098,52 +1098,43 @@ with tab_scan:
 
         st.divider()
 
-
-        # --- [3. 板塊掃描區：大基石 V15.3 緩存增強版 - 完整 UI 不縮水] ---
+        
+        # --- [3. 板塊掃描區：大基石 V15.4 修正版 - 修正買入無效問題] ---
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_full")
 
         if st.button(f"🔍 啟動 {cat_choice} 板塊診斷", use_container_width=True):
-    
-            # ✅ 1. 啟動中文進度提示（取代討厭的英文 Running...）
-            with st.spinner(f"📡 大基石 AI 正在調取 {cat_choice} 板塊數據，請稍後..."):
-                # 調用上方定義的緩存函數（大腦核心）
+            with st.spinner(f"📡 大基石 AI 正在調取 {cat_choice} 板塊數據..."):
                 top_picks = get_cached_sector_scan(cat_choice, pool_500[cat_choice])
                   
             if top_picks:
-                st.success(f"✅ 板塊掃描完成！AI 篩選出 {len(top_picks)} 檔強勢標的：")
+                st.success(f"✅ AI 篩選出 {len(top_picks)} 檔強勢標的：")
 
-                # ✅ 將原本的 for item in top_picks: 改成下面這行帶有 enumerate 的版本
                 for i, item in enumerate(top_picks): 
-                    # 數據解析與籌碼狀態
-                    analysis_msg = item.get('msg', '📡 AI 正在深度運算數據流...')
+                    analysis_msg = item.get('msg', '📡 AI 運算中...')
                     sent_status = item.get('sent', '⚖️ 籌碼穩定')
             
                     with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | {sent_status}"):
-                        # --- 第一行：AI 戰略診斷 ---
                         st.info(f"💡 **AI 指令：** {analysis_msg}")
                 
-                        # --- 第二行：數據細節與操作區 ---
+                        # --- 數據與操作區 ---
                         c1, c2, c3 = st.columns([1.2, 1.8, 1.2])
                         with c1:
-                            # 注意：:.2f 要放在 item['price'] 之後，變數的大括號內
                             st.write(f"📊 目前價格: **{item['price']:.2f}**")
                             st.caption(f"漲跌幅: {item['diff']:.2f}")
 
-                
                         with c2:
-                            # 🚀 這裡就是用到 i 的地方，確保每一筆結果的 Key 都是唯一的
+                            # 關鍵修正：確保 Key 包含當前客戶名，避免換人操作時出錯
                             buy_col1, buy_col2 = st.columns([1, 1])
-                            u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}", horizontal=True, label_visibility="collapsed")
-                            q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}")
-
+                            u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}_{st.session_state.cur_c}", horizontal=True, label_visibility="collapsed")
+                            q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}_{st.session_state.cur_c}")
                         
                         with c3:
-                            # 🚀 執行買入：融合動態 Key 與 強制刷新邏輯
-                            btn_buy_key = f"btn_buy_{item['tid']}_{i}_{st.session_state.cur_c}"
+                            # 🚀 修正買入機制：借鏡個股掃描，加入 save_data()
+                            btn_buy_key = f"btn_buy_final_{item['tid']}_{i}_{st.session_state.cur_c}"
                             
                             if st.button(f"🚀 執行買入", key=btn_buy_key, use_container_width=True):
-                                # A. 建立新資料列，確保價格為數字格式
+                                # 1. 數據封裝
                                 new_entry = pd.DataFrame([{
                                     'client': st.session_state.cur_c, 
                                     'id': item['tid'], 
@@ -1155,25 +1146,25 @@ with tab_scan:
                                     'sentiment': sent_status
                                 }])
                                 
-                                # B. 更新本地資料庫
+                                # 2. 更新 Session 與 紀錄 (同步個股掃描邏輯)
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val, float(item['price']), f"板塊掃描買入: {analysis_msg}")
                                 
-                                # C. 寫入交易日誌與存檔
-                                record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val, item['price'], f"掃股買入:{analysis_msg}")
-                                save_data()
+                                # 3. 重要：觸發雲端寫入與提示
+                                save_data() 
                                 
-                                # D. 提示與強制重整 (確保右側更新)
+                                # 4. 反饋與刷新
                                 st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
-                                time.sleep(0.8)
+                                time.sleep(0.5)
                                 st.rerun()
 
-                            # 🔍 深度診斷按鈕：同步修正 Key 避免重複報錯
-                            btn_diag_key = f"btn_diag_{item['tid']}_{i}_{st.session_state.cur_c}"
+                            # 🔍 深度診斷按鈕
+                            btn_diag_key = f"btn_diag_final_{item['tid']}_{i}_{st.session_state.cur_c}"
                             if st.button(f"🔍 深度診斷", key=btn_diag_key, use_container_width=True):
                                 st.session_state.selected_stock = item['tid']
                                 st.rerun()
-
                 st.divider()
+
 
             
     
