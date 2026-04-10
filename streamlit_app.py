@@ -1137,26 +1137,37 @@ with tab_scan:
                             u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}", horizontal=True, label_visibility="collapsed")
                             q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}")
 
-                    
+                        
                         with c3:
-                            # 🚀 執行買入案件：完整紀錄 record_transaction, save_data
-                            if st.button(f"🚀 執行買入", key=f"btn_buy_{item['tid']}", use_container_width=True):
+                            # 1. 執行買入按鈕：加上 i 與 cur_c 確保 Key 絕不重複
+                            btn_buy_key = f"btn_buy_{item['tid']}_{i}_{st.session_state.cur_c}" 
+                            
+                            if st.button(f"🚀 執行買入", key=btn_buy_key, use_container_width=True):
+                                # 建立新資料列 (強制轉換價格為 float 避免運算錯誤)
                                 new_entry = pd.DataFrame([{
-                                    'client': st.session_state.cur_c, 'id': item['tid'], 'name': item['tname'], 
-                                    'buy_price': item['price'], 'shares': q_val, 'unit': u_val, 'entry_reason': analysis_msg, 
+                                    'client': st.session_state.cur_c, 
+                                    'id': item['tid'], 
+                                    'name': item['tname'], 
+                                    'buy_price': float(item['price']), 
+                                    'shares': q_val, 
+                                    'unit': u_val, 
+                                    'entry_reason': analysis_msg, 
                                     'sentiment': sent_status
                                 }])
-                                # 更新本地資料庫
+                                
+                                # 更新本地資料庫並存檔
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
-                                # 寫入交易日誌與存檔
                                 record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val, item['price'], f"掃描買入:{analysis_msg}")
                                 save_data()
+                                
+                                # 觸發提示並重整
                                 st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
                                 time.sleep(1)
                                 st.rerun()
 
-                            # 🔍 深度診斷按鈕
-                            if st.button(f"🔍 深度診斷", key=f"btn_diag_{item['tid']}", use_container_width=True):
+                            # 2. 深度診斷按鈕：同樣加上 i 確保安全
+                            btn_diag_key = f"btn_diag_{item['tid']}_{i}_{st.session_state.cur_c}"
+                            if st.button(f"🔍 深度診斷", key=btn_diag_key, use_container_width=True):
                                 st.session_state.selected_stock = item['tid']
                                 st.rerun()
 
