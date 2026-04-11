@@ -1459,7 +1459,8 @@ with tab_history:
         try:
             # 轉換為字串避免 Arrow 轉換失敗
             display_df = st.session_state.trade_history.astype(str)
-            st.dataframe(display_df, width='stretch') # 順便修正警告，將 use_container_width 改為 width='stretch'
+            # 在 tab_history 中將：
+            st.dataframe(display_df, use_container_width=True)
         except Exception as e:
             st.error(f"表格顯示異常: {e}")
 
