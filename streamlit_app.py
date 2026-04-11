@@ -1169,49 +1169,60 @@ with tab_scan:
 
                         
                         with c3:
-                            # 🚀 修正後的買入機制：與個股搜尋保持 100% 相同模式
+                            # 🚀 修正後的買入機制：強化數據類型轉換，防止 Arrow 轉換崩潰
                             btn_buy_key = f"btn_buy_final_{item['tid']}_{i}_{st.session_state.cur_c}"
 
-                            if st.button(f"🚀 執行買入", key=btn_buy_key, use_container_width=True):
-                                # 1. 數據封裝 (完全還原無精簡，確保包含 Sentiment 欄位)
-                                new_entry = pd.DataFrame([{
-                                    'client': st.session_state.cur_c, 
-                                    'id': item['tid'], 
-                                    'name': item['tname'], 
-                                    'buy_price': float(item['price']), 
-                                    'shares': q_val, 
-                                    'unit': u_val, 
-                                    'entry_reason': analysis_msg, 
-                                    'sentiment': sent_status  # 融資/籌碼洗盤偵測邏輯
-                                }])
-                                
-                                # 2. 更新本地 Session (確保前端持股監控區能即時獲取最新數據)
-                                # 使用 ignore_index=True 確保索引連續，防止 UI 渲染錯誤
-                                if 'local_db' not in st.session_state:
-                                    st.session_state.local_db = new_entry
-                                else:
-                                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
-                                
-                                # 3. 寫入交易紀錄 (觸發強化版的 record_transaction)
-                                # 同步記錄至 Sheets 的 "history" 分頁
-                                record_transaction(
-                                    st.session_state.cur_c, 
-                                    item['tid'], 
-                                    "買入", 
-                                    q_val, 
-                                    float(item['price']), 
-                                    f"板塊掃描買入: {analysis_msg}"
-                                )
-                                
-                                # 4. 【核心關鍵】執行雲端寫入 (觸發強化版的 save_data)
-                                # 將更新後的 local_db 100% 同步至 StoneManager_DB (inventory 分頁)
-                                save_data() 
-                                
-                                # 5. 提示 UI 與強制刷新
-                                # 確保持股區、帳戶餘額與 UI 佈局即時重繪，解決按鍵無效問題
-                                st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
-                                time.sleep(0.5)
-                                st.rerun()
+                            if st.button(f"🚀 執行買入", key=btn_buy_key, width='stretch'): # 修正日誌建議語法
+                                try:
+                                    # --- 關鍵修復：強制轉化數值，確保寫入時不是字串 ---
+                                    clean_price = float(item['price'])
+                                    clean_shares = float(q_val) if q_val else 0.0
+                                    
+                                    # 1. 數據封裝 (確保類型 100% 正確)
+                                    new_entry = pd.DataFrame([{
+                                        'client': st.session_state.cur_c, 
+                                        'id': str(item['tid']),       # 確保 ID 是字串
+                                        'name': str(item['tname']), 
+                                        'buy_price': clean_price,     # 轉為 float
+                                        'shares': clean_shares,       # 轉為 float
+                                        'unit': str(u_val), 
+                                        'entry_reason': str(analysis_msg), 
+                                        'sentiment': str(sent_status)
+                                    }])
+                                    
+                                    # 2. 更新本地 Session
+                                    if 'local_db' not in st.session_state:
+                                        st.session_state.local_db = new_entry
+                                    else:
+                                        # 這裡也要確保舊數據與新數據類型一致
+                                        st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                    
+                                    # 確保整個 local_db 的數值欄位統一，避免 Arrow 再次報錯
+                                    st.session_state.local_db['buy_price'] = pd.to_numeric(st.session_state.local_db['buy_price'], errors='coerce')
+                                    st.session_state.local_db['shares'] = pd.to_numeric(st.session_state.local_db['shares'], errors='coerce')
+
+                                    # 3. 寫入交易紀錄
+                                    record_transaction(
+                                        st.session_state.cur_c, 
+                                        item['tid'], 
+                                        "買入", 
+                                        clean_shares, 
+                                        clean_price, 
+                                        f"板塊掃描買入: {analysis_msg}"
+                                    )
+                                    
+                                    # 4. 執行雲端寫入
+                                    save_data() 
+                                    
+                                    # 5. 反饋與刷新
+                                    st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
+                                    time.sleep(0.5)
+                                    st.rerun()
+
+                                except Exception as e:
+                                    st.error(f"❌ 買入執行失敗：資料類型異常 - {e}")
+
+
 
 
             
