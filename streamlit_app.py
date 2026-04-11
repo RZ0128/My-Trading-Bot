@@ -1167,13 +1167,13 @@ with tab_scan:
                             u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}_{st.session_state.cur_c}", horizontal=True, label_visibility="collapsed")
                             q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}_{st.session_state.cur_c}")
 
-                        
+                        Ｒ
                         with c3:
                             # 🚀 修正後的買入機制：與個股搜尋保持 100% 相同模式
                             btn_buy_key = f"btn_buy_final_{item['tid']}_{i}_{st.session_state.cur_c}"
 
                             if st.button(f"🚀 執行買入", key=btn_buy_key, use_container_width=True):
-                                # 1. 數據封裝
+                                # 1. 數據封裝 (完全還原無精簡，確保包含 Sentiment 欄位)
                                 new_entry = pd.DataFrame([{
                                     'client': st.session_state.cur_c, 
                                     'id': item['tid'], 
@@ -1182,19 +1182,33 @@ with tab_scan:
                                     'shares': q_val, 
                                     'unit': u_val, 
                                     'entry_reason': analysis_msg, 
-                                    'sentiment': sent_status
+                                    'sentiment': sent_status  # 融資/籌碼洗盤偵測邏輯
                                 }])
                                 
-                                # 2. 更新本地 Session (確保前端持股區能即時抓到)
-                                st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                # 2. 更新本地 Session (確保前端持股監控區能即時獲取最新數據)
+                                # 使用 ignore_index=True 確保索引連續，防止 UI 渲染錯誤
+                                if 'local_db' not in st.session_state:
+                                    st.session_state.local_db = new_entry
+                                else:
+                                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
                                 
-                                # 3. 寫入交易紀錄
-                                record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val, float(item['price']), f"板塊掃描買入: {analysis_msg}")
+                                # 3. 寫入交易紀錄 (觸發強化版的 record_transaction)
+                                # 同步記錄至 Sheets 的 "history" 分頁
+                                record_transaction(
+                                    st.session_state.cur_c, 
+                                    item['tid'], 
+                                    "買入", 
+                                    q_val, 
+                                    float(item['price']), 
+                                    f"板塊掃描買入: {analysis_msg}"
+                                )
                                 
-                                # 4. 【核心關鍵】執行雲端寫入動作，將 local_db 推送到 StoneManager_DB
+                                # 4. 【核心關鍵】執行雲端寫入 (觸發強化版的 save_data)
+                                # 將更新後的 local_db 100% 同步至 StoneManager_DB (inventory 分頁)
                                 save_data() 
                                 
-                                # 5. 反饋與強制刷新 (確保持股監控區立刻重繪)
+                                # 5. 提示 UI 與強制刷新
+                                # 確保持股區、帳戶餘額與 UI 佈局即時重繪，解決按鍵無效問題
                                 st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
                                 time.sleep(0.5)
                                 st.rerun()
