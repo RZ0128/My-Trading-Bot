@@ -1167,7 +1167,7 @@ with tab_scan:
                             u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}_{st.session_state.cur_c}", horizontal=True, label_visibility="collapsed")
                             q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}_{st.session_state.cur_c}")
 
-                        Ｒ
+                        
                         with c3:
                             # 🚀 修正後的買入機制：與個股搜尋保持 100% 相同模式
                             btn_buy_key = f"btn_buy_final_{item['tid']}_{i}_{st.session_state.cur_c}"
