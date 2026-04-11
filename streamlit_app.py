@@ -1128,9 +1128,10 @@ with tab_scan:
                             buy_col1, buy_col2 = st.columns([1, 1])
                             u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}_{st.session_state.cur_c}", horizontal=True, label_visibility="collapsed")
                             q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}_{st.session_state.cur_c}")
+
                         
                         with c3:
-                            # 🚀 修正買入機制：借鏡個股掃描，加入 save_data()
+                            # 🚀 修正後的買入機制：與個股搜尋保持 100% 相同模式
                             btn_buy_key = f"btn_buy_final_{item['tid']}_{i}_{st.session_state.cur_c}"
                             
                             if st.button(f"🚀 執行買入", key=btn_buy_key, use_container_width=True):
@@ -1146,24 +1147,19 @@ with tab_scan:
                                     'sentiment': sent_status
                                 }])
                                 
-                                # 2. 更新 Session 與 紀錄 (同步個股掃描邏輯)
+                                # 2. 更新本地 Session (確保前端持股區能即時抓到)
                                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                
+                                # 3. 寫入交易紀錄
                                 record_transaction(st.session_state.cur_c, item['tid'], "買入", q_val, float(item['price']), f"板塊掃描買入: {analysis_msg}")
                                 
-                                # 3. 重要：觸發雲端寫入與提示
+                                # 4. 【核心關鍵】執行雲端寫入動作，將 local_db 推送到 StoneManager_DB
                                 save_data() 
                                 
-                                # 4. 反饋與刷新
+                                # 5. 反饋與強制刷新 (確保持股監控區立刻重繪)
                                 st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
                                 time.sleep(0.5)
                                 st.rerun()
-
-                            # 🔍 深度診斷按鈕
-                            btn_diag_key = f"btn_diag_final_{item['tid']}_{i}_{st.session_state.cur_c}"
-                            if st.button(f"🔍 深度診斷", key=btn_diag_key, use_container_width=True):
-                                st.session_state.selected_stock = item['tid']
-                                st.rerun()
-                st.divider()
 
 
             
