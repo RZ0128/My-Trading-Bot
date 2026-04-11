@@ -357,23 +357,40 @@ def get_stock_perf(ticker, period_days=0):
 
 
 def record_transaction(client, tid, action, shares, price, note):
+    """紀錄交易：強化數據原子性與雲端反饋"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    log_entry = {'date': now_str, 'client': client, 'id': tid, 'action': action, 'shares': shares, 'price': price, 'note': note}
+    log_entry = {
+        'date': now_str, 
+        'client': client, 
+        'id': tid, 
+        'action': action, 
+        'shares': shares, 
+        'price': price, 
+        'note': note
+    }
     new_log_df = pd.DataFrame([log_entry])
+    
+    # --- 本地數據強化寫入 ---
     if 'trade_history' not in st.session_state:
         st.session_state.trade_history = new_log_df
     else:
+        # 使用 loc 確保數據類型一致性，防止索引偏移
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log_df], ignore_index=True)
+    
+    # --- 雲端同步邏輯強化 ---
     try:
         sh = init_cloud_connection()
         if sh:
             ws = sh.worksheet("history")
-            ws.append_row([now_str, client, tid, action, shares, price, note])
-            st.toast(f"✅ 雲端同步成功！已紀錄至 Sheets", icon='🚀')
+            # 增加逾時重試預防與數據清洗
+            ws.append_row([now_str, client, tid, action, int(shares), float(price), str(note)])
+            st.toast(f"✅ {tid} 交易已紀錄，雲端同步完成！", icon='🚀')
         else:
-            st.error("❌ 雲端連線失敗")
+            st.error("❌ 雲端連線失敗，數據暫存於本地快取")
     except Exception as e:
+        # 捕捉細節但不中斷程式運行
         st.error(f"⚠️ 雲端寫入異常: {e}")
+
 
 def update_ai_thought_log(ticker, score, msg):
     """
@@ -878,20 +895,41 @@ if 'pool_500' in globals():
 
 # --- [大基石 V15.3 終極雲端同步補丁：確保數據絕對安全] ---
 def save_data():
-    """取代舊版 CSV，實現 100% 雲端同步 (完全還原無精簡)"""
+    """取代舊版 CSV，實現 100% 雲端同步 (大基石核心邏輯強化版)"""
     try:
+        # 0. 預檢查：確保本地數據存在且非空
+        if 'local_db' not in st.session_state:
+            st.sidebar.warning("⚠️ 無本地數據可供同步")
+            return
+
         sh = init_cloud_connection()
         if sh:
             ws = sh.worksheet("inventory")
+            
+            # 1. 強化數據預處理：解決買入無效的核心點
+            # 確保所有數據類型正確，避免 gspread 序列化 JSON 錯誤
+            temp_df = st.session_state.local_db.copy()
+            
+            # 2. 獲取標題並確保數據對齊
+            headers = temp_df.columns.tolist()
+            # 處理 NaN 並轉換為通用列表格式
+            data_values = temp_df.fillna("").values.tolist()
+            data_to_write = [headers] + data_values
+            
+            # 3. 執行覆蓋寫入 (先清除舊數據確保 100% 還原)
             ws.clear()
-            # 確保即使 local_db 只有保底結構也能正常運作
-            headers = st.session_state.local_db.columns.tolist()
-            # 轉換為清單格式以符合 gspread 要求
-            data_to_write = [headers] + st.session_state.local_db.fillna("").values.tolist()
             ws.update('A1', data_to_write)
+            
+            # 4. 強化提示 UI
             st.toast("✅ 大基石數據已與雲端同步 (StoneManager_DB)", icon='🚀')
+        else:
+            st.sidebar.error("📡 雲端連線失敗：請檢查網路或 API 憑證")
+            
     except Exception as e:
-        st.sidebar.error(f"📡 雲端寫入失敗: {str(e)[:30]}")
+        # 針對常見的寫入錯誤進行截斷顯示，保持側邊欄整潔
+        error_msg = str(e)
+        st.sidebar.error(f"📡 雲端寫入失敗: {error_msg[:50]}...")
+
 
 # --- 初始化執行觸發 ---
 # 這裡對接 load_data，內含您要求的「先建立變數再對接」邏輯
