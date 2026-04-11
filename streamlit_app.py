@@ -1133,7 +1133,7 @@ with tab_scan:
                         with c3:
                             # 🚀 修正後的買入機制：與個股搜尋保持 100% 相同模式
                             btn_buy_key = f"btn_buy_final_{item['tid']}_{i}_{st.session_state.cur_c}"
-                            
+
                             if st.button(f"🚀 執行買入", key=btn_buy_key, use_container_width=True):
                                 # 1. 數據封裝
                                 new_entry = pd.DataFrame([{
@@ -1457,12 +1457,15 @@ with tab_history:
     
     if 'trade_history' in st.session_state and not st.session_state.trade_history.empty:
         try:
-            # 轉換為字串避免 Arrow 轉換失敗
-            display_df = st.session_state.trade_history.astype(str)
-            # 在 tab_history 中將：
-            st.dataframe(display_df, use_container_width=True)
+            # 💡 大基石優化：確保數據乾淨且 100% 填充
+            display_df = st.session_state.trade_history.copy()
+            display_df = display_df.astype(str).replace(['nan', 'None', 'None'], '')
+            
+            # 使用最新 API 確保寬度自適應
+            st.dataframe(display_df, use_container_width=True) 
         except Exception as e:
             st.error(f"表格顯示異常: {e}")
+
 
     else:
         st.info("💡 目前尚無交易紀錄，或雲端連線中...")
