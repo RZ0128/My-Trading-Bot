@@ -1154,90 +1154,82 @@ with tab_scan:
         st.divider()
 
         
-        # --- [3. 板塊掃描區：大基石 V15.4 修正版 - 修正買入無效問題] ---
+        # --- [3. 板塊掃描區：大基石 V15.4 修正版 - 解決買入無效與嵌套崩潰] ---
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_full")
 
+        # 使用 session_state 儲存掃描結果，避免按鈕按下後結果消失
         if st.button(f"🔍 啟動 {cat_choice} 板塊診斷", use_container_width=True):
             with st.spinner(f"📡 大基石 AI 正在調取 {cat_choice} 板塊數據..."):
-                top_picks = get_cached_sector_scan(cat_choice, pool_500[cat_choice])
-                  
-            if top_picks:
-                st.success(f"✅ AI 篩選出 {len(top_picks)} 檔強勢標的：")
+                st.session_state.last_scan_results = get_cached_sector_scan(cat_choice, pool_500[cat_choice])
+                st.session_state.last_scan_cat = cat_choice
 
-                for i, item in enumerate(top_picks): 
-                    analysis_msg = item.get('msg', '📡 AI 運算中...')
-                    sent_status = item.get('sent', '⚖️ 籌碼穩定')
+        # 如果有之前的掃描結果，就顯示出來
+        if 'last_scan_results' in st.session_state and st.session_state.last_scan_results:
+            st.success(f"✅ AI 篩選出 {len(st.session_state.last_scan_results)} 檔強勢標的：")
+
+            for i, item in enumerate(st.session_state.last_scan_results): 
+                analysis_msg = item.get('msg', '📡 AI 運算中...')
+                sent_status = item.get('sent', '⚖️ 籌碼穩定')
+        
+                with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | {sent_status}"):
+                    st.info(f"💡 **AI 指令：** {analysis_msg}")
             
-                    with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | {sent_status}"):
-                        st.info(f"💡 **AI 指令：** {analysis_msg}")
-                
-                        # --- 數據與操作區 ---
-                        c1, c2, c3 = st.columns([1.2, 1.8, 1.2])
-                        with c1:
-                            st.write(f"📊 目前價格: **{item['price']:.2f}**")
-                            st.caption(f"漲跌幅: {item['diff']:.2f}")
+                    # --- 數據與操作區 ---
+                    c1, c2, c3 = st.columns([1.2, 1.8, 1.2])
+                    with c1:
+                        st.write(f"📊 目前價格: **{item['price']:.2f}**")
+                        st.caption(f"漲跌幅: {item['diff']:.2f}")
 
-                        with c2:
-                            # 關鍵修正：確保 Key 包含當前客戶名，避免換人操作時出錯
-                            buy_col1, buy_col2 = st.columns([1, 1])
-                            u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}_{st.session_state.cur_c}", horizontal=True, label_visibility="collapsed")
-                            q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}_{st.session_state.cur_c}")
+                    with c2:
+                        buy_col1, buy_col2 = st.columns([1, 1])
+                        # 增加 key 的獨特性，確保多客戶切換時不衝突
+                        u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}_{st.session_state.cur_c}", horizontal=True, label_visibility="collapsed")
+                        q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}_{st.session_state.cur_c}")
 
-                        
-                        with c3:
-                            # 🚀 修正後的買入機制：強化數據類型轉換，防止 Arrow 轉換崩潰
-                            btn_buy_key = f"btn_buy_final_{item['tid']}_{i}_{st.session_state.cur_c}"
+                    with c3:
+                        # 修正語法：將 width='stretch' 改為 use_container_width=True
+                        btn_buy_key = f"btn_buy_final_{item['tid']}_{i}_{st.session_state.cur_c}"
 
-                            if st.button(f"🚀 執行買入", key=btn_buy_key, width='stretch'): # 修正日誌建議語法
-                                try:
-                                    # --- 關鍵修復：強制轉化數值，確保寫入時不是字串 ---
-                                    clean_price = float(item['price'])
-                                    clean_shares = float(q_val) if q_val else 0.0
-                                    
-                                    # 1. 數據封裝 (確保類型 100% 正確)
-                                    new_entry = pd.DataFrame([{
-                                        'client': st.session_state.cur_c, 
-                                        'id': str(item['tid']),       # 確保 ID 是字串
-                                        'name': str(item['tname']), 
-                                        'buy_price': clean_price,     # 轉為 float
-                                        'shares': clean_shares,       # 轉為 float
-                                        'unit': str(u_val), 
-                                        'entry_reason': str(analysis_msg), 
-                                        'sentiment': str(sent_status)
-                                    }])
-                                    
-                                    # 2. 更新本地 Session
-                                    if 'local_db' not in st.session_state:
-                                        st.session_state.local_db = new_entry
-                                    else:
-                                        # 這裡也要確保舊數據與新數據類型一致
-                                        st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
-                                    
-                                    # 確保整個 local_db 的數值欄位統一，避免 Arrow 再次報錯
-                                    st.session_state.local_db['buy_price'] = pd.to_numeric(st.session_state.local_db['buy_price'], errors='coerce')
-                                    st.session_state.local_db['shares'] = pd.to_numeric(st.session_state.local_db['shares'], errors='coerce')
+                        if st.button(f"🚀 執行買入", key=btn_buy_key, use_container_width=True):
+                            try:
+                                # 1. 數據類型強制轉換
+                                clean_price = float(item['price'])
+                                clean_shares = float(q_val)
+                                
+                                # 2. 建立新紀錄
+                                new_entry = pd.DataFrame([{
+                                    'client': st.session_state.cur_c, 
+                                    'id': str(item['tid']),
+                                    'name': str(item['tname']), 
+                                    'buy_price': clean_price, 
+                                    'shares': clean_shares, 
+                                    'unit': str(u_val), 
+                                    'entry_reason': str(analysis_msg), 
+                                    'sentiment': str(sent_status)
+                                }])
+                                
+                                # 3. 寫入 Session 資料庫
+                                if 'local_db' not in st.session_state:
+                                    st.session_state.local_db = new_entry
+                                else:
+                                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                
+                                # 數據清理與格式化
+                                st.session_state.local_db['buy_price'] = pd.to_numeric(st.session_state.local_db['buy_price'], errors='coerce')
+                                st.session_state.local_db['shares'] = pd.to_numeric(st.session_state.local_db['shares'], errors='coerce')
 
-                                    # 3. 寫入交易紀錄
-                                    record_transaction(
-                                        st.session_state.cur_c, 
-                                        item['tid'], 
-                                        "買入", 
-                                        clean_shares, 
-                                        clean_price, 
-                                        f"板塊掃描買入: {analysis_msg}"
-                                    )
-                                    
-                                    # 4. 執行雲端寫入
-                                    save_data() 
-                                    
-                                    # 5. 反饋與刷新
-                                    st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
-                                    time.sleep(0.5)
-                                    st.rerun()
+                                # 4. 交易紀錄與雲端同步
+                                record_transaction(st.session_state.cur_c, item['tid'], "買入", clean_shares, clean_price, f"板塊買入: {analysis_msg}")
+                                save_data() 
+                                
+                                # 5. 提示與強制刷新 (Rerun 是關鍵)
+                                st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
+                                time.sleep(0.5)
+                                st.rerun()
 
-                                except Exception as e:
-                                    st.error(f"❌ 買入執行失敗：資料類型異常 - {e}")
+                            except Exception as e:
+                                st.error(f"❌ 買入失敗: {e}")
 
 
 
