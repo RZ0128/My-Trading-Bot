@@ -1287,15 +1287,25 @@ with tab_scan:
                     
                     col_t1, col_t2 = st.columns([2, 1])
                     col_t1.markdown(f"### **{row['name']}** `{row['id']}`")
-                    
+
+                    Ｒ
                     # 顯示現價與漲跌
                     delta_color = "red" if cd >= 0 else "green"
                     prefix = "+" if cd > 0 else ""
+
+                    # 處理數值：若為空值則顯示 0，否則四捨五入至兩位
+                    safe_cp = round(cp, 2) if not pd.isna(cp) else '---'
+                    safe_cd = round(cd, 2) if not pd.isna(cd) else '0'
+                    safe_cc = round(cc, 2) if not pd.isna(cc) else '0' # 這裡原本漏掉 round 了
+
                     col_t2.markdown(
-                        f"<div style='text-align:right;'><span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{round(cp, 2) if not pd.isna(cp) else '---'}</span><br>"
-                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{round(cd, 2) if not pd.isna(cd) else '0'} ({cc if not pd.isna(cc) else '0'}%)</span></div>", 
+                        f"<div style='text-align:right;'>"
+                        f"<span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{safe_cp}</span><br>"
+                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{safe_cd} ({prefix}{safe_cc}%)</span>"
+                        f"</div>", 
                         unsafe_allow_html=True
                     )
+
             
                     st.markdown(f"🚩 **AI 籌碼診斷：** :orange[{sentiment_val}]")
                     
