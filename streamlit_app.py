@@ -1293,27 +1293,16 @@ with tab_scan:
                     delta_color = "red" if cd >= 0 else "green"
                     prefix = "+" if cd > 0 else ""
 
-                    # --- [精準修復區：僅處理顯示數值，不更動原始變數] ---
-                    try:
-                        disp_cp = round(float(cp), 2) if not pd.isna(cp) else '---'
-                    except:
-                        disp_cp = '---'
-                        
-                    try:
-                        disp_cd = round(float(cd), 2) if not pd.isna(cd) else '0'
-                    except:
-                        disp_cd = '0'
-                        
-                    try:
-                        # 修復百分比顯示，若抓不到或非數字則設為 0
-                        disp_cc = round(float(cc), 2) if not pd.isna(cc) else '0'
-                    except:
-                        disp_cc = '0'
+                    # --- [精準修復：修正百分比為 0% 的問題] ---
+                    # 使用 f-string 格式化 :.2f 確保保留兩位小數，避免被 int() 捨去
+                    s_cp = f"{cp:.2f}" if not pd.isna(cp) and cp != 0 else "---"
+                    s_cd = f"{cd:.2f}" if not pd.isna(cd) else "0.00"
+                    s_cc = f"{cc:.2f}" if not pd.isna(cc) else "0.00"
 
                     col_t2.markdown(
                         f"<div style='text-align:right;'>"
-                        f"<span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{disp_cp}</span><br>"
-                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{disp_cd} ({prefix}{disp_cc}%)</span>"
+                        f"<span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{s_cp}</span><br>"
+                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{s_cd} ({prefix}{s_cc}%)</span>"
                         f"</div>", 
                         unsafe_allow_html=True
                     )
