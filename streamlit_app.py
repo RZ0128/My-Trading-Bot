@@ -1293,10 +1293,22 @@ with tab_scan:
                     delta_color = "red" if cd >= 0 else "green"
                     prefix = "+" if cd > 0 else ""
 
-                    # 處理數值：若為空值則顯示 0，否則四捨五入至兩位
-                    safe_cp = round(cp, 2) if not pd.isna(cp) else '---'
-                    safe_cd = round(cd, 2) if not pd.isna(cd) else '0'
-                    safe_cc = round(cc, 2) if not pd.isna(cc) else '0' # 這裡原本漏掉 round 了
+                    # 安全轉換數值：確保進入 round 之前是 float 類型
+                    try:
+                        safe_cp = round(float(cp), 2) if not pd.isna(cp) else '---'
+                    except:
+                        safe_cp = '---'
+                        
+                    try:
+                        safe_cd = round(float(cd), 2) if not pd.isna(cd) else '0'
+                    except:
+                        safe_cd = '0'
+                        
+                    try:
+                        # 這是最容易出錯的地方，強制轉 float 再四捨五入
+                        safe_cc = round(float(cc), 2) if not pd.isna(cc) else '0'
+                    except:
+                        safe_cc = '0'
 
                     col_t2.markdown(
                         f"<div style='text-align:right;'>"
