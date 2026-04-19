@@ -1288,7 +1288,7 @@ with tab_scan:
                     col_t1, col_t2 = st.columns([2, 1])
                     col_t1.markdown(f"### **{row['name']}** `{row['id']}`")
 
-                    Ｒ
+                    
                     # 顯示現價與漲跌
                     delta_color = "red" if cd >= 0 else "green"
                     prefix = "+" if cd > 0 else ""
