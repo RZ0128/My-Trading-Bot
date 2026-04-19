@@ -606,6 +606,33 @@ def ai_evolution_engine(ticker, h_max, current_price, margin_data=None):
     elif near_support:
         score += 20; intel_tags.append("📡 重要均線支撐")
 
+        # ... (以上為第 6 區：融資洗盤判斷邏輯) ...
+
+    # --- [戰略級：老總專業選股 - 產業突圍與低基期起漲偵測] ---
+    try:
+        # 模擬聯電(2302)與至上(8112)起漲邏輯：
+        # 1. 低基期：股價距離年線(ma248)在 5% 以內 (代表底部剛整理完)
+        # 2. 異常用量：成交量是 20 日均量的 2.5 倍以上 (代表主力進場)
+        # 3. 趨勢轉正：5日線 > 20日線
+        
+        is_low_base = (abs(dist_ma248) < 0.05) 
+        is_volume_spike = (v.iloc[-1] > v_sma20 * 2.5)
+        
+        if is_low_base and is_volume_spike:
+            score += 25  # 大幅加分，這是起漲點特徵
+            intel_tags.append("💎 挖掘到【低基期起漲基因】(老總戰略位階)")
+            
+        # 趨勢慣性強化判斷
+        if ma5 > ma20 and ma20 > ma60:
+            # 判斷是否為「首度」放量突破
+            if v.iloc[-1] > v.iloc[-2] * 2:
+                score += 10
+                intel_tags.append("🚩 偵測到【首度放量突圍】")
+    except Exception as e:
+        # 保持大腦強韌，若計算出錯則跳過但不崩潰
+        pass
+
+
     # --- [7. 高檔警戒與噴發基因] ---
     if dist_ma248 > 0.3 and v.iloc[-1] > v.rolling(248).mean().iloc[-1] * 3:
         score -= 40; intel_tags.append("💀 高檔爆巨量(出貨預警)")
