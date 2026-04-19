@@ -677,12 +677,15 @@ def ai_evolution_engine(ticker, h_max, current_price, margin_data=None):
         score -= 40; intel_tags.append("💀 高檔爆巨量(出貨預警)")
     elif dist_ma60 > 0.25:
         score -= 15; intel_tags.append("⚠️ 短線漲幅過大(防拉回)")
-
+    
     try:
-        surge_bonus, _ = historical_surge_analysis(ticker)
+        # 修改點：將 h_max 也傳遞進去，讓 AI 真正看得到 K 線數據
+        surge_bonus, surge_msg = historical_surge_analysis(ticker, h_max) 
         if surge_bonus > 70: 
-            score += 15; intel_tags.append("📜 符合歷史大噴發基因")
+            score += 25  # 既然是預測大噴發，加分可以稍微提高到 25
+            intel_tags.append(f"📜 {surge_msg}") # 直接顯示偵測到的噴發基因類型
     except: pass
+
 
     # --- [8. 勝率模擬與輸出] ---
     # 使用滾動勝率作為基準
