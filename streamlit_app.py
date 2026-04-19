@@ -1154,79 +1154,72 @@ with tab_scan:
         st.divider()
 
         
-        # --- [3. 板塊掃描區：大基石 V15.4 修正版 - 解決買入無效與嵌套崩潰] ---
+        # --- [3. 板塊掃描區：大基石 V15.4 最終穩定版 - 解決按鈕嵌套失效問題] ---
         st.subheader("🚀 產業板塊共振偵測 (全市場掃描)")
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_full")
 
-        # 使用 session_state 儲存掃描結果，避免按鈕按下後結果消失
+        # 1. 啟動診斷：按下後將結果存入 session_state
         if st.button(f"🔍 啟動 {cat_choice} 板塊診斷", use_container_width=True):
             with st.spinner(f"📡 大基石 AI 正在調取 {cat_choice} 板塊數據..."):
-                st.session_state.last_scan_results = get_cached_sector_scan(cat_choice, pool_500[cat_choice])
-                st.session_state.last_scan_cat = cat_choice
+                # 這裡保存結果，確保頁面刷新時數據不會消失
+                st.session_state.scan_cache = get_cached_sector_scan(cat_choice, pool_500[cat_choice])
+                st.session_state.scan_cat_name = cat_choice
 
-        # 如果有之前的掃描結果，就顯示出來
-        if 'last_scan_results' in st.session_state and st.session_state.last_scan_results:
-            st.success(f"✅ AI 篩選出 {len(st.session_state.last_scan_results)} 檔強勢標的：")
+        # 2. 顯示診斷結果 (從 Cache 讀取，這能保證買入按鈕運作正常)
+        if 'scan_cache' in st.session_state and st.session_state.scan_cache:
+            st.success(f"✅ AI 篩選出 {len(st.session_state.scan_cache)} 檔強勢標的：")
 
-            for i, item in enumerate(st.session_state.last_scan_results): 
+            for i, item in enumerate(st.session_state.scan_cache): 
                 analysis_msg = item.get('msg', '📡 AI 運算中...')
                 sent_status = item.get('sent', '⚖️ 籌碼穩定')
-        
+
                 with st.expander(f"⭐ {item['tname']} ({item['tid']}) | 評分: {item['score']} | {sent_status}"):
                     st.info(f"💡 **AI 指令：** {analysis_msg}")
             
-                    # --- 數據與操作區 ---
                     c1, c2, c3 = st.columns([1.2, 1.8, 1.2])
                     with c1:
                         st.write(f"📊 目前價格: **{item['price']:.2f}**")
                         st.caption(f"漲跌幅: {item['diff']:.2f}")
 
                     with c2:
-                        buy_col1, buy_col2 = st.columns([1, 1])
-                        # 增加 key 的獨特性，確保多客戶切換時不衝突
-                        u_val = buy_col1.radio("單位", ["張", "股"], key=f"u_scan_{item['tid']}_{i}_{st.session_state.cur_c}", horizontal=True, label_visibility="collapsed")
-                        q_val = buy_col2.number_input("數量", min_value=1, value=1, key=f"q_scan_{item['tid']}_{i}_{st.session_state.cur_c}")
+                        # 確保 Key 唯一
+                        u_val = st.radio("單位", ["張", "股"], key=f"u_v154_{item['tid']}_{i}", horizontal=True, label_visibility="collapsed")
+                        q_val = st.number_input("數量", min_value=1, value=1, key=f"q_v154_{item['tid']}_{i}")
 
                     with c3:
-                        # 修正語法：將 width='stretch' 改為 use_container_width=True
-                        btn_buy_key = f"btn_buy_final_{item['tid']}_{i}_{st.session_state.cur_c}"
-
-                        if st.button(f"🚀 執行買入", key=btn_buy_key, use_container_width=True):
+                        # 修正：確保按鈕點擊後能完成完整的數據寫入循環
+                        if st.button(f"🚀 執行買入", key=f"buy_v154_{item['tid']}_{i}", use_container_width=True):
                             try:
-                                # 1. 數據類型強制轉換
-                                clean_price = float(item['price'])
-                                clean_shares = float(q_val)
+                                # 強制轉換類型
+                                c_p = float(item['price'])
+                                c_q = float(q_val)
                                 
-                                # 2. 建立新紀錄
-                                new_entry = pd.DataFrame([{
+                                # 數據封裝
+                                new_row = pd.DataFrame([{
                                     'client': st.session_state.cur_c, 
                                     'id': str(item['tid']),
                                     'name': str(item['tname']), 
-                                    'buy_price': clean_price, 
-                                    'shares': clean_shares, 
+                                    'buy_price': c_p, 
+                                    'shares': c_q, 
                                     'unit': str(u_val), 
                                     'entry_reason': str(analysis_msg), 
                                     'sentiment': str(sent_status)
                                 }])
                                 
-                                # 3. 寫入 Session 資料庫
+                                # 更新本地資料庫
                                 if 'local_db' not in st.session_state:
-                                    st.session_state.local_db = new_entry
+                                    st.session_state.local_db = new_row
                                 else:
-                                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_entry], ignore_index=True)
+                                    st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
                                 
-                                # 數據清理與格式化
-                                st.session_state.local_db['buy_price'] = pd.to_numeric(st.session_state.local_db['buy_price'], errors='coerce')
-                                st.session_state.local_db['shares'] = pd.to_numeric(st.session_state.local_db['shares'], errors='coerce')
-
-                                # 4. 交易紀錄與雲端同步
-                                record_transaction(st.session_state.cur_c, item['tid'], "買入", clean_shares, clean_price, f"板塊買入: {analysis_msg}")
+                                # 寫入日誌與雲端
+                                record_transaction(st.session_state.cur_c, item['tid'], "買入", c_q, c_p, f"板塊買入: {analysis_msg}")
                                 save_data() 
                                 
-                                # 5. 提示與強制刷新 (Rerun 是關鍵)
+                                # 成功反饋
                                 st.toast(f"✅ 已將 {item['tname']} 加入 {st.session_state.cur_c} 帳戶", icon='🚀')
-                                time.sleep(0.5)
-                                st.rerun()
+                                time.sleep(0.8)
+                                st.rerun() # 點擊後強制刷新，讓持股區立刻顯示
 
                             except Exception as e:
                                 st.error(f"❌ 買入失敗: {e}")
