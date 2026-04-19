@@ -1239,22 +1239,25 @@ with tab_scan:
         total_invest_cost = 0.0  
 
         if not my_h.empty:
+        
             for idx, row in my_h.iterrows():
                 # --- [數據抓取強化：防止 nan 出現] ---
                 # 呼叫獲取行情：cp(現價), cd(漲跌), cc(漲幅)
                 cp, cd, cc = get_stock_perf(row['id'], 0) 
                 
-                # 如果抓到的是 nan，嘗試從 yf 直接拉取最後價格補救 (穩定性關鍵)
-                if pd.isna(cp) or cp == 0:
+                # [修正關鍵]：如果抓到價格但漲跌幅(cc)是 nan 或 0，手動補算
+                if pd.isna(cc) or cc == 0:
                     try:
                         temp_stock = yf.Ticker(get_full_ticker(row['id']))
                         temp_h = temp_stock.history(period="1d")
                         if not temp_h.empty:
-                            cp = temp_h['Close'].iloc[-1]
-                            cd = cp - temp_h['Open'].iloc[-1]
-                            cc = round((cd / temp_h['Open'].iloc[-1]) * 100, 2)
+                            last_close = temp_h['Close'].iloc[-1]
+                            open_price = temp_h['Open'].iloc[-1]
+                            cp = last_close if pd.isna(cp) or cp == 0 else cp
+                            cd = cp - open_price
+                            cc = (cd / open_price) * 100
                     except:
-                        cp = cp if not pd.isna(cp) else 0.0
+                        pass
 
                 # 計算單筆損益：(現價 - 成本) * 股數
                 multiplier = 1000 if row['unit'] == "張" else 1
@@ -1288,36 +1291,25 @@ with tab_scan:
                     col_t1, col_t2 = st.columns([2, 1])
                     col_t1.markdown(f"### **{row['name']}** `{row['id']}`")
 
-                    
                     # 顯示現價與漲跌
                     delta_color = "red" if cd >= 0 else "green"
                     prefix = "+" if cd > 0 else ""
 
-                    # 安全轉換數值：確保進入 round 之前是 float 類型
+                    # 安全處理數值顯示：確保四捨五入到兩位
                     try:
-                        safe_cp = round(float(cp), 2) if not pd.isna(cp) else '---'
+                        s_cp = f"{float(cp):.2f}" if not pd.isna(cp) and cp != 0 else "---"
+                        s_cd = f"{float(cd):.2f}" if not pd.isna(cd) else "0.00"
+                        s_cc = f"{float(cc):.2f}" if not pd.isna(cc) else "0.00"
                     except:
-                        safe_cp = '---'
-                        
-                    try:
-                        safe_cd = round(float(cd), 2) if not pd.isna(cd) else '0'
-                    except:
-                        safe_cd = '0'
-                        
-                    try:
-                        # 這是最容易出錯的地方，強制轉 float 再四捨五入
-                        safe_cc = round(float(cc), 2) if not pd.isna(cc) else '0'
-                    except:
-                        safe_cc = '0'
+                        s_cp, s_cd, s_cc = "---", "0.00", "0.00"
 
                     col_t2.markdown(
                         f"<div style='text-align:right;'>"
-                        f"<span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{safe_cp}</span><br>"
-                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{safe_cd} ({prefix}{safe_cc}%)</span>"
+                        f"<span style='color:{delta_color}; font-size:20px; font-weight:bold;'>{s_cp}</span><br>"
+                        f"<span style='color:{delta_color}; font-size:14px;'>{prefix}{s_cd} ({prefix}{s_cc}%)</span>"
                         f"</div>", 
                         unsafe_allow_html=True
                     )
-
             
                     st.markdown(f"🚩 **AI 籌碼診斷：** :orange[{sentiment_val}]")
                     
@@ -1343,6 +1335,7 @@ with tab_scan:
                             st.session_state.local_db.at[idx, 'shares'] = new_shares
                         save_data()
                         st.rerun()
+
 
             # [底部看板]：顯示總投入與估計盈虧
             st.divider()
