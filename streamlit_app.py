@@ -945,21 +945,21 @@ with st.sidebar:
     st.title("👤 大基石 AI 經理人")
     st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
-    # 核心守護：確保在 load_data 萬一失敗時，client_list 依然存在
-    if "client_list" not in st.session_state or not st.session_state.client_list:
-        st.session_state.client_list = ["Robert"]
+    # --- [核心修復：從資料庫同步客戶名單] ---
+    # 不要只給 ["Robert"]，而是從 local_db 裡面抓出所有不重複的客戶名稱
+    db_clients = st.session_state.local_db['client'].unique().tolist()
+    if "Robert" not in db_clients:
+        db_clients.insert(0, "Robert") # 確保 Robert 永遠在第一個
+    
+    st.session_state.client_list = db_clients
 
     # --- [還原：V15.0 客戶系統設定功能] ---
     with st.expander("⚙️ 客戶系統設定 (增/改/刪)", expanded=False):
-        # 這裡整合了最新的新增邏輯
         new_c = st.text_input("新增客戶姓名", key="add_client_input")
         
         if st.button("➕ 確認新增", use_container_width=True):
             if new_c and new_c not in st.session_state.client_list: 
-                # 1. 立即更新列表
-                st.session_state.client_list.append(new_c)
-                
-                # 2. 建立初始結構（符合 Sentiment 欄位與格式）
+                # 建立初始結構並存入資料庫
                 new_row = pd.DataFrame([{
                     'client': new_c, 
                     'id': 'INIT', 
@@ -972,13 +972,9 @@ with st.sidebar:
                 }])
                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
                 
-                # 3. 強制切換當前對象為新客戶
-                st.session_state['cur_c'] = new_c
-                
-                # 4. 同步至雲端 (確保數據持久化)
+                # 同步並刷新
                 save_data()
-                
-                # 5. 提示與刷新：解決無法即時呈現的問題
+                st.session_state['cur_c'] = new_c # 直接切換
                 st.success(f"✅ 客戶 {new_c} 已就緒")
                 time.sleep(0.5)
                 st.rerun()
@@ -987,14 +983,12 @@ with st.sidebar:
         
         st.markdown("---")
             
-        # 安全取得當前對象姓名
         current_idx_name = st.session_state.get('cur_c', st.session_state.client_list[0])
         
         new_name = st.text_input("更名當前客戶", value=current_idx_name, key="rename_input")
         if st.button("📝 執行更名", use_container_width=True):
             if new_name and new_name != current_idx_name:
                 st.session_state.local_db['client'] = st.session_state.local_db['client'].replace(current_idx_name, new_name)
-                st.session_state.client_list = [new_name if x == current_idx_name else x for x in st.session_state.client_list]
                 st.session_state['cur_c'] = new_name
                 save_data()
                 st.success(f"✅ 已更名為 {new_name}")
@@ -1004,7 +998,6 @@ with st.sidebar:
         if st.button("❌ 刪除當前客戶", use_container_width=True):
             if st.session_state.get('cur_c') != "Robert":
                 to_del = st.session_state['cur_c']
-                st.session_state.client_list.remove(to_del)
                 st.session_state.local_db = st.session_state.local_db[st.session_state.local_db['client'] != to_del]
                 st.session_state['cur_c'] = "Robert"
                 save_data()
@@ -1013,11 +1006,9 @@ with st.sidebar:
                 st.rerun()
 
     # --- [核心：控盤選擇器] ---
-    # 確保 cur_c 變數不會因為雲端數據沒刷進來而遺失
     if st.session_state.get('cur_c') not in st.session_state.client_list:
         st.session_state['cur_c'] = st.session_state.client_list[0]
 
-    # 計算 index 以保持選擇狀態連貫
     try:
         c_idx = st.session_state.client_list.index(st.session_state['cur_c'])
     except:
@@ -1036,7 +1027,6 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    # 即時顯示持股統計
     c_stocks = st.session_state.local_db[(st.session_state.local_db['client'] == st.session_state['cur_c']) & (st.session_state.local_db['id'] != 'INIT')]
     st.metric(f"{st.session_state['cur_c']} 持股總數", f"{len(c_stocks)} 檔")
 
