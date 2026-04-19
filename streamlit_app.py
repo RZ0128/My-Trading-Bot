@@ -477,9 +477,48 @@ def calculate_cost_zone(df):
     """成本區計算模組"""
     return {"support": df['Close'].min(), "resistance": df['Close'].max()}
 
-def historical_surge_analysis(ticker):
-    """歷史飆股特徵分析"""
-    return 0, "無歷史數據"
+def historical_surge_analysis(ticker, df):
+    """
+    大基石 V16.4 實體化：歷史飆股攻擊基因偵測
+    目標：鎖定 5 天內具備 10% 以上爆發潛力的特徵
+    """
+    if df is None or len(df) < 60: 
+        return 0, "📡 數據累積不足，無法對標歷史"
+    
+    c = df['Close']
+    v = df['Volume']
+    score = 0
+    traits = []
+
+    # --- [特徵 A：極致窒息量後的首放量] ---
+    # 邏輯：過去 10 天量縮到極致，今日突然爆出 20 日均量的 3 倍
+    v_avg_20 = v.tail(20).mean()
+    v_min_10 = v.tail(10).min()
+    if v.iloc[-1] > v_avg_20 * 2.5 and v_min_10 < v_avg_20 * 0.5:
+        score += 40
+        traits.append("🔥 窒息後首度放量")
+
+    # --- [特徵 B：VCP 形態 (價格收斂突破)] ---
+    # 邏輯：股價波動越來越小，突然帶量突破 20 日高點
+    recent_std = c.tail(10).std()
+    prev_std = c.tail(20).head(10).std()
+    if recent_std < prev_std * 0.7 and c.iloc[-1] > c.tail(20).max() * 0.98:
+        score += 30
+        traits.append("🎯 價格收斂後突圍")
+
+    # --- [特徵 C：強勢缺口 (跳空不補)] ---
+    if df['Low'].iloc[-1] > df['High'].iloc[-2]:
+        score += 30
+        traits.append("🚀 跳空攻擊缺口")
+
+    # --- [最終判定] ---
+    if score >= 70:
+        return score, f"【大噴發預定】{' + '.join(traits)}"
+    elif score >= 40:
+        return score, "📈 蓄勢待發中"
+    
+    return 10, "⚖️ 走勢平穩，無噴發基因"
+
 
 
 def ai_pattern_discovery(ticker, h_max):
