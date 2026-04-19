@@ -1239,7 +1239,7 @@ with tab_scan:
         total_invest_cost = 0.0  
 
         if not my_h.empty:
-                   
+                  
             for idx, row in my_h.iterrows():
                 # --- [數據抓取強化：防止 nan 出現] ---
                 # 呼叫獲取行情：cp(現價), cd(漲跌), cc(漲幅)
@@ -1293,11 +1293,20 @@ with tab_scan:
                     delta_color = "red" if cd >= 0 else "green"
                     prefix = "+" if cd > 0 else ""
 
-                    # --- [精準修復：修正百分比為 0% 的問題] ---
-                    # 使用 f-string 格式化 :.2f 確保保留兩位小數，避免被 int() 捨去
-                    s_cp = f"{cp:.2f}" if not pd.isna(cp) and cp != 0 else "---"
-                    s_cd = f"{cd:.2f}" if not pd.isna(cd) else "0.00"
-                    s_cc = f"{cc:.2f}" if not pd.isna(cc) else "0.00"
+                    # --- [核心修復區：強制轉為 float 避免 ValueError] ---
+                    # 這裡加入 float() 轉換，確保不論抓到的是字串還是數字，都能正確顯示
+                    try:
+                        s_cp = f"{float(cp):.2f}" if not pd.isna(cp) and cp != 0 else "---"
+                    except: s_cp = "---"
+                    
+                    try:
+                        s_cd = f"{float(cd):.2f}" if not pd.isna(cd) else "0.00"
+                    except: s_cd = "0.00"
+                    
+                    try:
+                        # 這是解決「0%」與「ValueError」的關鍵：強制轉型並保留小數
+                        s_cc = f"{float(cc):.2f}" if not pd.isna(cc) else "0.00"
+                    except: s_cc = "0.00"
 
                     col_t2.markdown(
                         f"<div style='text-align:right;'>"
@@ -1331,6 +1340,7 @@ with tab_scan:
                             st.session_state.local_db.at[idx, 'shares'] = new_shares
                         save_data()
                         st.rerun()
+
 
 
             # [底部看板]：顯示總投入與估計盈虧
