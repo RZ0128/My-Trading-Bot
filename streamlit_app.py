@@ -1239,7 +1239,7 @@ with tab_scan:
         total_invest_cost = 0.0  
 
         if not my_h.empty:
-                  
+               
             for idx, row in my_h.iterrows():
                 # --- [數據抓取強化：防止 nan 出現] ---
                 # 呼叫獲取行情：cp(現價), cd(漲跌), cc(漲幅)
@@ -1253,7 +1253,7 @@ with tab_scan:
                         if not temp_h.empty:
                             cp = temp_h['Close'].iloc[-1]
                             cd = cp - temp_h['Open'].iloc[-1]
-                            cc = round((cd / temp_h['Open'].iloc[-1]) * 100, 2)
+                            cc = (cd / temp_h['Open'].iloc[-1]) * 100
                     except:
                         cp = cp if not pd.isna(cp) else 0.0
 
@@ -1293,20 +1293,23 @@ with tab_scan:
                     delta_color = "red" if cd >= 0 else "green"
                     prefix = "+" if cd > 0 else ""
 
-                    # --- [核心修復區：強制轉為 float 避免 ValueError] ---
-                    # 這裡加入 float() 轉換，確保不論抓到的是字串還是數字，都能正確顯示
+                    # --- [暴力修復區：重新計算百分比，確保精度不流失] ---
                     try:
-                        s_cp = f"{float(cp):.2f}" if not pd.isna(cp) and cp != 0 else "---"
-                    except: s_cp = "---"
-                    
-                    try:
-                        s_cd = f"{float(cd):.2f}" if not pd.isna(cd) else "0.00"
-                    except: s_cd = "0.00"
-                    
-                    try:
-                        # 這是解決「0%」與「ValueError」的關鍵：強制轉型並保留小數
-                        s_cc = f"{float(cc):.2f}" if not pd.isna(cc) else "0.00"
-                    except: s_cc = "0.00"
+                        f_cp = float(cp)
+                        f_cd = float(cd)
+                        # 如果 get_stock_perf 給的 cc 是 0 但 cd 有值，我們手動算出來
+                        # 邏輯：昨收 = 現價 - 漲跌額
+                        prev_close = f_cp - f_cd
+                        if prev_close != 0:
+                            actual_cc = (f_cd / prev_close) * 100
+                        else:
+                            actual_cc = float(cc) # 如果無法回推，才用原本的
+                        
+                        s_cp = f"{f_cp:.2f}" if f_cp != 0 else "---"
+                        s_cd = f"{f_cd:.2f}"
+                        s_cc = f"{actual_cc:.2f}"
+                    except:
+                        s_cp, s_cd, s_cc = "---", "0.00", "0.00"
 
                     col_t2.markdown(
                         f"<div style='text-align:right;'>"
@@ -1340,6 +1343,7 @@ with tab_scan:
                             st.session_state.local_db.at[idx, 'shares'] = new_shares
                         save_data()
                         st.rerun()
+
 
 
 
