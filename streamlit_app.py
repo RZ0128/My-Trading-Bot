@@ -827,10 +827,13 @@ def ai_self_correction_and_learning():
 
         # 4. 偵錯與防禦：若近期虧損，自動降低風險權重
         # (這裡可擴充對接真實損益計算)
+        # --- [新增：在回傳結果前，先存入雲端] ---
+        sync_brain_to_cloud() 
         
         return f"🚀 AI 自主進化中：{learning_logs[-1] if learning_logs else '權重微調完成'}"
     except:
         return "⚠️ 自我修正引擎暫時休眠"
+
 
 def executive_action_agent():
     """
