@@ -1203,8 +1203,17 @@ with st.sidebar:
     )
     
     st.markdown("---")
+    # 在側邊欄代碼中找到這顆按鈕
     if st.button("🔄 AI 自主學習/刷新雲端", use_container_width=True):
+        # 第一步：執行診斷與自我修正 (這會觸發 sync_brain_to_cloud)
+        msg = ai_self_correction_and_learning()
+    
+        # 第二步：強制刷新 Session 狀態，並讓 AI 重新初始化
         st.session_state.initialized = False 
+    
+        # 第三步：顯示學習成果
+        st.success(msg)
+        time.sleep(1)
         st.rerun()
 
     st.markdown("---")
