@@ -847,6 +847,43 @@ def executive_action_agent():
     return status
 
 
+def sync_brain_to_cloud():
+    """將 AI 學習到的權重實體寫入 brain_memory 分頁"""
+    try:
+        sh = init_cloud_connection()
+        if sh:
+            ws = sh.worksheet("brain_memory")
+            # 準備數據列：日期, 分類, 權重, 心得, 版本
+            new_record = [
+                datetime.now().strftime("%Y-%m-%d"),
+                "Surge_Hunter",
+                st.session_state.brain_weights.get("surge", 1.0),
+                "AI 自主進化：優化噴發基因權重",
+                "V16.8"
+            ]
+            ws.append_row(new_record)
+            st.toast("🧠 AI 學習成果已存入雲端記憶體", icon='💾')
+    except Exception as e:
+        pass # 靜默處理，避免干擾主流程
+
+def load_brain_from_cloud():
+    """開機初始化：從雲端讀取之前的學習權重"""
+    try:
+        sh = init_cloud_connection()
+        if sh:
+            ws = sh.worksheet("brain_memory")
+            data = ws.get_all_records()
+            if data:
+                last_m = data[-1] # 取得最後一次學習紀錄
+                if 'brain_weights' not in st.session_state:
+                    st.session_state.brain_weights = {"tech": 1.0, "chip": 1.0, "surge": 1.0}
+                st.session_state.brain_weights["surge"] = float(last_m['weight'])
+                return True
+    except:
+        pass
+    return False
+
+
 
 # ==============================================================================
 # 【大基石 V16.5】獵殺者引擎：專注於 3-5 天內 10-20% 的噴發基因
