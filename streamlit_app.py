@@ -1199,11 +1199,12 @@ with tab_scan:
         cat_choice = st.radio("選擇掃描板塊", list(pool_500.keys()), horizontal=True, key="cat_radio_full")
 
         # 1. 啟動診斷：按下後將結果存入 session_state
-        if st.button(f"🔍 啟動 {cat_choice} 板塊診斷", use_container_width=True):
-            with st.spinner(f"📡 大基石 AI 正在調取 {cat_choice} 板塊數據..."):
-                # 這裡保存結果，確保頁面刷新時數據不會消失
-                st.session_state.scan_cache = get_cached_sector_scan(cat_choice, pool_500[cat_choice])
+        if st.button(f"🏹 啟動 {cat_choice} 噴發基因獵殺", use_container_width=True):
+            with st.spinner(f"🚨 正在搜索準備噴發 10% 以上的標的..."):
+                # 核心：改用獵殺引擎，且不再限制只拿前 15 檔，而是拿「所有符合基因」的標的
+                st.session_state.scan_cache = get_hunter_sector_scan(cat_choice, pool_500[cat_choice])
                 st.session_state.scan_cat_name = cat_choice
+
 
         # 2. 顯示診斷結果 (從 Cache 讀取，這能保證買入按鈕運作正常)
         if 'scan_cache' in st.session_state and st.session_state.scan_cache:
