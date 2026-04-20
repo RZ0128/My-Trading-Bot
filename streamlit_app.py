@@ -787,33 +787,50 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
         return {"msg": f"AI 異常: {str(e)[:20]}", "score": 50, "sent": "🔄 錯誤", "price": price, "target": price, "stop": price, "win_prob": 0, "atr_range": "N/A", "pivot": f"修復中 ({time_str})"}
 
 
+
 # ==============================================================================
-# 【更新】大基石 V15.3 高效掃描引擎 (中文進度條 + 隱藏英文版)
+# 【大基石 V16.5】獵殺者引擎：專注於 3-5 天內 10-20% 的噴發基因
 # ==============================================================================
 
-@st.cache_data(ttl=1200, show_spinner=False) # 👈 徹底關閉 Streamlit 預設英文提示
-def get_cached_sector_scan(sector_name, target_pool):
-    scored_data = []
+@st.cache_data(ttl=600, show_spinner=False)
+def get_hunter_sector_scan(sector_name, target_pool):
+    """
+    大基石獵殺引擎：不再只是顯示全部，而是執行「基因過濾」
+    """
+    hunter_results = []
     total_count = len(target_pool)
     
-    # 在這裡建立中文進度條，這樣只有在「第一次掃描」時會出現
-    scan_p = st.progress(0, text=f"🚀 大基石 AI 開始分析 {sector_name} 板塊...")
+    scan_p = st.progress(0, text=f"🏹 大基石正在佈置【{sector_name}】獵殺陷阱...")
     
     for idx, (tid, tname) in enumerate(target_pool):
-        # 更新百分比與中文進度文字
-        progress_val = (idx + 1) / total_count
-        scan_p.progress(progress_val, text=f"📡 正在深度診斷 ({idx+1}/{total_count}): {tname}...")
+        scan_p.progress((idx + 1) / total_count, text=f"📡 基因比對中 ({idx+1}/{total_count}): {tname}...")
         
         ps, ds, _ = get_stock_perf(tid)
         if ps > 0:
+            # 1. 抓取完整 AI 診斷 (內含 historical_surge_analysis)
             r = generate_ai_tech_analysis(tid, ps)
-            if r:
-                r.update({'tid': tid, 'tname': tname, 'price': ps, 'diff': ds})
-                scored_data.append(r)
+            
+            # 2. 【獵殺法則：三位一體過濾】
+            # 法則 A: 分數必須 > 75 (代表趨勢已成)
+            # 法則 B: 必須偵測到「噴發預定」、「窒息量」或「洗盤完成」
+            # 法則 C: 勝率模擬必須 > 65%
+            
+            is_surging = "噴發" in r['msg'] or "洗盤完成" in r['msg'] or "窒息" in r['msg']
+            
+            if r['score'] >= 75 or is_surging:
+                r.update({
+                    'tid': tid, 
+                    'tname': tname, 
+                    'price': ps, 
+                    'diff': ds,
+                    'potential': "⭐⭐⭐⭐⭐" if r['score'] >= 85 else "⭐⭐⭐"
+                })
+                hunter_results.append(r)
     
-    # 跑完後清除進度條
     scan_p.empty()
-    return sorted(scored_data, key=lambda x: x['score'], reverse=True)[:15]
+    # 依照分數與噴發基因排序
+    return sorted(hunter_results, key=lambda x: x['score'], reverse=True)
+
 
 
 # --- 初始化執行 ---
