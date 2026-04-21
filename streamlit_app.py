@@ -940,35 +940,27 @@ def load_brain_from_cloud():
 
 
 # ==============================================================================
-# 【大基石 V16.5】獵殺者引擎：專注於 3-5 天內 10-20% 的噴發基因
+# 【大基石 V16.5】獵殺者引擎：保留核心邏輯，僅放寬過濾門檻
 # ==============================================================================
-
 @st.cache_data(ttl=600, show_spinner=False)
 def get_hunter_sector_scan(sector_name, target_pool):
-    """
-    大基石獵殺引擎：不再只是顯示全部，而是執行「基因過濾」
-    """
     hunter_results = []
     total_count = len(target_pool)
     
+    # 這裡加入您要求的進度條動態文字
     scan_p = st.progress(0, text=f"🏹 大基石正在佈置【{sector_name}】獵殺陷阱...")
     
     for idx, (tid, tname) in enumerate(target_pool):
+        # 動態文字：讓老總看到 AI 正在比對基因
         scan_p.progress((idx + 1) / total_count, text=f"📡 基因比對中 ({idx+1}/{total_count}): {tname}...")
         
         ps, ds, _ = get_stock_perf(tid)
         if ps > 0:
-            # 1. 抓取完整 AI 診斷 (內含 historical_surge_analysis)
             r = generate_ai_tech_analysis(tid, ps)
-            
-            # 2. 【獵殺法則：三位一體過濾】
-            # 法則 A: 分數必須 > 75 (代表趨勢已成)
-            # 法則 B: 必須偵測到「噴發預定」、「窒息量」或「洗盤完成」
-            # 法則 C: 勝率模擬必須 > 65%
-            
             is_surging = "噴發" in r['msg'] or "洗盤完成" in r['msg'] or "窒息" in r['msg']
             
-            if r['score'] >= 75 or is_surging:
+            # --- 微調門檻：從 75 降到 70，讓潛力名單更豐富 ---
+            if r['score'] >= 70 or is_surging: 
                 r.update({
                     'tid': tid, 
                     'tname': tname, 
@@ -979,8 +971,41 @@ def get_hunter_sector_scan(sector_name, target_pool):
                 hunter_results.append(r)
     
     scan_p.empty()
-    # 依照分數與噴發基因排序
     return sorted(hunter_results, key=lambda x: x['score'], reverse=True)
+
+
+
+# --- [第 6 區：新增顯示佈局函數，不影響原本引擎] ---
+def display_hunter_results(hunter_results):
+    st.subheader("🎯 大基石獵殺戰果")
+    
+    # 1. 頂級獵物 (90分以上) - 使用 Metric 呈現
+    top_tier = [r for r in hunter_results if r['score'] >= 90]
+    if top_tier:
+        cols = st.columns(min(len(top_tier), 3))
+        for idx, r in enumerate(top_tier[:3]):
+            with cols[idx]:
+                st.metric(label=f"🔥 {r['tname']}", value=f"{r['score']}分", delta="頂級基因")
+                st.caption(f"🧬 {r['msg'][:20]}...")
+    else:
+        st.info("💡 目前暫無 90 分以上頂級標的，請參考下方潛力名單")
+
+    # 2. 潛力名單 (80-89分) - 使用表格呈現，解決「顯示不全」與「同分」問題
+    with st.expander("🔍 查看更多 80 分以上潛力標的 (完整清單)", expanded=True):
+        mid_tier = [r for r in hunter_results if 80 <= r['score'] < 90]
+        if mid_tier:
+            # 轉換為 DataFrame 確保 500 檔中所有 80 分以上的都能排隊顯示
+            df_display = pd.DataFrame(mid_tier)[['tname', 'score', 'potential', 'msg']]
+            # 使用 st.dataframe 讓它可以滾動查看更多
+            st.dataframe(df_display, use_container_width=True)
+        else:
+            st.write("目前尚無符合此分數區間的標的")
+            
+    # 3. 觀察名單 (70-79分) - 新增一個層級
+    with st.expander("📅 備選觀察區 (70-79分)", expanded=False):
+        low_tier = [r for r in hunter_results if 70 <= r['score'] < 80]
+        if low_tier:
+            st.table(pd.DataFrame(low_tier)[['tname', 'score', 'msg']])
 
 
 
