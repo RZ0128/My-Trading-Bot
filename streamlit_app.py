@@ -1303,19 +1303,22 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    
-    # --- [核心按鈕：觸發 AI 自主學習與進化] ---
+
+    # --- [核心按鈕：觸發 AI 自主決策與進化] ---
     if st.button("🔄 AI 自主學習/刷新雲端", use_container_width=True):
-        # 此處會執行您的 ai_self_correction_and_learning 函數
-        # 內含您新增的全球聯動分析與深度復盤邏輯
-        msg = ai_self_correction_and_learning()
+        # 修改點：改為調用 executive_action_agent，由它來發動進化與後續決策
+        msg = executive_action_agent()
     
+        # 第二步：強制刷新 Session 狀態，確保新權重立刻生效
         st.session_state.initialized = False 
+    
+        # 第三步：顯示進化成果
         st.success(msg)
         time.sleep(1)
         st.rerun()
 
     st.markdown("---")
+
     
     # 顯示當前對象持股狀況
     c_stocks = st.session_state.local_db[(st.session_state.local_db['client'] == st.session_state['cur_c']) & (st.session_state.local_db['id'] != 'INIT')]
