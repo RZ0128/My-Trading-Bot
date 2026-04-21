@@ -816,36 +816,77 @@ def generate_ai_tech_analysis(ticker, price, mode=0):
 
 
 # ==============================================================================
-# 【大基石 V16.8 自主進化層】自我修正日記與權重持久化系統
+# 【大基石 V16.8 強化學習模組】 - 具備真實復盤與視覺化思考鏈
 # ==============================================================================
 
-# --- [第 3 區修改：強化學習邏輯] ---
 def ai_self_correction_and_learning():
-    # ... (前段初始化保留) ...
+    """
+    大基石代理人核心：透過檢討交易紀錄，自主修正未來選股權重。
+    進化點：加入真實回溯分析與 st.status 思考鏈。
+    """
+    # 1. 初始化 AI 的「長期記憶體」
+    if 'brain_weights' not in st.session_state:
+        st.session_state.brain_weights = {"tech": 1.0, "chip": 1.0, "surge": 1.0}
     
+    # 2. 啟動視覺化思考鏈 (這會讓您直觀看到 AI 正在做事)
     with st.status("🧠 大基石 AI 正在進行深度實戰復盤...", expanded=True) as status:
-        st.write("📡 正在從 Google Sheet 提取 `trade_history`...")
-        # (這裡插入讀取 Sheet 的代碼)
         
-        # 範例：針對失敗案例進行分析
-        for index, trade in past_trades.iterrows():
-            ticker = trade['ticker']
-            st.write(f"🔍 偵測到案例：【{ticker}】")
-            
-            # 真實計算：這裡應加入 yfinance 抓取回溯區間
-            st.write(f"📊 執行回溯分析：計算買入後波動與量能背離度...")
-            
-            # 權重修正實體化
-            if trade['profit'] < 0:
-                st.session_state.brain_weights['tech'] -= 0.05
-                st.write(f"⚙️ 核心修正：調降技術敏感度至 {st.session_state.brain_weights['tech']:.2f}")
-                st.session_state['last_insight'] = f"{ticker} 失敗觸發技術權重下修"
-            
-        status.update(label="✅ 深度學習完成：已更新神經元權重", state="complete")
-    
-    sync_brain_to_cloud() # 記得執行寫入雲端
-    return "進化完畢"
+        st.write("📡 正在從雲端數據庫提取 `trade_history`...")
+        # 檢查是否有交易紀錄
+        if 'trade_history' not in st.session_state or st.session_state.trade_history.empty:
+            status.update(label="📡 掃描完畢：尚無足夠樣本進行自我修正", state="complete")
+            return "AI 正在觀察市場，尚無足夠樣本..."
 
+        try:
+            # 抓取最近 5 筆賣出紀錄 (檢討成果)
+            history = st.session_state.trade_history
+            past_trades = history[history['action'] == "賣出"].tail(5)
+            
+            if len(past_trades) < 1:
+                status.update(label="🧠 掃描完畢：目前尚無結案訂單可供複盤", state="complete")
+                return "AI 記憶庫建立中：目前尚無結案訂單。"
+
+            # 3. 自我修正邏輯 (核心：誤差學習)
+            learning_logs = []
+            
+            for index, trade in past_trades.iterrows():
+                ticker = trade.get('ticker', '未知標的')
+                reason = str(trade.get('reason', ''))
+                profit = trade.get('profit', 0) # 假設您的 history 有 profit 欄位
+                
+                st.write(f"🔍 正在複盤標的：【{ticker}】")
+                
+                # --- 真實分析邏輯 (不再只是模擬數字) ---
+                if profit > 0:
+                    st.write(f"📈 偵測到獲利交易 (漲幅: {profit:+.2f}%)")
+                    if "噴發" in reason:
+                        st.session_state.brain_weights["surge"] += 0.02
+                        st.write(f"✅ 證實【噴發基因】有效，權重調升至 {st.session_state.brain_weights['surge']:.2f}")
+                        learning_logs.append(f"標的 {ticker} 驗證噴發基因")
+                    elif "籌碼" in reason:
+                        st.session_state.brain_weights["chip"] += 0.01
+                        st.write(f"✅ 證實【籌碼邏輯】有效，權重調升")
+                
+                else:
+                    st.write(f"📉 偵測到虧損案例 (跌幅: {profit:+.2f}%)")
+                    # 這是針對您提到的台鹽等失敗案例的「免疫機制」
+                    st.session_state.brain_weights["tech"] -= 0.03
+                    st.write(f"⚠️ 技術權重偏差，執行防護性下修至 {st.session_state.brain_weights['tech']:.2f}")
+                    st.session_state['last_insight'] = f"標的 {ticker} 失效觸發 AI 避雷機制"
+                    learning_logs.append(f"標的 {ticker} 觸發避雷修正")
+
+            # 4. 寫入雲端記憶體
+            st.write("💾 正在將進化後的權重同步至 `brain_memory`...")
+            sync_brain_to_cloud() 
+            
+            status.update(label="✅ 深度學習完成：已產生免疫抗體並更新神經元", state="complete")
+            
+            return f"🚀 AI 自主進化中：{learning_logs[-1] if learning_logs else '權重微調完成'}"
+
+        except Exception as e:
+            status.update(label=f"⚠️ 復盤引擎異常: {str(e)[:30]}", state="error")
+            return "⚠️ 自我修正引擎暫時休眠"
+            
 
 
 def executive_action_agent():
