@@ -1803,20 +1803,36 @@ with tab_brain:
 
     st.divider()
 
-    # --- [第二部分：神經元權重控制] ---
-    st.subheader("⚙️ 神經元權重控制")
-    w1 = st.slider("技術指標權重 (MACD/斜率/背離)", 0, 100, 60, key="brain_w1")
-    w2 = st.slider("籌碼流向權重 (洗盤/融資/大戶)", 0, 100, 40, key="brain_w2")
+    # --- [第二部分：AI 全自動神經元監控與核心模組狀態] ---
+    st.subheader("⚙️ AI 全自動神經元監控")
     
-    c_mod1, c_mod2 = st.columns(2)
-    with c_mod1:
-        st.write("🧬 已啟用核心模組：")
-        st.markdown("- `get_multi_timeframe_data` (多時框共振)\n- `detect_divergence` (指標背離偵測)")
-    with c_mod2:
-        st.write("　") 
-        st.markdown("- `calculate_cost_zone` (成本區計算)\n- `historical_surge_analysis` (歷史飆股特徵分析)")
+    with st.container(border=True):
+        if 'brain_weights' in st.session_state:
+            w = st.session_state.brain_weights
+            c1, c2, c3 = st.columns(3)
+            
+            # 1. 權重動態儀表板
+            c1.metric("噴發基因敏感度", f"{w.get('surge', 1.0):.2f}", 
+                      delta=f"{w.get('surge', 1.0)-1.0:+.2f} (AI調校)")
+            c2.metric("籌碼洗盤信心值", f"{w.get('chip', 1.0):.2f}")
+            c3.metric("技術指標契合度", f"{w.get('tech', 1.0):.2f}")
+            
+            st.divider()
+            
+            # 2. 核心模組運行狀態 (保留您原本的模組清單，但稍微美化)
+            st.caption("🛡️ 當前 AI 核心引擎掛載狀態：")
+            m_col1, m_col2 = st.columns(2)
+            with m_col1:
+                st.write("✅ `Multi-Timeframe` 多時框共振")
+                st.write("✅ `Divergence` 指標背離偵測")
+            with m_col2:
+                st.write("✅ `Cost-Zone` 成本區計算")
+                st.write("✅ `Surge-Analysis` 飆股基因分析")
+        else:
+            st.warning("📡 大腦尚未啟動學習，目前以標準參數運行中。")
     
     st.divider()
+
 
     # --- [第三部分：AI 動態進化日誌流] ---
     st.subheader("📜 AI 動態進化日誌")
