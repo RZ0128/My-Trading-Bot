@@ -1119,18 +1119,42 @@ if 'initialized' not in st.session_state:
 
 
 # ==============================================================================
-# 第 5 區：側邊欄管理與分頁定義 - 大基石 V15.3 完整佈局 (核心邏輯優化版)
+# 第 5 區：側邊欄管理與分頁定義 - 大基石 V16.8 完整佈局 (AI 大腦監控集成版)
 # ==============================================================================
 
 with st.sidebar:
     st.title("👤 大基石 AI 經理人")
     st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
+    # --- [新增：AI 大腦神經元狀態監視器] ---
+    # 放置於時間下方，讓老總第一眼掌握 AI 進化狀態
+    with st.sidebar.expander("🧠 AI 大腦神經元狀態", expanded=True):
+        if 'brain_weights' in st.session_state:
+            w = st.session_state.brain_weights
+            
+            # 核心指標：顯示噴發敏感度與變動值
+            st.metric("🚀 噴發敏感度", f"{w.get('surge', 1.0):.2f}", 
+                      delta=f"{w.get('surge', 1.0)-1.0:.2f}")
+            
+            st.write("當前進化參數：")
+            # 這裡進度條除以 2 是為了讓 1.0 顯示在 50% 處，保留增長空間
+            st.progress(min(w.get('surge', 1.0)/2, 1.0), text=f"噴發基因: {w.get('surge', 1.0):.2f}")
+            st.progress(min(w.get('chip', 1.0)/2, 1.0), text=f"籌碼信心: {w.get('chip', 1.0):.2f}")
+            st.progress(min(w.get('tech', 1.0)/2, 1.0), text=f"技術權重: {w.get('tech', 1.0):.2f}")
+            
+            # 顯示 AI 自主學習後的最新心得
+            if 'last_insight' in st.session_state:
+                st.caption(f"🤖 最新心得: {st.session_state['last_insight']}")
+            st.caption(f"最後進化時間: {datetime.now().strftime('%H:%M:%S')}")
+        else:
+            st.warning("💡 大腦尚未啟動學習，請執行下方自主學習按鈕")
+
+    st.markdown("---")
+
     # --- [核心修復：從資料庫同步客戶名單] ---
-    # 不要只給 ["Robert"]，而是從 local_db 裡面抓出所有不重複的客戶名稱
     db_clients = st.session_state.local_db['client'].unique().tolist()
     if "Robert" not in db_clients:
-        db_clients.insert(0, "Robert") # 確保 Robert 永遠在第一個
+        db_clients.insert(0, "Robert") 
     
     st.session_state.client_list = db_clients
 
@@ -1140,7 +1164,6 @@ with st.sidebar:
         
         if st.button("➕ 確認新增", use_container_width=True):
             if new_c and new_c not in st.session_state.client_list: 
-                # 建立初始結構並存入資料庫
                 new_row = pd.DataFrame([{
                     'client': new_c, 
                     'id': 'INIT', 
@@ -1152,10 +1175,8 @@ with st.sidebar:
                     'sentiment': '觀測中'
                 }])
                 st.session_state.local_db = pd.concat([st.session_state.local_db, new_row], ignore_index=True)
-                
-                # 同步並刷新
                 save_data()
-                st.session_state['cur_c'] = new_c # 直接切換
+                st.session_state['cur_c'] = new_c
                 st.success(f"✅ 客戶 {new_c} 已就緒")
                 time.sleep(0.5)
                 st.rerun()
@@ -1203,20 +1224,21 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    # 在側邊欄代碼中找到這顆按鈕
+    
+    # --- [核心按鈕：觸發 AI 自主學習與進化] ---
     if st.button("🔄 AI 自主學習/刷新雲端", use_container_width=True):
-        # 第一步：執行診斷與自我修正 (這會觸發 sync_brain_to_cloud)
+        # 此處會執行您的 ai_self_correction_and_learning 函數
+        # 內含您新增的全球聯動分析與深度復盤邏輯
         msg = ai_self_correction_and_learning()
     
-        # 第二步：強制刷新 Session 狀態，並讓 AI 重新初始化
         st.session_state.initialized = False 
-    
-        # 第三步：顯示學習成果
         st.success(msg)
         time.sleep(1)
         st.rerun()
 
     st.markdown("---")
+    
+    # 顯示當前對象持股狀況
     c_stocks = st.session_state.local_db[(st.session_state.local_db['client'] == st.session_state['cur_c']) & (st.session_state.local_db['id'] != 'INIT')]
     st.metric(f"{st.session_state['cur_c']} 持股總數", f"{len(c_stocks)} 檔")
 
