@@ -443,6 +443,33 @@ def update_ai_thought_log(ticker, score, msg):
 # 第 3 區：大基石史詩級強大腦 V16.3 - 核心診斷與 MACD 斜率引擎 (老總增強完全體)
 # ==============================================================================
 
+# --- [第 3 區新增：全球聯動模組] ---
+def check_global_sentiment():
+    """AI 掃描全球市場情緒 (整合 5 號代碼)"""
+    indices = {"^SOX": "費半指數", "TSM": "台積電ADR", "NVDA": "輝達", "AAPL": "蘋果"}
+    sentiment_score = 0
+    
+    with st.status("🌐 AI 正在同步國際盤勢與全球新聞...", expanded=False) as status:
+        for ticker, name in indices.items():
+            try:
+                # 這裡調用您現有的數據抓取邏輯
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="2d")
+                change = ((hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2]) * 100
+                st.write(f"📊 {name} ({ticker}) 昨晚表現: {change:+.2f}%")
+                sentiment_score += change
+            except:
+                st.write(f"❌ {name} 數據連線中斷")
+            
+        if sentiment_score > 1.5:
+            st.session_state.brain_weights['global_factor'] = 1.2
+            status.update(label="🔥 國際盤勢極佳，AI 已調升電子股加權", state="complete")
+        else:
+            st.session_state.brain_weights['global_factor'] = 0.9
+            status.update(label="⚖️ 國際盤勢平淡，維持標準權重", state="complete")
+    return sentiment_score
+
+
 def get_macd_slope(df):
     """大基石核心：MACD 斜率共振偵測 (完全保留，嚴禁簡化)"""
     if df is None or df.empty or len(df) < 35: 
