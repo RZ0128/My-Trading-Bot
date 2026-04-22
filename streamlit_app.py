@@ -205,50 +205,67 @@ def check_connection():
         return False, "❌ 連線失敗：請檢查 Secrets 設定"
 
 def load_data():
-    """大腦初始化程序 - V25.0 優先級修復版"""
-    # 1. 建立絕對保底，確保 UI 不會反白
-    if 'initialized' not in st.session_state:
-        st.session_state.initialized = False
+    """大腦初始化程序 - 穩定強化版：先建立保底，再對接雲端"""
+    if 'initialized' in st.session_state and st.session_state.initialized:
+        return
+    
+    # --- [第一步：強制建立所有保底變數，防止 UI 崩潰] ---
     if 'client_list' not in st.session_state:
         st.session_state.client_list = ["Robert"]
     if 'local_db' not in st.session_state:
         st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'shares', 'buy_price', 'unit', 'entry_reason', 'sentiment'])
     if 'trade_history' not in st.session_state:
         st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-
-    if st.session_state.initialized:
-        return
-
+    
     # 初始化進度條
-    progress_bar = st.progress(0, text="🤖 AI 數據對齊中 (優先調度 TwStock 模式)...")
+    progress_bar = st.progress(0, text="🤖 AI 大腦啟動：正在初始化雲端對齊程序...")
     
     try:
-        # --- [關鍵修復：嘗試雲端，但設定快速失敗] ---
+        # --- [第二步：嘗試對接 GCP] ---
         sh = init_cloud_connection()
-        if sh:
-            # 掃描庫存
-            progress_bar.progress(30, text="📊 同步雲端 Inventory...")
-            inv_df = safe_get_df(sh, "inventory")
-            if not inv_df.empty:
-                st.session_state.local_db = inv_df
-                st.session_state.inventory = inv_df
+        if not sh: 
+            raise Exception("無法辨認 Secrets 金鑰或 Google Sheets 權限未開啟")
+
+        # --- [1/4] 正在掃描 Inventory (庫存) ---
+        progress_bar.progress(25, text="📊 [1/4] 正在對齊 Inventory 雲端數據...")
+        inv_df = safe_get_df(sh, "inventory")
+        if not inv_df.empty:
+            for col in ['id', 'client', 'name']:
+                if col in inv_df.columns:
+                    inv_df[col] = inv_df[col].astype(str)
+            st.session_state.local_db = inv_df
+            st.session_state.inventory = inv_df
+        
+        # --- [2/4] 正在同步 History (交易紀錄) ---
+        progress_bar.progress(50, text="📜 [2/4] 正在對齊 History 交易紀錄...")
+        his_df = safe_get_df(sh, "history")
+        if not his_df.empty:
+            for col in ['action', 'id', 'client']:
+                if col in his_df.columns:
+                    his_df[col] = his_df[col].astype(str)
+            st.session_state.trade_history = his_df
             
-            # 同步歷史
-            progress_bar.progress(60, text="📜 同步雲端 History...")
-            his_df = safe_get_df(sh, "history")
-            if not his_df.empty:
-                st.session_state.trade_history = his_df
-                
-            progress_bar.progress(100, text="✅ 數據對齊完成")
-        else:
-            st.sidebar.warning("📡 雲端通訊延遲：已自動切換至本地快取模式")
+        # --- [3/4] 正在對齊 Clients (客戶清單) ---
+        progress_bar.progress(75, text="👥 [3/4] 正在同步客戶名單系統...")
+        client_df = safe_get_df(sh, "clients")
+        if not client_df.empty and 'name' in client_df.columns:
+            cloud_clients = client_df['name'].dropna().astype(str).tolist()
+            combined = list(set(["Robert"] + cloud_clients))
+            st.session_state.client_list = sorted([c for c in combined if c not in ["nan", "None", ""]])
+        
+        # --- [4/4] 雲端對齊完成 ---
+        progress_bar.progress(100, text="✅ [4/4] 雲端對齊成功！")
+        time.sleep(0.5)
+
     except Exception as e:
-        st.sidebar.error(f"⚠️ 初始化中斷: {str(e)[:30]}")
+        st.sidebar.warning(f"📡 雲端目前離線：使用本地模式")
+        st.sidebar.error(f"金鑰診斷: {str(e)[:40]}")
+
     
-    # 🛑 核心指令：無論如何都要標記為 True，否則 App 會永遠卡在啟動畫面
+    # 無論成功失敗，都標記為已初始化，防止無限循環
     st.session_state.initialized = True
-    time.sleep(0.5)
-    progress_bar.empty()
+    if 'progress_bar' in locals():
+        progress_bar.empty()
 
 
 
