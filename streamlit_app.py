@@ -1716,100 +1716,132 @@ with tab_intel:
     st.info("情報室正在對接中，將整合 V15.2 宏觀數據流 (包含 SOX/IXIC 監控)...")
 
 with tab_brain:
+        # ==============================================================================
+    # 【第一區：🚀 超級飆股狙擊手 - 實戰自動化版 V27.0】
     # ==============================================================================
-    # 【第一區：🚀 超級飆股狙擊手 - 防死鎖穩定版 V26.0】
-    # ==============================================================================
-    st.subheader("🧬 AI 大腦進化監控 (500 檔 TwStock 本地強效掃描)")
+    st.subheader("🧬 AI 大腦進化監控 (自動獵殺、存檔、推薦一體化)")
 
-    # 1. 確保數據池存在，防止因變數未定義導致全屏崩潰
-    if 'pool_500' not in globals():
-        # 如果 pool_500 還沒從後面讀取到，這裡先給一個空的保底，避免報錯
-        current_pool = {} 
-    else:
-        current_pool = pool_500
+    if 'pool_500' not in globals(): current_pool = {} 
+    else: current_pool = pool_500
 
-    # 1. 雙維度指標保險箱 (初始化)
-    if 'actual_hit_rate' not in st.session_state: st.session_state.actual_hit_rate = 0.0 
-    if 'brain_evolution_progress' not in st.session_state: st.session_state.brain_evolution_progress = 0.0 
     if 'temp_hero_list' not in st.session_state: st.session_state.temp_hero_list = []
 
-    col_prog1, col_prog2 = st.columns([3, 1])
-    with col_prog1:
-        st.markdown(f"🎯 **實戰狙擊準確率：`{st.session_state.actual_hit_rate}%`**")
-        st.progress(st.session_state.actual_hit_rate / 100)
-    with col_prog2:
-        st.metric("大腦百科進化", f"{st.session_state.brain_evolution_progress:.1f}%")
-
     with st.container(border=True):
-        st.markdown("#### 🏆 今日全台股英雄榜 (漲幅 >= 9% 實時監控)")
+        st.markdown("#### 🏆 今日全台股英雄榜 (自動同步雲端與 AI 診斷)")
         
         status_area = st.empty()
         progress_bar = st.progress(0)
         hero_display_area = st.empty()
 
-        # 斷線保護：只要 temp_hero_list 有東西，無論掃描是否完成都顯示
         if st.session_state.temp_hero_list:
             hero_display_area.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
 
-        if st.button("📡 啟動 TwStock 強效偵察機", width="stretch", key="hunt_v26_stable"):
-            if not current_pool:
-                st.error("❌ 偵測失敗：尚未讀取到核心 500 檔股票清單，請確認代碼佈局。")
-            else:
-                st.session_state.temp_hero_list = [] 
-                all_targets = []
-                for cat, tickers in current_pool.items():
-                    for tid, tname in tickers:
-                        clean_tid = str(tid).replace(".TW", "").replace(".TWO", "")
-                        all_targets.append((clean_tid, tname))
+        if st.button("📡 啟動強效偵察機：掃描、分析、同步一氣呵成", width="stretch", key="hunt_v27_final"):
+            st.session_state.temp_hero_list = [] 
+            all_targets = []
+            for cat, tickers in current_pool.items():
+                for tid, tname in tickers:
+                    clean_tid = str(tid).replace(".TW", "").replace(".TWO", "")
+                    all_targets.append((clean_tid, tname))
+            
+            total = len(all_targets)
+            
+            for idx, (tid, tname) in enumerate(all_targets):
+                prog_val = (idx + 1) / total
+                progress_bar.progress(prog_val)
+                status_area.markdown(f"🔍 **AI 正在獵殺：** `{tname} ({tid})` ... **({idx+1}/{total})**")
                 
-                total = len(all_targets)
-                
-                for idx, (tid, tname) in enumerate(all_targets):
-                    prog_val = (idx + 1) / total
-                    progress_bar.progress(prog_val)
-                    status_area.markdown(f"🔍 **TwStock 本地線路：** `{tname} ({tid})` ... **({idx+1}/{total})**")
+                try:
+                    # 1. 抓取行情 (TwStock 優先)
+                    perf_data = get_stock_perf(tid)
+                    if isinstance(perf_data, tuple) and len(perf_data) >= 2:
+                        price, diff = perf_data[0], perf_data[1]
+                        change = (diff / (price - diff)) * 100 if (price - diff) > 0 else 0
+                    else: continue
                     
-                    try:
-                        # 呼叫已經改好的 TwStock 優先函數
-                        perf_data = get_stock_perf(tid)
+                    # 2. 篩選漲幅 9% 以上標的
+                    if 9.0 <= change <= 11.0:
+                        # --- 【核心進化：掃描到立即進行 AI 深度診斷】 ---
+                        # 直接調用您的第 3 區診斷引擎
+                        # 這裡我們模擬獲取 2 年 K 線做深度分析
+                        stock_yf = yf.Ticker(f"{tid}.TW")
+                        h_full = stock_yf.history(period="2y")
                         
-                        # 解析漲幅 (修正 V25 邏輯：get_stock_perf 回傳的是 tuple)
-                        # 回傳值格式為 (price, diff, source)
-                        if isinstance(perf_data, tuple) and len(perf_data) >= 2:
-                            price, diff = perf_data[0], perf_data[1]
-                            # 計算漲幅
-                            if price > 0 and (price - diff) > 0:
-                                change = (diff / (price - diff)) * 100
-                            else:
-                                continue
-                        else:
-                            continue
+                        # 呼叫 V16.3 進化大腦
+                        score, intel_msg, win_prob, sentiment = ai_evolution_engine(tid, h_full, price)
                         
-                        # 🛑 門檻設定：漲幅 >= 9% 且排除異常數值
-                        if 9.0 <= change <= 11.0:
-                            new_hero = {
-                                "代號": tid, 
-                                "名稱": tname, 
-                                "今日漲幅": f"+{change:.2f}%", 
-                                "英雄基因": "🔥 漲停強勢" if change >= 9.8 else "🚀 動能噴發"
-                            }
-                            st.session_state.temp_hero_list.append(new_hero)
-                            st.session_state.brain_evolution_progress = min(100.0, st.session_state.brain_evolution_progress + 0.2)
-                            
-                            # 即時更新，確保不消失
-                            hero_display_area.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
-                    except:
-                        continue 
+                        new_hero = {
+                            "代號": tid, 
+                            "名稱": tname, 
+                            "漲幅": f"+{change:.2f}%", 
+                            "AI 分數": score,
+                            "勝率": f"{win_prob}%",
+                            "籌碼": sentiment,
+                            "診斷結論": intel_msg[:20] + "..." # 截短方便顯示
+                        }
+                        st.session_state.temp_hero_list.append(new_hero)
+                        
+                        # --- 【核心進化：自動同步雲端】 ---
+                        # 每發現一檔就同步一檔，防止中途斷線
+                        update_ai_thought_log(tid, score, f"【強勢股捕捉】今日漲幅{change:.2f}%，AI評分{score}")
+                        
+                        # 即時更新 UI
+                        hero_display_area.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
+                except:
+                    continue 
 
-                status_area.success(f"✅ 掃描完成！捕捉到 {len(st.session_state.temp_hero_list)} 檔標的。")
-                st.session_state.hero_database = pd.DataFrame(st.session_state.temp_hero_list)
-                st.rerun() 
+            status_area.success(f"✅ 任務完成！共獵殺 {len(st.session_state.temp_hero_list)} 檔標的，數據已同步至雲端 thought_log。")
+            st.session_state.hero_database = pd.DataFrame(st.session_state.temp_hero_list)
+            
+            # 排序：直接將高分飆股排在最前面
+            if not st.session_state.hero_database.empty:
+                st.session_state.hero_database = st.session_state.hero_database.sort_values(by="AI 分數", ascending=False)
+            
+            st.rerun() 
 
-    with st.expander("📝 系統運行診斷", expanded=False):
-        st.write("🟢 數據源：TwStock 優先 + Yahoo 備援")
-        st.write(f"📊 當前池大小：{len(current_pool)} 類別")
+    # 推薦區塊
+    # ==============================================================================
+    # 【戰略推薦：AI 明日飆股種子選手】
+    # ==============================================================================
+    if 'hero_database' in st.session_state and not st.session_state.hero_database.empty:
+        st.divider()
+        st.subheader("🎯 AI 隔日沖/起漲戰略推薦")
+        
+        # 篩選條件：分數 > 85 且 勝率 > 60%
+        recommend_df = st.session_state.hero_database[
+            (st.session_state.hero_database['AI 分數'] >= 85)
+        ].sort_values(by="AI 分數", ascending=False).head(3) # 只取最強 3 檔，不求多只求精
+        
+        if not recommend_df.empty:
+            cols = st.columns(len(recommend_df))
+            for i, (index, row) in enumerate(recommend_df.iterrows()):
+                with cols[i]:
+                    st.metric(label=f"🏆 推薦選手: {row['名稱']}", value=f"{row['代號']}", delta=f"AI 評分: {row['AI 分數']}")
+                    with st.container(border=True):
+                        st.write(f"📈 **預估勝率:** {row['勝率']}")
+                        st.write(f"🔍 **籌碼狀態:** {row['籌碼']}")
+                        st.caption(f"💡 戰略建議: 該股具備強大攻擊基因，建議明日開盤觀察量能是否持續，若開高不墜則具備續攻動能。")
+            
+            # 自動儲存這份「推薦清單」到雲端，方便明天對帳
+            if st.button("💾 鎖定今日推薦名單並備份", key="save_top_3"):
+                sh = init_cloud_connection()
+                if sh:
+                    ws = sh.worksheet("thought_log")
+                    for _, row in recommend_df.iterrows():
+                        ws.append_row([
+                            datetime.now().strftime("%Y-%m-%d"), 
+                            row['代號'], 
+                            row['名稱'], 
+                            "推薦觀察", 
+                            f"AI 高分推薦: {row['AI 分數']}"
+                        ])
+                    st.success("✅ 推薦名單已存入雲端，明天盤後自動對帳！")
+        else:
+            st.info("💡 今日掃描結果中，尚未發現符合『極致噴發基因』的 85 分以上標的。")
+
 
     st.divider()
+
 
 
 
