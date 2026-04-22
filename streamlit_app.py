@@ -557,17 +557,20 @@ def ai_pattern_discovery(ticker, h_max):
         return "🧬 AI 發現新法則：極致窒息量後跳空模型 (勝率待測)"
     return None
 
+
+
 def ai_evolution_engine(ticker, h_max, current_price, margin_data=None):
     """
-    大腦進化引擎 V16.3：專業老總版
+    大腦進化引擎 V16.3：專業老總版 (精確修正版)
     整合【多週期連動】、【核心四模組】、【融資洗盤偵測】與【動態年線回補】
-    修正 55 分平庸化問題，強化位階描述與量能診斷。
     """
+    import random # 【修正 2：確保隨機模組可用，防止掃描卡死】
+
     # --- [0. 數據保險絲：數據完整性檢查與回補] ---
     if h_max is None or h_max.empty or h_max['Close'].isnull().all():
         try:
-            recovery_score, recovery_msg = historical_surge_analysis(ticker)
-            return recovery_score, f"補充診斷：{recovery_msg}", 40.0, "數據缺失/回補中"
+            # 【修正 1：防止崩潰】既然數據缺失，給予保底中性分數，不強制調用需 h_max 的分析
+            return 50, "⚠️ 數據源獲取異常，暫以中性評估", 40.0, "數據缺失"
         except:
             return 50, "⚠️ 數據獲取異常，請檢查代碼有效性", 0.0, "數據異常"
 
@@ -671,32 +674,20 @@ def ai_evolution_engine(ticker, h_max, current_price, margin_data=None):
     elif near_support:
         score += 20; intel_tags.append("📡 重要均線支撐")
 
-        # ... (以上為第 6 區：融資洗盤判斷邏輯) ...
-
     # --- [戰略級：老總專業選股 - 產業突圍與低基期起漲偵測] ---
     try:
-        # 模擬聯電(2302)與至上(8112)起漲邏輯：
-        # 1. 低基期：股價距離年線(ma248)在 5% 以內 (代表底部剛整理完)
-        # 2. 異常用量：成交量是 20 日均量的 2.5 倍以上 (代表主力進場)
-        # 3. 趨勢轉正：5日線 > 20日線
-        
         is_low_base = (abs(dist_ma248) < 0.05) 
         is_volume_spike = (v.iloc[-1] > v_sma20 * 2.5)
         
         if is_low_base and is_volume_spike:
-            score += 25  # 大幅加分，這是起漲點特徵
-            intel_tags.append("💎 挖掘到【低基期起漲基因】(老總戰略位階)")
+            score += 25  
+            intel_tags.append("💎 挖掘到【低基期起漲基因】")
             
-        # 趨勢慣性強化判斷
         if ma5 > ma20 and ma20 > ma60:
-            # 判斷是否為「首度」放量突破
             if v.iloc[-1] > v.iloc[-2] * 2:
                 score += 10
                 intel_tags.append("🚩 偵測到【首度放量突圍】")
-    except Exception as e:
-        # 保持大腦強韌，若計算出錯則跳過但不崩潰
-        pass
-
+    except: pass
 
     # --- [7. 高檔警戒與噴發基因] ---
     if dist_ma248 > 0.3 and v.iloc[-1] > v.rolling(248).mean().iloc[-1] * 3:
@@ -705,15 +696,18 @@ def ai_evolution_engine(ticker, h_max, current_price, margin_data=None):
         score -= 15; intel_tags.append("⚠️ 短線漲幅過大(防拉回)")
     
     try:
-        # 修改點：將 h_max 也傳遞進去，讓 AI 真正看得到 K 線數據
         surge_bonus, surge_msg = historical_surge_analysis(ticker, h_max) 
         if surge_bonus > 70: 
-            score += 25  # 既然是預測大噴發，加分可以稍微提高到 25
-            intel_tags.append(f"📜 {surge_msg}") # 直接顯示偵測到的噴發基因類型
+            score += 25  
+            intel_tags.append(f"📜 {surge_msg}")
     except: pass
 
+    # --- [8. 最終輸出與勝率 - 【修正 3：強化漲停股特殊加分】] ---
+    # 如果今日是強勢漲停(>9%)且價格收在最高點附近，額外獎勵基因分
+    if current_price >= hi.iloc[-1] * 0.995 and (current_price / c.iloc[-2] > 1.09):
+        score += 5
+        intel_tags.append("⚡ 能量飽和(鎖死封盤)")
 
-    # --- [8. 勝率模擬與輸出] ---
     # 使用滾動勝率作為基準
     returns = c.pct_change(5).shift(-5)
     valid_returns = returns.dropna()
@@ -728,6 +722,8 @@ def ai_evolution_engine(ticker, h_max, current_price, margin_data=None):
     elif score < 50: sentiment_status = "📉 籌碼潰散"
 
     return int(max(0, min(100, score))), " | ".join(intel_tags) if intel_tags else "⚖️ 數據盤整中", win_prob, sentiment_status
+
+
 
 def generate_ai_tech_analysis(ticker, price, mode=0):
     """
