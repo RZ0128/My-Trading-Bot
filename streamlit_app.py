@@ -1716,35 +1716,35 @@ with tab_intel:
 
 with tab_brain:
         # ==============================================================================
-    # 【第一區：🚀 超級飆股狙擊手 - 純淨修煉進化版 V18.7】
+    # 【第一區：🚀 超級飆股狙擊手 - 數據對齊修復版 V18.8】
     # ==============================================================================
     st.subheader("🧬 AI 大腦進化監控 (英雄基因獵殺中)")
 
-    # --- 1. 雙維度修煉指標 (全部歸零，從實戰開始) ---
+    # --- 1. 雙維度修煉指標 (從 0% 開始的實踐) ---
     if 'actual_hit_rate' not in st.session_state:
-        st.session_state.actual_hit_rate = 0.0 # 實戰準確率
+        st.session_state.actual_hit_rate = 0.0 
     if 'brain_evolution_progress' not in st.session_state:
-        st.session_state.brain_evolution_progress = 0.0 # 百科進化進度
+        st.session_state.brain_evolution_progress = 0.0 
 
     col_prog1, col_prog2 = st.columns([3, 1])
     with col_prog1:
         st.markdown(f"🎯 **實戰狙擊準確率：`{st.session_state.actual_hit_rate}%`**")
         st.progress(st.session_state.actual_hit_rate / 100)
     with col_prog2:
-        # 這裡改為百科進化度，同樣從 0% 開始
-        st.metric("大腦百科進化", f"{st.session_state.brain_evolution_progress}%", "🌱 初始狀態")
+        # 徹底移除 72.5%，同步為百科進化度
+        st.metric("大腦百科進化", f"{st.session_state.brain_evolution_progress:.1f}%", "🌱 初始狀態")
 
     with st.container(border=True):
         st.markdown("#### 🏆 今日英雄獵殺動態牆 (9-10% 噴發名單)")
         
-        # 動態顯示組件
         status_area = st.empty()
         progress_bar = st.progress(0)
         hero_display_area = st.empty()
 
-        if st.button("📡 啟動全市場偵察機：即時獵殺 1700 檔標的", width="stretch", key="hunt_v187"):
+        if st.button("📡 啟動全市場偵察機：即時獵殺 1700 檔標的", width="stretch", key="hunt_v188"):
             found_heroes = []
             all_targets = []
+            # 確保從 pool_500 獲取正確清單
             for cat, tickers in pool_500.items():
                 for tid, tname in tickers:
                     all_targets.append((tid, tname, cat))
@@ -1757,37 +1757,46 @@ with tab_brain:
                 status_area.markdown(f"🔍 **AI 正在獵殺：** `{tname} ({tid})` ... ({idx+1}/{total})")
                 
                 try:
-                    perf, _, _ = get_stock_perf(tid, 0)
-                    change = float(perf.replace('%', '')) if isinstance(perf, str) else perf
+                    # 【關鍵修正】：精確獲取漲幅，而非誤抓現價
+                    perf_str, diff, close_price = get_stock_perf(tid, 0)
                     
-                    if change >= 9.0:
-                        reason = "🔥 漲停鎖死：極強多頭基因" if change >= 9.8 else "🚀 動能爆發：洗盤後強勢創高"
+                    # 清理漲幅字串，轉換為浮點數
+                    change = float(perf_str.replace('%', '').replace('+', '')) if isinstance(perf_str, str) else perf_str
+                    
+                    # 嚴格篩選：只有漲幅在 9% 到 10.5% 之間的才是真英雄
+                    if 9.0 <= change <= 11.0:
+                        reason = "🔥 漲停鎖死：極強多頭基因" if change >= 9.8 else "🚀 動能爆發：帶量突圍創高"
+                        
                         found_heroes.append({
-                            "代號": tid, "名稱": tname, "漲幅": f"+{change}%", "基因分析": reason
+                            "代號": tid, 
+                            "名稱": tname, 
+                            "今日漲幅": f"+{change:.2f}%",  # 確保顯示的是百分比
+                            "基因分析": reason
                         })
                         
-                        # 每抓到一檔，增加一點點「大腦百科進化度」
+                        # 每抓到一檔，進化進度增加 0.1%
                         st.session_state.brain_evolution_progress = min(100.0, st.session_state.brain_evolution_progress + 0.1)
                         
+                        # 實時更新畫面表格
                         with hero_display_area.container():
                             st.dataframe(pd.DataFrame(found_heroes), width="stretch", hide_index=True)
                 except:
                     continue 
 
-            status_area.success(f"✅ 全市場獵殺完成！今日共捕捉 {len(found_heroes)} 檔飆股英雄。")
+            status_area.success(f"✅ 獵殺完成！今日全市場共捕捉 {len(found_heroes)} 檔飆股英雄。")
             st.session_state.hero_database = pd.DataFrame(found_heroes)
-            st.rerun() # 重新整理以更新頂部 metric 數值
+            st.rerun()
 
-        # 持久化顯示
+        # 掃描完成後的最終呈現
         if 'hero_database' in st.session_state and not st.session_state.hero_database.empty:
             st.dataframe(st.session_state.hero_database, width="stretch", height=400, hide_index=True)
 
     # --- 3. 隔日驗證系統 ---
     with st.expander("📝 AI 自我診斷與實戰修正", expanded=True):
-        st.info("AI 將於明日收盤後，根據今日獵殺名單的續航力，自動更新『實戰狙擊準確率』。")
-        st.write("目前狀態：數據獵食中... 🟢 (正在建立屬於您的英雄百科全書)")
+        st.info("AI 將於明日收盤後驗證今日獵殺標的之續航力，並修正實戰準確率。")
 
     st.divider() 
+
 
 
 
