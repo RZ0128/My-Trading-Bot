@@ -1717,11 +1717,18 @@ with tab_intel:
 
 with tab_brain:
     # ==============================================================================
-    # 【第一區：🚀 超級飆股狙擊手 - TwStock 核心重構版 V25.0】
+    # 【第一區：🚀 超級飆股狙擊手 - 防死鎖穩定版 V26.0】
     # ==============================================================================
     st.subheader("🧬 AI 大腦進化監控 (500 檔 TwStock 本地強效掃描)")
 
-    # 1. 雙維度指標保險箱
+    # 1. 確保數據池存在，防止因變數未定義導致全屏崩潰
+    if 'pool_500' not in globals():
+        # 如果 pool_500 還沒從後面讀取到，這裡先給一個空的保底，避免報錯
+        current_pool = {} 
+    else:
+        current_pool = pool_500
+
+    # 1. 雙維度指標保險箱 (初始化)
     if 'actual_hit_rate' not in st.session_state: st.session_state.actual_hit_rate = 0.0 
     if 'brain_evolution_progress' not in st.session_state: st.session_state.brain_evolution_progress = 0.0 
     if 'temp_hero_list' not in st.session_state: st.session_state.temp_hero_list = []
@@ -1740,83 +1747,67 @@ with tab_brain:
         progress_bar = st.progress(0)
         hero_display_area = st.empty()
 
-        # 斷線保護呈現：使用 2026 最新 width='stretch' 語法移除警告
+        # 斷線保護：只要 temp_hero_list 有東西，無論掃描是否完成都顯示
         if st.session_state.temp_hero_list:
-            with hero_display_area.container():
-                st.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
+            hero_display_area.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
 
-        if st.button("📡 啟動 TwStock 強效偵察機", width="stretch", key="hunt_v25_core"):
-            st.session_state.temp_hero_list = [] 
-            all_targets = []
-            for cat, tickers in pool_500.items():
-                for tid, tname in tickers:
-                    # 修正：轉換代號格式以符合本地 TwStock 邏輯，避免 Yahoo 錯誤
-                    clean_tid = tid.replace(".TW", "").replace(".TWO", "")
-                    all_targets.append((clean_tid, tname))
-            
-            total = len(all_targets)
-            
-            for idx, (tid, tname) in enumerate(all_targets):
-                prog_val = (idx + 1) / total
-                progress_bar.progress(prog_val)
-                status_area.markdown(f"🔍 **TwStock 本地線路獵殺中：** `{tname} ({tid})` ... **({idx+1} / {total})**")
+        if st.button("📡 啟動 TwStock 強效偵察機", width="stretch", key="hunt_v26_stable"):
+            if not current_pool:
+                st.error("❌ 偵測失敗：尚未讀取到核心 500 檔股票清單，請確認代碼佈局。")
+            else:
+                st.session_state.temp_hero_list = [] 
+                all_targets = []
+                for cat, tickers in current_pool.items():
+                    for tid, tname in tickers:
+                        clean_tid = str(tid).replace(".TW", "").replace(".TWO", "")
+                        all_targets.append((clean_tid, tname))
                 
-                try:
-                    # --- 【核心重構：強制繞過 Yahoo】 ---
-                    # 這裡模擬調用本地 TwStock 數據，不再讓日誌出現 Yahoo Error
-                    perf, _, _ = get_stock_perf(f"{tid}.TW", 0) 
+                total = len(all_targets)
+                
+                for idx, (tid, tname) in enumerate(all_targets):
+                    prog_val = (idx + 1) / total
+                    progress_bar.progress(prog_val)
+                    status_area.markdown(f"🔍 **TwStock 本地線路：** `{tname} ({tid})` ... **({idx+1}/{total})**")
                     
-                    perf_str = str(perf)
-                    # 排除所有 Yahoo 產生的 Delisted 垃圾數據
-                    if "No data" in perf_str or "delisted" in perf_str.lower() or "nan" in perf_str.lower():
-                        continue
+                    try:
+                        # 呼叫已經改好的 TwStock 優先函數
+                        perf_data = get_stock_perf(tid)
                         
-                    # --- 【精準漲幅邏輯鎖】 ---
-                    import re
-                    # 嚴格抓取帶有 % 的數值
-                    match = re.search(r'([+-]?\d+\.?\d*)%', perf_str)
-                    if match:
-                        change = float(match.group(1))
-                    else:
-                        temp_val = perf_str.replace('%', '').replace('+', '').strip()
-                        change = float(temp_val)
-                    
-                    # 🛑 強制排除「股價」亂入：台股漲幅不可能大於 11
-                    if change > 11.0: continue
-                    
-                    # 🎯 獵殺目標：漲幅 >= 9.0% (含漲停)
-                    if change >= 9.0:
-                        reason = "🔥 漲停鎖死：最強多頭基因" if change >= 9.8 else "🚀 帶量噴發：強勢突破"
+                        # 解析漲幅 (修正 V25 邏輯：get_stock_perf 回傳的是 tuple)
+                        # 回傳值格式為 (price, diff, source)
+                        if isinstance(perf_data, tuple) and len(perf_data) >= 2:
+                            price, diff = perf_data[0], perf_data[1]
+                            # 計算漲幅
+                            if price > 0 and (price - diff) > 0:
+                                change = (diff / (price - diff)) * 100
+                            else:
+                                continue
+                        else:
+                            continue
                         
-                        new_hero = {
-                            "代號": tid, 
-                            "名稱": tname, 
-                            "今日漲幅": f"+{change:.2f}%", 
-                            "英雄基因分析": reason
-                        }
-                        st.session_state.temp_hero_list.append(new_hero)
-                        
-                        # 大腦進化更新
-                        st.session_state.brain_evolution_progress = min(100.0, st.session_state.brain_evolution_progress + 0.2)
-                        
-                        # 【即時更新表格】：移除所有過時語法，確保不反白
-                        with hero_display_area.container():
-                            st.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
-                except:
-                    continue 
+                        # 🛑 門檻設定：漲幅 >= 9% 且排除異常數值
+                        if 9.0 <= change <= 11.0:
+                            new_hero = {
+                                "代號": tid, 
+                                "名稱": tname, 
+                                "今日漲幅": f"+{change:.2f}%", 
+                                "英雄基因": "🔥 漲停強勢" if change >= 9.8 else "🚀 動能噴發"
+                            }
+                            st.session_state.temp_hero_list.append(new_hero)
+                            st.session_state.brain_evolution_progress = min(100.0, st.session_state.brain_evolution_progress + 0.2)
+                            
+                            # 即時更新，確保不消失
+                            hero_display_area.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
+                    except:
+                        continue 
 
-            status_area.success(f"✅ TwStock 全域掃描完成！捕捉到 {len(st.session_state.temp_hero_list)} 檔飆股。")
-            st.session_state.hero_database = pd.DataFrame(st.session_state.temp_hero_list)
-            st.rerun() 
+                status_area.success(f"✅ 掃描完成！捕捉到 {len(st.session_state.temp_hero_list)} 檔標的。")
+                st.session_state.hero_database = pd.DataFrame(st.session_state.temp_hero_list)
+                st.rerun() 
 
-        # 持久化最終呈現
-        if 'hero_database' in st.session_state and not st.session_state.hero_database.empty:
-            st.dataframe(st.session_state.hero_database, width="stretch", height=450, hide_index=True)
-
-    with st.expander("📝 大基石系統診斷日誌", expanded=True):
-        st.write("🟢 **後端引擎：已切換至 TwStock 本地解析協議**")
-        st.write("🟢 **警告修復：已全面替換 `width='stretch'` 語法**")
-        st.write("🔴 **異常攔截：自動跳過 Yahoo Delisted 無效代號**")
+    with st.expander("📝 系統運行診斷", expanded=False):
+        st.write("🟢 數據源：TwStock 優先 + Yahoo 備援")
+        st.write(f"📊 當前池大小：{len(current_pool)} 類別")
 
     st.divider()
 
