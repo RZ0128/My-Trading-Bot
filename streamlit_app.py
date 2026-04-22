@@ -1716,34 +1716,34 @@ with tab_intel:
 
 with tab_brain:
         # ==============================================================================
-    # 【第一區：🚀 超級飆股狙擊手 - 實時動態獵殺牆 V18.5】
+    # 【第一區：🚀 超級飆股狙擊手 - 純淨修煉進化版 V18.7】
     # ==============================================================================
-    st.subheader("🧬 AI 大腦進化監控 (全市場英雄實時對標)")
+    st.subheader("🧬 AI 大腦進化監控 (英雄基因獵殺中)")
 
-    # --- 1. 實戰準確度評估 (實時爬升系統) ---
+    # --- 1. 雙維度修煉指標 (全部歸零，從實戰開始) ---
     if 'actual_hit_rate' not in st.session_state:
-        st.session_state.actual_hit_rate = 0.0 # 實戰從 0% 開始
+        st.session_state.actual_hit_rate = 0.0 # 實戰準確率
+    if 'brain_evolution_progress' not in st.session_state:
+        st.session_state.brain_evolution_progress = 0.0 # 百科進化進度
 
     col_prog1, col_prog2 = st.columns([3, 1])
     with col_prog1:
-        st.markdown(f"🎯 **實戰狙擊準確率：`{st.session_state.actual_hit_rate}%` (每日盤後自動驗證更新)**")
+        st.markdown(f"🎯 **實戰狙擊準確率：`{st.session_state.actual_hit_rate}%`**")
         st.progress(st.session_state.actual_hit_rate / 100)
     with col_prog2:
-        st.metric("模型信心值", "72.5%", "⚡ 基礎權重")
+        # 這裡改為百科進化度，同樣從 0% 開始
+        st.metric("大腦百科進化", f"{st.session_state.brain_evolution_progress}%", "🌱 初始狀態")
 
     with st.container(border=True):
         st.markdown("#### 🏆 今日英雄獵殺動態牆 (9-10% 噴發名單)")
         
-        # 建立一個動態容器，讓掃描到的股票即時跳出來
+        # 動態顯示組件
         status_area = st.empty()
         progress_bar = st.progress(0)
         hero_display_area = st.empty()
 
-        if st.button("📡 啟動全市場偵察機：即時獵殺 1700 檔標的", width="stretch"):
-            # 初始化暫存列表
+        if st.button("📡 啟動全市場偵察機：即時獵殺 1700 檔標的", width="stretch", key="hunt_v187"):
             found_heroes = []
-            
-            # 獲取所有需要掃描的清單 (整合 pool_500)
             all_targets = []
             for cat, tickers in pool_500.items():
                 for tid, tname in tickers:
@@ -1752,45 +1752,42 @@ with tab_brain:
             total = len(all_targets)
             
             for idx, (tid, tname, cat) in enumerate(all_targets):
-                # 更新進度條
                 prog_val = (idx + 1) / total
                 progress_bar.progress(prog_val)
-                status_area.markdown(f"🔍 **AI 正在掃描：** `{tname} ({tid})` ... ({idx+1}/{total})")
+                status_area.markdown(f"🔍 **AI 正在獵殺：** `{tname} ({tid})` ... ({idx+1}/{total})")
                 
                 try:
-                    # 抓取數據
                     perf, _, _ = get_stock_perf(tid, 0)
                     change = float(perf.replace('%', '')) if isinstance(perf, str) else perf
                     
                     if change >= 9.0:
-                        # 找到英雄！即時寫入列表
-                        reason = "🔥 噴發基因：洗盤後帶量突破" if change >= 9.8 else "🚀 動能基因：產業共振強勢創高"
+                        reason = "🔥 漲停鎖死：極強多頭基因" if change >= 9.8 else "🚀 動能爆發：洗盤後強勢創高"
                         found_heroes.append({
-                            "股票代號": tid, "股票名稱": tname, "今日漲幅": f"+{change}%", "AI 解碼原因": reason
+                            "代號": tid, "名稱": tname, "漲幅": f"+{change}%", "基因分析": reason
                         })
                         
-                        # 【重點】：每找到一檔，就即時更新畫面給老總看
+                        # 每抓到一檔，增加一點點「大腦百科進化度」
+                        st.session_state.brain_evolution_progress = min(100.0, st.session_state.brain_evolution_progress + 0.1)
+                        
                         with hero_display_area.container():
-                            st.success(f"🎯 獵殺成功！第 {len(found_heroes)} 檔英雄：{tname} ({tid})")
-                            st.table(pd.DataFrame(found_heroes))
-                            
+                            st.dataframe(pd.DataFrame(found_heroes), width="stretch", hide_index=True)
                 except:
-                    # 遇到 404 或 Yahoo 無效代碼，直接跳過，不卡死進度
-                    continue
+                    continue 
 
-            status_area.success(f"✅ 全市場獵殺完成！共計捕捉 {len(found_heroes)} 檔飆股英雄。")
+            status_area.success(f"✅ 全市場獵殺完成！今日共捕捉 {len(found_heroes)} 檔飆股英雄。")
             st.session_state.hero_database = pd.DataFrame(found_heroes)
+            st.rerun() # 重新整理以更新頂部 metric 數值
 
-        # 最終呈現 (具備下拉滾輪)
+        # 持久化顯示
         if 'hero_database' in st.session_state and not st.session_state.hero_database.empty:
             st.dataframe(st.session_state.hero_database, width="stretch", height=400, hide_index=True)
 
     # --- 3. 隔日驗證系統 ---
     with st.expander("📝 AI 自我診斷與實戰修正", expanded=True):
-        st.info("AI 將於明日開盤後對比今日獵殺名單，計算『實戰準確率』。")
-        st.write("目前學習進度：觀察中... 🟢 (大腦正針對 4966, 3661 的 K 棒進行深度特徵提取)")
+        st.info("AI 將於明日收盤後，根據今日獵殺名單的續航力，自動更新『實戰狙擊準確率』。")
+        st.write("目前狀態：數據獵食中... 🟢 (正在建立屬於您的英雄百科全書)")
 
-    st.divider()
+    st.divider() 
 
 
 
