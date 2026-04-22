@@ -1715,12 +1715,12 @@ with tab_intel:
     st.info("情報室正在對接中，將整合 V15.2 宏觀數據流 (包含 SOX/IXIC 監控)...")
 
 with tab_brain:
+        # ==============================================================================
+    # 【第一區：🚀 超級飆股狙擊手 - 全市場英雄即時對標版 V22.0】
     # ==============================================================================
-    # 【第一區：🚀 超級飆股狙擊手 - 全市場 1700 檔實戰學習版 V21.0】
-    # ==============================================================================
-    st.subheader("🧬 AI 大腦進化監控 (1700 檔全域獵殺)")
+    st.subheader("🧬 AI 大腦進化監控 (1700 檔全域實時獵殺)")
 
-    # 1. 雙維度進化監控
+    # 1. 進度與狀態初始化
     if 'actual_hit_rate' not in st.session_state: st.session_state.actual_hit_rate = 0.0 
     if 'brain_evolution_progress' not in st.session_state: st.session_state.brain_evolution_progress = 0.0 
 
@@ -1729,89 +1729,90 @@ with tab_brain:
         st.markdown(f"🎯 **實戰狙擊準確率：`{st.session_state.actual_hit_rate}%`**")
         st.progress(st.session_state.actual_hit_rate / 100)
     with col_prog2:
-        st.metric("大腦百科進化", f"{st.session_state.brain_evolution_progress:.1f}%", "⚡ 加速修煉")
+        st.metric("大腦百科進化", f"{st.session_state.brain_evolution_progress:.1f}%")
 
     with st.container(border=True):
-        st.markdown("#### 🏆 全市場英雄基因庫 (今日實時獵殺 9-10% 飆股)")
+        st.markdown("#### 🏆 今日全市場英雄獵殺動態牆 (9-10% 噴發名單)")
         
-        # 動態顯示核心組件
+        # 定義動態更新區 (邊掃描邊顯示的關鍵)
         status_area = st.empty()
         progress_bar = st.progress(0)
-        hero_display_area = st.empty() 
+        hero_display_area = st.empty()
 
-        if st.button("📡 啟動全市場偵察機：即時獵殺全台股 1700 檔標的", width="stretch"):
+        if st.button("📡 啟動全市場偵察機：即時獵殺全台股 1700 檔標的", width="stretch", key="scan_v22"):
             found_heroes = []
             
-            # --- 強制生成全市場 1700+ 檔有效掃描清單 ---
-            # 這裡我們合併已知池與全市場號碼段，確保分母絕對超過 1700
-            valid_ranges = [
-                range(1101, 1500), range(2001, 3100), range(3101, 6000), 
-                range(6101, 8500), range(9901, 9960)
-            ]
+            # --- 核心邏輯：建立 1700+ 檔真實掃描名單 ---
+            # 優先從 pool_500 獲取已確認存在的股票 (確保基本盤)
+            confirmed_list = []
+            for tickers in pool_500.values():
+                for tid, tname in tickers:
+                    confirmed_list.append((tid, tname))
             
-            # 建立真·全市場清單
-            raw_codes = []
-            for r in valid_ranges:
+            # 若 pool_500 不足 1700，則補充有效區間代碼 (過濾掉空號)
+            scan_targets = confirmed_list.copy()
+            additional_ranges = [range(1101, 1500), range(2301, 3100), range(6101, 6800)]
+            for r in additional_ranges:
+                if len(scan_targets) >= 1750: break
                 for code in r:
-                    raw_codes.append(f"{code}.TW")
-                    raw_codes.append(f"{code}.TWO")
+                    tid = f"{code}.TW"
+                    if tid not in [x[0] for x in scan_targets]:
+                        scan_targets.append((tid, "待偵測"))
             
-            # 鎖定全市場規模（過濾掉明顯無效的，維持在 1750 檔上下）
-            final_scan_list = raw_codes[:1750] 
-            total_count = len(final_scan_list)
+            final_targets = scan_targets[:1750] # 鎖定全市場規模
+            total = len(final_targets)
             
-            for idx, tid in enumerate(final_scan_list):
-                # 更新進度標籤：必須顯示真實的 1700+ 分母
-                current_idx = idx + 1
-                prog_val = current_idx / total_count
+            for idx, (tid, tname) in enumerate(final_targets):
+                # 1. 更新進度與狀態文字
+                prog_val = (idx + 1) / total
                 progress_bar.progress(prog_val)
-                status_area.markdown(f"🔍 **AI 全域掃描中：** `{tid}` ... **({current_idx} / {total_count})**")
+                
+                # 實時顯示掃描狀態
+                status_area.markdown(f"🔍 **AI 全域掃描中：** `{tid}` ... **({idx+1} / {total})**")
                 
                 try:
-                    # 獲取名稱與漲幅數據
-                    tname = get_stock_name(tid)
-                    if not tname or tname == tid: continue # 過濾無效代碼
+                    # 2. 獲取數據 (排除無效代碼以提升速度)
+                    real_name = get_stock_name(tid)
+                    if not real_name or real_name == tid: continue 
                     
-                    perf_str, _, _ = get_stock_perf(tid, 0)
-                    change = float(perf_str.replace('%', '').replace('+', ''))
+                    perf, _, _ = get_stock_perf(tid, 0)
+                    # 修正：確保處理的是漲幅字串
+                    change = float(perf.replace('%', '').replace('+', ''))
                     
-                    # 獵殺邏輯：9.0% - 11.0% (包含漲停標的)
+                    # 3. 獵殺門檻 (9.0% - 11.0%)
                     if 9.0 <= change <= 11.0:
-                        # 基因特徵分析 (這部分是大腦學習的關鍵)
-                        reason = ""
-                        if change >= 9.8: reason = "🔥 漲停鎖死：極強多頭噴發基因"
-                        elif "半導體" in tname: reason = "🚀 科技領航：產業權值噴發"
-                        else: reason = "💥 動能爆發：帶量突破關鍵位"
+                        reason = "🔥 漲停鎖死：極強多頭基因" if change >= 9.8 else "🚀 動能爆發：強力突圍"
                         
                         found_heroes.append({
-                            "股票代號": tid, 
-                            "股票名稱": tname, 
+                            "代號": tid, 
+                            "名稱": real_name, 
                             "今日漲幅": f"+{change:.2f}%", 
-                            "重點特徵 (基因)": reason
+                            "噴發原因分析": reason
                         })
                         
-                        # 每抓到一檔，大腦百科進化度大幅跳升
-                        st.session_state.brain_evolution_progress = min(100.0, st.session_state.brain_evolution_progress + 0.5)
+                        # 大腦進化度同步成長
+                        st.session_state.brain_evolution_progress = min(100.0, st.session_state.brain_evolution_progress + 0.1)
                         
-                        # 【核心要求】：只要找到，立刻列在榜單上
+                        # 【核心功能】：一邊掃描一邊更新表格 (B版本功能)
                         with hero_display_area.container():
-                            st.markdown(f"✨ **偵測到英雄基因：`{tname}` 已寫入學習榜！**")
-                            st.table(pd.DataFrame(found_heroes)) # 使用 Table 確保格式清晰
-                            
+                            st.info(f"✨ 成功捕捉！目前已在 1700 檔中發現 {len(found_heroes)} 檔英雄標的。")
+                            # 使用 dataframe 確保滾動條正確
+                            st.dataframe(pd.DataFrame(found_heroes), width="stretch", hide_index=True)
                 except:
                     continue 
 
-            status_area.success(f"✅ 全市場 {total_count} 檔獵殺完成！今日共捕捉 {len(found_heroes)} 檔飆股英雄。")
+            status_area.success(f"✅ 全市場 {total} 檔獵殺完成！今日共捕捉 {len(found_heroes)} 檔飆股英雄。")
             st.session_state.hero_database = pd.DataFrame(found_heroes)
+            st.rerun() # 掃描完畢後重整一次以固定數據
 
-        # 最終持久化英雄榜
+        # 4. 持久化顯示最終英雄榜
         if 'hero_database' in st.session_state and not st.session_state.hero_database.empty:
-            st.markdown("### 🏆 今日英雄榜單 (AI 深度學習對象)")
-            st.dataframe(st.session_state.hero_database, width="stretch", hide_index=True)
+            st.markdown("### 🏆 今日英雄榜 (AI 深度學習資料庫)")
+            st.dataframe(st.session_state.hero_database, width="stretch", height=450, hide_index=True)
 
     # --- 隔日驗證系統 ---
     with st.expander("📝 AI 自我診斷與實戰修正", expanded=True):
-        st.info("AI 正在針對今日獲取的基因進行深度學習與權重修正...")
+        st.info("AI 正在針對今日 1700 檔中獵殺到的基因進行深度對標...")
 
     st.divider() 
 
