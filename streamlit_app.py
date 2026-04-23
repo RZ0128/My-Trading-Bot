@@ -1127,6 +1127,53 @@ def fetch_and_score_intel():
     return sorted(news_list, key=lambda x: x['score'], reverse=True), hot_words
 
 
+# ==============================================================================
+# 第四段：【外部戰略引擎】(放置於 500 檔股池定義之前)
+# ==============================================================================
+
+def get_global_bias():
+    """
+    抓取美股收盤數據，計算對台股的影響偏誤值 (與新聞模組形成雙濾網)
+    """
+    try:
+        # 抓取四大關鍵指標
+        indices = {
+            "^SOX": "費城半導體", 
+            "^IXIC": "那斯達克",  
+            "NVDA": "輝達",       
+            "CL=F": "原油期貨"    
+        }
+        
+        bias_score = 1.0
+        msg_list = []
+        
+        for ticker, name in indices.items():
+            # 抓取 2 天數據計算漲跌幅
+            data = yf.Ticker(ticker).history(period="2y") # 抓 2y 確保數據量充足
+            if len(data) >= 2:
+                # 取得最後兩天的收盤價
+                close_today = data['Close'].iloc[-1]
+                close_prev = data['Close'].iloc[-2]
+                change = ((close_today - close_prev) / close_prev) * 100
+                
+                # 核心權重權衡：費半對台股影響加權 1.5 倍
+                if ticker == "^SOX":
+                    bias_score += (change / 100) * 1.5 
+                elif ticker == "NVDA":
+                    bias_score += (change / 100) * 1.0 
+                elif ticker == "CL=F" and change > 3.0: # 油價飆漲超過 3% 視為戰爭風險
+                    bias_score -= 0.05 
+                
+                emoji = "🔴" if change < 0 else "🟢"
+                msg_list.append(f"{emoji}{name}: {change:+.2f}%")
+        
+        # 限制係數範圍 (0.8 ~ 1.2)，避免過度偏離
+        bias_score = max(0.8, min(1.2, bias_score))
+        return bias_score, " | ".join(msg_list)
+    except:
+        return 1.0, "🌐 國際數據連線異常"
+
+
 
 # ==============================================================================
 # 第四區：大基石核心標題池 (500 檔完整細分名單 - 2026 實戰版)
