@@ -1760,19 +1760,23 @@ with tab_intel:
 
 with tab_brain:
     # ==============================================================================
-    # 【核心儀表板：AI 大腦進化與狙擊儀表板】
+    # 【核心儀表板：AI 實戰戰果與進化度】
     # ==============================================================================
     if 'accuracy' not in st.session_state: st.session_state.accuracy = 0.0
     
-    col_stat1, col_stat2 = st.columns([2, 1])
+    col_stat1, col_stat2 = st.columns(2)
     with col_stat1:
-        st.markdown("#### 🧬 AI 大腦進化監控 (複盤、學習、再獵殺)")
-        st.metric(label="🎯 實戰狙擊準確率", value=f"{st.session_state.accuracy:.1f}%")
+        st.markdown("#### 🎯 實戰狙擊準確率")
+        # 這裡改回進度條模式，讓老總更有感覺
+        st.progress(st.session_state.accuracy / 100)
+        st.metric(label="當前勝率", value=f"{st.session_state.accuracy:.1f}%")
+        
     with col_stat2:
-        progress_val = 5.2 + (st.session_state.accuracy / 10) 
-        st.write(f"大腦百科進化")
-        st.progress(min(progress_val / 100, 1.0))
-        st.caption(f"{progress_val:.1f}%")
+        st.markdown("#### 🧪 大腦百科進化度")
+        # 進化度由勝率加權計算
+        evolution_val = min(5.2 + (st.session_state.accuracy / 10), 100.0)
+        st.progress(evolution_val / 100)
+        st.caption(f"已完成 {evolution_val:.1f}% 歷史數據特徵吸收")
 
     st.divider()
     
