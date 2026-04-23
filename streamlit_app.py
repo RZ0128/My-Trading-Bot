@@ -1903,26 +1903,46 @@ with tab_brain:
             st.session_state.hero_database = pd.DataFrame(st.session_state.temp_hero_list)
             st.success(f"✅ 獵殺完成！今日共捕捉 {len(st.session_state.temp_hero_list)} 檔英雄標的。")
             st.rerun()
-
+    　 
     # ==============================================================================
-    # 【第三區：🎯 AI 隔日沖戰略推薦 - 海量種子區 (10-15 檔)】
+    # 【第三區：🎯 AI 隔日沖戰略推薦 - 寫入雲端大腦】
     # ==============================================================================
     if 'hero_database' in st.session_state and not st.session_state.hero_database.empty:
         st.divider()
         st.subheader("🎯 AI 明日飆股種子選手 (海量學習樣本)")
         
-        # 門檻微調，取出前 15 檔高分股作為學習樣本
+        # 篩選出要學習的種子 (例如前 15 檔)
         top_seeds = st.session_state.hero_database.sort_values(by="AI 分數", ascending=False).head(15)
+        st.dataframe(top_seeds, width="stretch", hide_index=True)
         
-        st.dataframe(top_seeds, use_container_width=True, hide_index=True)
-        
-        if st.button("💾 鎖定這 15 檔種子並寫入雲端大腦", key="save_top_15"):
+        if st.button("💾 鎖定這 15 檔種子並同步至雲端大腦", key="save_top_15", width="stretch"):
             sh = init_cloud_connection()
             if sh:
-                ws = sh.worksheet("thought_log")
-                for _, row in top_seeds.iterrows():
-                    ws.append_row([datetime.now().strftime("%Y-%m-%d"), row['代號'], row['名稱'], "明日推薦驗證", f"分數:{row['AI 分數']}"])
-                st.success(f"✅ 成功寫入 15 檔樣本！AI 已進入『高度待命』狀態，準備明日複盤。")
+                try:
+                    ws = sh.worksheet("thought_log")
+                    # 獲取明天複盤的日期
+                    v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+                    
+                    # 逐筆寫入，確保欄位與我們定義的 8 個中文標題完全一致
+                    for _, row in top_seeds.iterrows():
+                        new_row = [
+                            datetime.now().strftime("%Y-%m-%d %H:%M"), # 日期
+                            row['代號'],                               # 代號
+                            row['名稱'],                               # 名稱
+                            row['AI 分數'],                            # AI分數
+                            row.get('診斷結論', '手動鎖定推薦'),         # 理由訊息
+                            row.get('偵測價格', 0),                    # 偵測價格 (複盤起點)
+                            v_date,                                   # 預計複盤日
+                            "明日推薦驗證"                             # 結果狀態 (這是複盤的關鍵標籤！)
+                        ]
+                        ws.append_row(new_row)
+                    
+                    st.success(f"✅ 成功同步 {len(top_seeds)} 檔至雲端！右上角若無紅字即表示寫入成功。")
+                    st.balloons() # 增加成功反饋感
+                except Exception as e:
+                    st.error(f"❌ 寫入雲端失敗：{e}")
+            else:
+                st.error("❌ 無法連線至 Google Sheets，請檢查憑證。")
 
 
 
