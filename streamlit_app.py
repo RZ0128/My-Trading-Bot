@@ -1760,7 +1760,7 @@ with tab_intel:
 
 with tab_brain:
     # ==============================================================================
-    # 【核心儀表板：AI 大腦進化與狙擊儀表板 - 實戰進化版】
+    # 【核心儀表板：AI 大腦進化與狙擊儀表板】
     # ==============================================================================
     if 'accuracy' not in st.session_state: st.session_state.accuracy = 0.0
     
@@ -1769,7 +1769,6 @@ with tab_brain:
         st.markdown("#### 🧬 AI 大腦進化監控 (複盤、學習、再獵殺)")
         st.metric(label="🎯 實戰狙擊準確率", value=f"{st.session_state.accuracy:.1f}%")
     with col_stat2:
-        # 進化公式：5.2% 為基底，隨準確率與學習量穩定成長
         progress_val = 5.2 + (st.session_state.accuracy / 10) 
         st.write(f"大腦百科進化")
         st.progress(min(progress_val / 100, 1.0))
@@ -1781,19 +1780,17 @@ with tab_brain:
     # 【第一區：📊 戰略複盤：高強度海量對帳與自我偵錯】
     # ==============================================================================
     with st.expander("📊 步驟一：啟動昨日戰略複盤 (海量數據學習區)", expanded=True):
-        st.info("💡 AI 將對昨日鎖定的 10-15 檔種子進行全面對帳，從錯誤中校準獵殺權重。")
+        st.info("💡 AI 將對昨日鎖定的 10-15 檔種子進行全面對帳，校準獵殺權重。")
         
-        # 確保按下按鈕後，後續代碼都有正確縮進
         if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning"):
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
-                    # 抓取昨天日期 (YYYY-MM-DD)
                     yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
                     
-                    # --- 關鍵對齊：使用您設定的標準中文標題 ---
+                    # 關鍵對齊：使用 8 個標準中文標題搜尋
                     targets = [r for r in data if str(r.get('預計複盤日', '')) == yesterday and r.get('結果狀態') == "明日推薦驗證"]
                     
                     if targets:
@@ -1801,54 +1798,46 @@ with tab_brain:
                         win_count = 0
                         for t in targets:
                             tid = str(t.get('代號', ''))
-                            # 獲取今日行情進行精準對帳
                             perf = get_stock_perf(tid)
                             if isinstance(perf, tuple):
                                 now_price = perf[0]
-                                # 修正：安全抓取偵測價格並轉換數字
                                 try:
                                     past_price = float(t.get('偵測價格', 0))
                                 except:
                                     past_price = 0
                                 
                                 if past_price > 0:
-                                    # 計算真實漲跌幅 (今日價格 vs 偵測時價格)
                                     change = ((now_price - past_price) / past_price) * 100
                                     is_win = change > 0 
                                     if is_win: win_count += 1
                                     
                                     results.append({
-                                        "代號": tid, 
-                                        "名稱": t.get('名稱', ''), 
-                                        "偵測價": past_price, 
-                                        "現價": now_price,
+                                        "代號": tid, "名稱": t.get('名稱', ''), 
+                                        "偵測價": past_price, "現價": now_price,
                                         "戰果": f"{change:+.2f}%", 
                                         "判決": "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
                                     })
                         
-                        # 更新準確率
                         st.session_state.accuracy = (win_count / len(targets)) * 100 if targets else 0
                         st.table(pd.DataFrame(results))
                         
-                        # --- 高強度自我進化邏輯 ---
                         if st.session_state.accuracy < 50:
-                            st.warning("⚠️ 偵測到模型與市場脫節！AI 正在執行『深度偵錯』，強化籌碼洗盤權重。")
+                            st.warning("⚠️ 偵測到市場偏誤！AI 正在執行深度偵錯，調整權重。")
                             if 'brain_weights' in st.session_state: 
                                 st.session_state.brain_weights['chip'] = st.session_state.brain_weights.get('chip', 1.0) + 0.1
                         else:
-                            st.success(f"🔥 預判精準！AI 正在複製成功基因，提升噴發敏感度。")
+                            st.success(f"🔥 預判精準！AI 正在複製成功基因。")
                             if 'brain_weights' in st.session_state: 
                                 st.session_state.brain_weights['surge'] = st.session_state.brain_weights.get('surge', 1.0) + 0.05
                     else:
-                        st.info("📅 雲端尚無昨日名單。請先執行步驟二進行今日獵殺並存檔。")
+                        st.info(f"📅 雲端尚無 {yesterday} 的推薦名單。請先執行今日獵殺並按『存檔』。")
                 except Exception as e: 
                     st.error(f"複盤執行失敗: {e}")
 
     st.divider()
 
-
     # ==============================================================================
-    # 【第二區：🚀 今日獵殺：全球視野 + 海量偵測 (無省略佈局)】
+    # 【第二區：🚀 今日獵殺：全球視野 + 海量偵測】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日獵殺 (自動獵殺、存檔、推薦)")
     
@@ -1864,11 +1853,8 @@ with tab_brain:
             hero_display_area.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
 
         if st.button("📡 啟動強效偵察機：全量獵殺與全球戰略校準", width="stretch", key="hunt_v27_final"):
-            # 1. 全球視野初始化
-            with st.spinner("🌍 正在讀取華爾街行情與全球地緣政治情緒..."):
+            with st.spinner("🌍 正在讀取全球情報網..."):
                 g_bias, g_msg = get_global_bias()
-                _, hot_words = fetch_and_score_intel()
-            st.info(f"📊 **全球戰略校準：** {g_msg}")
             
             st.session_state.temp_hero_list = []
             all_targets = []
@@ -1876,34 +1862,31 @@ with tab_brain:
                 for tid, tname in pool_500[cat]:
                     all_targets.append((tid, tname))
             
-            # 2. 開始 500 檔高強度偵測
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_bar.progress((idx + 1) / len(all_targets))
-                status_area.markdown(f"🔍 **AI 正在掃描：** `{tname} ({tid})`")
+                status_area.markdown(f"🔍 **AI 偵察中：** `{tname} ({tid})`")
                 
                 try:
                     perf = get_stock_perf(tid)
+                    # 偵測漲幅 >= 9%
                     if isinstance(perf, tuple) and perf[1]/(perf[0]-perf[1]) >= 0.09:
-                        # 偵測到一檔上漲 >= 9%
                         price = perf[0]
-                        # 這裡調用進化大腦 V16.3 (此處簡化示意，請接您的完整函數)
+                        # 核心大腦診斷
                         score, msg, win, sent = ai_evolution_engine(tid, None, price)
-                        
-                        # 注入全球視野質變分數
                         final_score = round(score * g_bias, 1)
                         
-                        new_hero = {
+                        st.session_state.temp_hero_list.append({
                             "代號": tid, "名稱": tname, "漲幅": ">=9.0%", 
-                            "AI 分數": final_score, "勝率": f"{win}%", "籌碼": sent, "診斷": msg[:20]
-                        }
-                        st.session_state.temp_hero_list.append(new_hero)
+                            "AI 分數": final_score, "勝率": f"{win}%", "籌碼": sent, 
+                            "偵測價格": price, "診斷結論": msg
+                        })
                         hero_display_area.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
                 except: continue
 
             st.session_state.hero_database = pd.DataFrame(st.session_state.temp_hero_list)
-            st.success(f"✅ 獵殺完成！今日共捕捉 {len(st.session_state.temp_hero_list)} 檔英雄標的。")
+            st.success(f"✅ 獵殺完成！")
             st.rerun()
-    　 
+
     # ==============================================================================
     # 【第三區：🎯 AI 隔日沖戰略推薦 - 寫入雲端大腦】
     # ==============================================================================
@@ -1911,38 +1894,27 @@ with tab_brain:
         st.divider()
         st.subheader("🎯 AI 明日飆股種子選手 (海量學習樣本)")
         
-        # 篩選出要學習的種子 (例如前 15 檔)
         top_seeds = st.session_state.hero_database.sort_values(by="AI 分數", ascending=False).head(15)
-        st.dataframe(top_seeds, width="stretch", hide_index=True)
+        st.dataframe(top_seeds[['代號', '名稱', 'AI 分數', '勝率', '籌碼']], width="stretch", hide_index=True)
         
         if st.button("💾 鎖定這 15 檔種子並同步至雲端大腦", key="save_top_15", width="stretch"):
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
-                    # 獲取明天複盤的日期
                     v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-                    
-                    # 逐筆寫入，確保欄位與我們定義的 8 個中文標題完全一致
                     for _, row in top_seeds.iterrows():
-                        new_row = [
+                        ws.append_row([
                             datetime.now().strftime("%Y-%m-%d %H:%M"), # 日期
-                            row['代號'],                               # 代號
-                            row['名稱'],                               # 名稱
-                            row['AI 分數'],                            # AI分數
-                            row.get('診斷結論', '手動鎖定推薦'),         # 理由訊息
-                            row.get('偵測價格', 0),                    # 偵測價格 (複盤起點)
-                            v_date,                                   # 預計複盤日
-                            "明日推薦驗證"                             # 結果狀態 (這是複盤的關鍵標籤！)
-                        ]
-                        ws.append_row(new_row)
-                    
-                    st.success(f"✅ 成功同步 {len(top_seeds)} 檔至雲端！右上角若無紅字即表示寫入成功。")
-                    st.balloons() # 增加成功反饋感
-                except Exception as e:
-                    st.error(f"❌ 寫入雲端失敗：{e}")
-            else:
-                st.error("❌ 無法連線至 Google Sheets，請檢查憑證。")
+                            row['代號'], row['名稱'], row['AI 分數'],
+                            row['診斷結論'], row['偵測價格'], v_date, "明日推薦驗證"
+                        ])
+                    st.success(f"✅ 成功寫入 {len(top_seeds)} 檔！明日請執行『步驟一』。")
+                    st.balloons()
+                except Exception as e: st.error(f"寫入失敗: {e}")
+
+    st.divider()
+    # (後續區塊保持原樣即可...)
 
 
 
