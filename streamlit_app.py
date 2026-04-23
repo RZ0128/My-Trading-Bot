@@ -1904,7 +1904,7 @@ with tab_brain:
 
 
     # ==============================================================================
-    # 【第三區：🎯 推薦名單與雲端同步 - 排除追高版】
+    # 【第三區：🎯 推薦名單與雲端同步 - 跨時空起漲點鎖定 V31.0】
     # ==============================================================================
     if st.session_state.hero_database is not None and not st.session_state.hero_database.empty:
         st.divider()
@@ -1914,8 +1914,32 @@ with tab_brain:
         top_seeds = st.session_state.hero_database.sort_values(by="AI 分數", ascending=False).head(15)
         st.dataframe(top_seeds[['代號', '名稱', 'AI 分數', '預估漲幅', '勝率', '籌碼', '診斷結論']], width="stretch", hide_index=True)
         
-        if st.button("💾 鎖定這 15 檔潛力股同步至雲端", key="save_v30_pro"):
-            # ... (保持原本的雲端同步代碼)
+        st.info("💡 以上名單已過濾掉今日漲幅過高之標的，專注於『洗盤完成、起漲點』特徵。")
+
+        # --- 修正後的同步雲端按鈕與完整邏輯 ---
+        if st.button("💾 鎖定這 15 檔潛力股同步至雲端", key="save_v31_final", width="stretch"):
+            sh = init_cloud_connection()
+            if sh:
+                try:
+                    ws = sh.worksheet("thought_log")
+                    v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+                    for _, row in top_seeds.iterrows():
+                        # 確保與雲端大腦 8 個欄位完美對齊
+                        ws.append_row([
+                            datetime.now().strftime("%Y-%m-%d %H:%M"), # 偵測時間
+                            row['代號'], 
+                            row['名稱'], 
+                            row['AI 分數'],
+                            row['診斷結論'], 
+                            row['偵測價格'], 
+                            v_date, # 預計複盤日
+                            "明日推薦驗證" # 結果狀態
+                        ])
+                    st.success(f"✅ 成功將 15 檔『起漲種子』寫入雲端大腦！明日開盤請執行步驟一複盤。")
+                    st.balloons()
+                except Exception as e:
+                    st.error(f"❌ 雲端同步失敗：{e}")
+
 
 
 
