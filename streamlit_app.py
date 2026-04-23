@@ -1835,7 +1835,7 @@ with tab_brain:
                     st.error(f"複盤執行失敗: {e}")
 
     st.divider()
-
+    
     # ==============================================================================
     # 【第二區：🚀 今日獵殺：全球視野 + 海量偵測】
     # ==============================================================================
@@ -1862,13 +1862,18 @@ with tab_brain:
                 for tid, tname in pool_500[cat]:
                     all_targets.append((tid, tname))
             
+            # --- 找回數字進度條與強化偵測邏輯 ---
+            total_count = len(all_targets) 
             for idx, (tid, tname) in enumerate(all_targets):
-                progress_bar.progress((idx + 1) / len(all_targets))
-                status_area.markdown(f"🔍 **AI 偵察中：** `{tname} ({tid})`")
+                current_idx = idx + 1
+                progress_bar.progress(current_idx / total_count)
+                
+                # 在這裡顯示數字進度 (例如 125 / 500)
+                status_area.markdown(f"🔍 **AI 偵察中：** `{tname} ({tid})` | **進度：{current_idx} / {total_count}**")
                 
                 try:
                     perf = get_stock_perf(tid)
-                    # 偵測漲幅 >= 9%
+                    # 偵測漲幅 >= 9% (現價 vs 昨收)
                     if isinstance(perf, tuple) and perf[1]/(perf[0]-perf[1]) >= 0.09:
                         price = perf[0]
                         # 核心大腦診斷
@@ -1880,11 +1885,12 @@ with tab_brain:
                             "AI 分數": final_score, "勝率": f"{win}%", "籌碼": sent, 
                             "偵測價格": price, "診斷結論": msg
                         })
+                        # 即時更新下方表格讓老總隨時檢閱
                         hero_display_area.dataframe(pd.DataFrame(st.session_state.temp_hero_list), width="stretch", hide_index=True)
                 except: continue
 
             st.session_state.hero_database = pd.DataFrame(st.session_state.temp_hero_list)
-            st.success(f"✅ 獵殺完成！")
+            st.success(f"✅ 獵殺完成！今日捕捉到 {len(st.session_state.temp_hero_list)} 檔強勢英雄。")
             st.rerun()
 
     # ==============================================================================
