@@ -1783,34 +1783,46 @@ with tab_brain:
     with st.expander("📊 步驟一：啟動昨日戰略複盤 (海量數據學習區)", expanded=True):
         st.info("💡 AI 將對昨日鎖定的 10-15 檔種子進行全面對帳，從錯誤中校準獵殺權重。")
         if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning"):
-            sh = init_cloud_connection()
-            if sh:
-                try:
-                    ws = sh.worksheet("thought_log")
-                    data = ws.get_all_records()
-                    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-                    # 抓取昨日所有存檔的驗證名單
-                    targets = [r for r in data if r['日期'] == yesterday and r['動作'] == "明日推薦驗證"]
-                    
-                    if targets:
-                        results = []
-                        win_count = 0
-                        for t in targets:
-                            tid = str(t['代號'])
-                            perf = get_stock_perf(tid)
-                            if isinstance(perf, tuple):
-                                now_price, diff = perf[0], perf[1]
-                                change = (diff / (now_price - diff)) * 100 if (now_price - diff) > 0 else 0
-                                is_win = change > 0 
-                                if is_win: win_count += 1
-                                results.append({
-                                    "代號": tid, "昨日標的": t['名稱'], 
-                                    "今日表現": f"{change:+.2f}%", 
-                                    "結果": "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
-                                })
+    sh = init_cloud_connection()
+    if sh:
+        try:
+            ws = sh.worksheet("thought_log")
+            data = ws.get_all_records()
+            # 抓取昨天日期 (YYYY-MM-DD)
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            
+            # --- 關鍵對齊：使用您設定的標準中文標題 ---
+            targets = [r for r in data if str(r.get('預計複盤日', '')) == yesterday and r.get('結果狀態') == "明日推薦驗證"]
+            
+            if targets:
+                results = []
+                win_count = 0
+                for t in targets:
+                    tid = str(t.get('代號', ''))
+                    # 獲取今日行情進行精準對帳
+                    perf = get_stock_perf(tid)
+                    if isinstance(perf, tuple):
+                        now_price = perf[0]
+                        # 從雲端抓取昨天的「偵測價格」
+                        past_price = float(t.get('偵測價格', 0))
                         
-                        st.session_state.accuracy = (win_count / len(targets)) * 100
-                        st.table(pd.DataFrame(results))
+                        # 計算真實漲跌幅 (今日價格 vs 偵測時價格)
+                        change = ((now_price - past_price) / past_price) * 100 if past_price > 0 else 0
+                        is_win = change > 0 
+                        if is_win: win_count += 1
+                        
+                        # 準備回寫結果至雲端 (這裡可選，建議手動更新或寫入新行)
+                        results.append({
+                            "代號": tid, "名稱": t.get('名稱', ''), 
+                            "偵測價": past_price, "現價": now_price,
+                            "真實戰果": f"{change:+.2f}%", 
+                            "判決": "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
+                        })
+                
+                st.session_state.accuracy = (win_count / len(targets)) * 100
+                st.table(pd.DataFrame(results))
+                # ... (後續學習權重修正邏輯保持不變) ...
+
                         
                         # 偵錯與高強度學習邏輯
                         if st.session_state.accuracy < 50:
