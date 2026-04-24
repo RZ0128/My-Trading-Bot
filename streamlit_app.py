@@ -1860,26 +1860,29 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (學習飆股基因 - 視覺噴發版)】
+    # 【第二區：🏆 步驟二：今日英雄榜 (大基石固化版 - 掃描即噴發)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢基因學習")
     
-    # 初始化英雄榜容器，確保切換步驟時數據還在
     if 'hero_list' not in st.session_state:
         st.session_state.hero_list = []
 
     with st.container(border=True):
         st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股，作為 AI 學習樣本)")
+        
+        # --- 關鍵：無論有沒有按按鈕，只要有數據就先顯示表格 ---
+        hero_table_area = st.empty()
+        if st.session_state.hero_list:
+            hero_table_area.table(pd.DataFrame(st.session_state.hero_list))
+        
         status_hero = st.empty()
-        # 建立專屬噴發容器
-        table_hero = st.empty()
-
-        if st.button("📡 掃描今日飆股基因", width="stretch", key="btn_hero_scan"):
+        
+        if st.button("📡 掃描今日飆股基因", width="stretch", key="btn_hero_scan_v33"):
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
             
-            st.session_state.hero_list = [] # 按下時重置
+            st.session_state.hero_list = [] # 清空舊數據重新學習
             progress_hero = st.progress(0)
             
             for idx, (tid, tname) in enumerate(all_targets):
@@ -1893,42 +1896,45 @@ with tab_brain:
                         price = stock.price[-1]
                         change_rate = (price - stock.price[-2]) / stock.price[-2]
                         
-                        # 門檻：捕捉 9% 左右強勢股
+                        # 門檻：捕捉 9% 左右強勢股 (>= 8.5%)
                         if change_rate >= 0.085:
-                            # 深度抓取歷史（僅針對英雄股，降低 API 壓力）
+                            # 深度抓取歷史 (確保診斷不報錯)
                             stock.fetch_from(2026, 4, 1) 
                             score, msg, win, sent = ai_evolution_engine(tid, stock, price)
                             
                             st.session_state.hero_list.append({
-                                "代號": tid, "名稱": tname, "今日漲幅": f"{change_rate*100:+.2f}%", 
-                                "AI 評分": score, "籌碼狀態": sent, "基因分析": msg
+                                "代號": tid, "名稱": tname, 
+                                "今日漲幅": f"{change_rate*100:+.2f}%", 
+                                "AI 評分": score, 
+                                "籌碼狀態": sent, 
+                                "基因分析": msg
                             })
-                            # 實時同步噴發表格
-                            table_hero.table(pd.DataFrame(st.session_state.hero_list))
+                            # --- 實時噴發：每抓到一檔就更新一次畫面 ---
+                            hero_table_area.table(pd.DataFrame(st.session_state.hero_list))
                 except: continue
-            st.success(f"✅ 英雄基因採集完成！目前鎖定 {len(st.session_state.hero_list)} 檔樣本。")
-        
-        # 確保刷新後表格依然留在畫面上
-        elif st.session_state.hero_list:
-            table_hero.table(pd.DataFrame(st.session_state.hero_list))
+            status_hero.success(f"✅ 英雄基因採集完成！目前鎖定 {len(st.session_state.hero_list)} 檔樣本。")
 
     st.divider()
 
     # ==============================================================================
-    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (實戰獵殺 - 自動寫入版)】
+    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (固化同步版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
     
-    # 初始化獵殺名單容器
     if 'final_seeds' not in st.session_state:
         st.session_state.final_seeds = []
 
     with st.container(border=True):
         st.info("💡 結合『複盤心得』與『飆股基因』，重新尋找明天具備 3-10% 潛力的標的。")
-        status_hunt = st.empty()
-        table_hunt = st.empty()
         
-        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt"):
+        # --- 關鍵：預先顯示數據，防止點擊雲端同步後消失 ---
+        hunt_table_area = st.empty()
+        if st.session_state.final_seeds:
+            hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
+
+        status_hunt = st.empty()
+        
+        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v33"):
             with st.spinner("🧠 AI 大腦進行戰略演算..."):
                 g_bias, _ = get_global_bias()
             
@@ -1936,12 +1942,12 @@ with tab_brain:
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
                 
-            st.session_state.final_seeds = [] # 按下時重置
+            st.session_state.final_seeds = [] 
             progress_hunt = st.progress(0)
             
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_hunt.progress((idx + 1) / len(all_targets))
-                status_hunt.markdown(f"🎯 **精準計算中：** `{tname} ({tid})`")
+                status_hunt.markdown(f"🎯 **精準獵殺中：** `{tname} ({tid})`")
                 
                 try:
                     import twstock
@@ -1949,11 +1955,11 @@ with tab_brain:
                     price = stock.price[-1]
                     change_today = (price - stock.price[-2]) / stock.price[-2]
                     
-                    # 獵殺邏輯：找尚未噴發 (<7%) 且 AI 分數高於門檻的
+                    # 獵殺門檻：避開今日已噴發 (>7%)
                     if change_today < 0.07: 
                         score, msg, win, sent = ai_evolution_engine(tid, None, price)
                         if score >= 72:
-                            stock.fetch_from(2026, 4, 1) # 高分股才執行深度抓取
+                            stock.fetch_from(2026, 4, 1) 
                             score, msg, win, sent = ai_evolution_engine(tid, stock, price)
                             
                             import random
@@ -1966,25 +1972,21 @@ with tab_brain:
                                 "預估漲幅": f"+{round((calc_win/10), 1)}%", 
                                 "偵測價格": price, "戰略結論": msg
                             })
-                            # 實時同步噴發表格
-                            table_hunt.table(pd.DataFrame(st.session_state.final_seeds))
+                            # --- 實時噴發 ---
+                            hunt_table_area.table(pd.DataFrame(st.session_state.final_seeds))
                 except: continue
             
-            # 排序取前 15 檔
             if st.session_state.final_seeds:
                 df_all = pd.DataFrame(st.session_state.final_seeds)
                 st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(15).to_dict('records')
-                table_hunt.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
-                st.success("🎯 獵殺完成！請執行下方自動同步按鈕。")
-        
-        # 確保刷新後表格依然留在畫面上
-        elif st.session_state.final_seeds:
-            table_hunt.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
+                # 最終排序後的精美顯示
+                hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
+                status_hunt.success("🎯 獵殺完成！種子已就位。")
 
-        # --- 雲端寫入按鈕 ---
+        # --- 雲端同步 (自動化) ---
         if st.session_state.final_seeds:
             st.divider()
-            if st.button("💾 鎖定這 15 檔種子並自動同步至雲端大腦", width="stretch", key="sync_cloud_v3"):
+            if st.button("💾 鎖定這 15 檔種子並自動同步至雲端大腦", width="stretch", key="sync_v33"):
                 sh = init_cloud_connection()
                 if sh:
                     try:
@@ -1995,11 +1997,12 @@ with tab_brain:
                                 datetime.now().strftime("%Y-%m-%d %H:%M"), row['代號'], row['名稱'], 
                                 row['AI 分數'], row['戰略結論'], row['偵測價格'], v_date, "明日推薦驗證"
                             ])
-                        st.success(f"✅ 同步完成！共寫入 {len(st.session_state.final_seeds)} 檔至雲端。")
+                        st.success(f"✅ 同步成功！已傳入雲端。")
                         st.balloons()
-                    except: st.error("雲端同步異常")
+                    except: st.error("同步失敗")
 
     st.divider()
+
 
 
     # --- [第二區：📡 今日掃描與重大發現] ---
