@@ -1860,122 +1860,131 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (數據強化修復版)】
+    # 【第二區：🏆 步驟二：今日英雄榜 (學習飆股基因 - 視覺噴發版)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢基因學習")
-    if 'hero_list' not in st.session_state: st.session_state.hero_list = []
+    
+    # 初始化英雄榜容器，確保切換步驟時數據還在
+    if 'hero_list' not in st.session_state:
+        st.session_state.hero_list = []
 
     with st.container(border=True):
         st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股，作為 AI 學習樣本)")
-        status_area_hero = st.empty()
-        table_placeholder_hero = st.empty()
+        status_hero = st.empty()
+        # 建立專屬噴發容器
+        table_hero = st.empty()
 
-        if st.button("📡 掃描今日飆股基因", width="stretch", key="scan_heroes"):
+        if st.button("📡 掃描今日飆股基因", width="stretch", key="btn_hero_scan"):
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
             
-            st.session_state.hero_list = []
-            progress_bar_hero = st.progress(0)
+            st.session_state.hero_list = [] # 按下時重置
+            progress_hero = st.progress(0)
             
             for idx, (tid, tname) in enumerate(all_targets):
-                progress_bar_hero.progress((idx + 1) / len(all_targets))
-                pure_id = tid.replace(".TW", "").replace(".TWO", "")
-                status_area_hero.markdown(f"🔍 **深度採集：** `{tname} ({tid})`")
+                progress_hero.progress((idx + 1) / len(all_targets))
+                status_hero.markdown(f"🔍 **深度分析中：** `{tname} ({tid})`")
                 
                 try:
                     import twstock
-                    # --- [ 關鍵修復：確保抓取足夠歷史數據以供 AI 診斷 ] ---
-                    stock = twstock.Stock(pure_id)
-                    # 至少抓取 31 天數據，確保年線/半年線與洗盤邏輯有數據可算
-                    stock.fetch_from(2026, 3, 1) 
-                    
-                    if stock and len(stock.price) > 1:
+                    stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
+                    if stock and len(stock.price) >= 2:
                         price = stock.price[-1]
                         change_rate = (price - stock.price[-2]) / stock.price[-2]
                         
-                        # 英雄榜門檻
+                        # 門檻：捕捉 9% 左右強勢股
                         if change_rate >= 0.085:
-                            # 傳入完整 stock 對象，解決「數據缺失」問題
+                            # 深度抓取歷史（僅針對英雄股，降低 API 壓力）
+                            stock.fetch_from(2026, 4, 1) 
                             score, msg, win, sent = ai_evolution_engine(tid, stock, price)
                             
                             st.session_state.hero_list.append({
-                                "代號": tid, "名稱": tname, 
-                                "今日漲幅": f"{change_rate*100:+.2f}%", 
-                                "AI 評分": score,
-                                "籌碼狀態": sent,
-                                "基因分析": msg
+                                "代號": tid, "名稱": tname, "今日漲幅": f"{change_rate*100:+.2f}%", 
+                                "AI 評分": score, "籌碼狀態": sent, "基因分析": msg
                             })
-                            # 即時噴發表格
-                            table_placeholder_hero.table(pd.DataFrame(st.session_state.hero_list))
-                except Exception as e:
-                    continue # 遇到極端異常跳過，但不報錯
-                    
-            st.success(f"✅ 英雄基因深度採集完成！AI 已獲取完整 K 線與籌碼特徵。")
+                            # 實時同步噴發表格
+                            table_hero.table(pd.DataFrame(st.session_state.hero_list))
+                except: continue
+            st.success(f"✅ 英雄基因採集完成！目前鎖定 {len(st.session_state.hero_list)} 檔樣本。")
+        
+        # 確保刷新後表格依然留在畫面上
+        elif st.session_state.hero_list:
+            table_hero.table(pd.DataFrame(st.session_state.hero_list))
 
     st.divider()
 
     # ==============================================================================
-    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (同步數據修復)】
+    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (實戰獵殺 - 自動寫入版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
-    if 'final_seeds' not in st.session_state: st.session_state.final_seeds = []
+    
+    # 初始化獵殺名單容器
+    if 'final_seeds' not in st.session_state:
+        st.session_state.final_seeds = []
 
     with st.container(border=True):
         st.info("💡 結合『複盤心得』與『飆股基因』，重新尋找明天具備 3-10% 潛力的標的。")
-        status_area_hunt = st.empty()
-        table_placeholder_hunt = st.empty()
+        status_hunt = st.empty()
+        table_hunt = st.empty()
         
-        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="final_hunt"):
-            with st.spinner("🧠 AI 大腦正在進行跨維度計算..."):
+        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt"):
+            with st.spinner("🧠 AI 大腦進行戰略演算..."):
                 g_bias, _ = get_global_bias()
             
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
                 
-            temp_hunt_list = []
-            progress_bar_hunt = st.progress(0)
+            st.session_state.final_seeds = [] # 按下時重置
+            progress_hunt = st.progress(0)
             
             for idx, (tid, tname) in enumerate(all_targets):
-                progress_bar_hunt.progress((idx + 1) / len(all_targets))
-                pure_id = tid.replace(".TW", "").replace(".TWO", "")
-                status_area_hunt.markdown(f"🎯 **AI 精準計算：** `{tname} ({tid})`")
+                progress_hunt.progress((idx + 1) / len(all_targets))
+                status_hunt.markdown(f"🎯 **精準計算中：** `{tname} ({tid})`")
                 
                 try:
                     import twstock
-                    stock = twstock.Stock(pure_id)
-                    # 同樣進行數據預抓取補強
-                    stock.fetch_from(2026, 3, 1)
+                    stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
                     price = stock.price[-1]
                     change_today = (price - stock.price[-2]) / stock.price[-2]
                     
+                    # 獵殺邏輯：找尚未噴發 (<7%) 且 AI 分數高於門檻的
                     if change_today < 0.07: 
-                        # 傳入 stock 以啟動「洗盤偵測」邏輯
-                        score, msg, win, sent = ai_evolution_engine(tid, stock, price)
-                        if score >= 75: 
+                        score, msg, win, sent = ai_evolution_engine(tid, None, price)
+                        if score >= 72:
+                            stock.fetch_from(2026, 4, 1) # 高分股才執行深度抓取
+                            score, msg, win, sent = ai_evolution_engine(tid, stock, price)
+                            
                             import random
                             calc_score = round(score * g_bias + random.uniform(-1, 1), 1)
                             calc_win = win + random.randint(-2, 2)
                             
-                            temp_hunt_list.append({
+                            st.session_state.final_seeds.append({
                                 "代號": tid, "名稱": tname, "AI 分數": calc_score,
                                 "勝率": f"{calc_win}%", "籌碼": sent, 
                                 "預估漲幅": f"+{round((calc_win/10), 1)}%", 
                                 "偵測價格": price, "戰略結論": msg
                             })
-                            table_placeholder_hunt.table(pd.DataFrame(temp_hunt_list))
+                            # 實時同步噴發表格
+                            table_hunt.table(pd.DataFrame(st.session_state.final_seeds))
                 except: continue
             
-            if temp_hunt_list:
-                df_all = pd.DataFrame(temp_hunt_list)
+            # 排序取前 15 檔
+            if st.session_state.final_seeds:
+                df_all = pd.DataFrame(st.session_state.final_seeds)
                 st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(15).to_dict('records')
-                table_placeholder_hunt.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
-                st.success(f"🎯 獵殺完成！種子數據已校準。")
+                table_hunt.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
+                st.success("🎯 獵殺完成！請執行下方自動同步按鈕。")
+        
+        # 確保刷新後表格依然留在畫面上
+        elif st.session_state.final_seeds:
+            table_hunt.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
 
+        # --- 雲端寫入按鈕 ---
         if st.session_state.final_seeds:
             st.divider()
-            if st.button("💾 鎖定這 15 檔種子並自動同步至雲端大腦", width="stretch", key="auto_sync_cloud"):
+            if st.button("💾 鎖定這 15 檔種子並自動同步至雲端大腦", width="stretch", key="sync_cloud_v3"):
                 sh = init_cloud_connection()
                 if sh:
                     try:
@@ -1983,17 +1992,14 @@ with tab_brain:
                         v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
                         for row in st.session_state.final_seeds:
                             ws.append_row([
-                                datetime.now().strftime("%Y-%m-%d %H:%M"), 
-                                row['代號'], row['名稱'], row['AI 分數'],
-                                row['戰略結論'], row['偵測價格'], v_date, "明日推薦驗證"
+                                datetime.now().strftime("%Y-%m-%d %H:%M"), row['代號'], row['名稱'], 
+                                row['AI 分數'], row['戰略結論'], row['偵測價格'], v_date, "明日推薦驗證"
                             ])
-                        st.success(f"✅ 成功同步 15 檔標的！")
+                        st.success(f"✅ 同步完成！共寫入 {len(st.session_state.final_seeds)} 檔至雲端。")
                         st.balloons()
-                    except Exception as e:
-                        st.error(f"雲端錯誤: {e}")
+                    except: st.error("雲端同步異常")
 
     st.divider()
-
 
 
     # --- [第二區：📡 今日掃描與重大發現] ---
