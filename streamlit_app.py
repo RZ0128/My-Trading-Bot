@@ -1860,7 +1860,7 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🚀 步驟二：全量獵殺今日飆股 (捕捉強勢基因)】
+    # 【第二區：🚀 步驟二：全量獵殺今日飆股 (9% 強勢基因)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢飆股偵察")
     if 'hero_list' not in st.session_state: st.session_state.hero_list = []
@@ -1869,10 +1869,10 @@ with tab_brain:
         st.markdown("#### 🏆 今日英雄榜 (偵測全台股 9% 以上強勢基因)")
         status_area = st.empty()
         progress_bar = st.progress(0)
-        # 關鍵：建立一個空容器，實現老總要求的「一邊掃一邊噴發」
+        # 關鍵：建立一個空容器，用來實現「邊掃描邊噴發」表格
         table_placeholder = st.empty()
 
-        if st.button("📡 啟動強效偵察機：全量獵殺與 AI 診斷", width="stretch"):
+        if st.button("📡 啟動強效偵察機：掃描 9% 飆股並執行 AI 診斷", width="stretch"):
             with st.spinner("🌍 正在讀取全球情報網與 AI 大腦權重..."):
                 g_bias, _ = get_global_bias()
             
@@ -1881,7 +1881,7 @@ with tab_brain:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
             
             total_count = len(all_targets)
-            st.session_state.hero_list = [] # 重置獵殺清單
+            st.session_state.hero_list = [] # 重置
             
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_bar.progress((idx + 1) / total_count)
@@ -1894,11 +1894,11 @@ with tab_brain:
                         price = stock.price[-1]
                         change_rate = (price - stock.price[-2]) / stock.price[-2]
                         
-                        # 執行 AI 核心診斷 (含洗盤偵測、成本區計算)
+                        # --- 核心邏輯：捕捉 9% 以上或高分標的 ---
+                        # 執行大腦診斷（含融資洗盤偵測）
                         score, msg, win, sent = ai_evolution_engine(tid, None, price)
                         
-                        # 放寬門檻：只要漲幅夠強 (≧8.5%) 或 AI 分數極高 (≧75) 就進榜
-                        if (change_rate >= 0.085) or (score >= 75):
+                        if (change_rate >= 0.085) or (score > 75): # 捕捉 9% 左右或極高分
                             import random
                             calc_score = round(score * g_bias + random.uniform(-1.0, 1.0), 1)
                             calc_win = win + random.randint(-2, 2)
@@ -1913,14 +1913,14 @@ with tab_brain:
                             }
                             st.session_state.hero_list.append(item)
                             
-                            # --- [ 視覺噴發：邊掃邊列出表格 ] ---
+                            # --- 邊掃描邊顯示：表格即時更新 ---
                             table_placeholder.table(pd.DataFrame(st.session_state.hero_list))
                 except: continue
 
             if st.session_state.hero_list:
                 st.success(f"✅ 獵殺完成！今日共捕捉到 {len(st.session_state.hero_list)} 檔英雄標的。")
             else:
-                st.warning("⚠️ 數據採集成功，但全市場無符合強勢基因標的。")
+                st.warning("⚠️ 數據採集成功，但今日市場動能不足，未偵測到強勢基因。")
 
     st.divider() # 區隔第二與第三步驟
 
