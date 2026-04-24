@@ -1800,39 +1800,39 @@ with tab_brain:
                     if targets:
                         results = []
                         win_count = 0
-                        # --- 在第一區的 for t in targets 循環中建議改為這樣 ---
+                        
+                        # --- 核心對帳循環：已修正縮排 ---
                         for t in targets:
-                        tid = str(t.get('代號', ''))
-                        
-                        # 這裡的邏輯修正：優先確保現價抓得到
-                        try:
-                            import twstock
-                            stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
-                            now_price = stock.price[-1] if (stock and len(stock.price) > 0) else 0
-                        except:
-                            # 如果 twstock 出錯，才退回到原本的函數
-                            perf = get_stock_perf(tid)
-                            now_price = perf[0] if isinstance(perf, tuple) else 0
-                    
-                        if now_price > 0:
-                            try:
-                                past_price = float(t.get('偵測價格', 0))
-                            except:
-                                past_price = 0
+                            tid = str(t.get('代號', ''))
                             
-                            if past_price > 0:
-                                change = ((now_price - past_price) / past_price) * 100
-                                is_win = change > 0 
-                                if is_win: win_count += 1
-                                
-                                results.append({
-                                    "代號": tid, "名稱": t.get('名稱', ''), 
-                                    "偵測價": past_price, "現價": now_price,
-                                    "戰果": f"{change:+.2f}%", 
-                                    "判決": "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
-                                })
-
+                            # 優先確保現價抓得到
+                            try:
+                                import twstock
+                                stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
+                                now_price = stock.price[-1] if (stock and len(stock.price) > 0) else 0
+                            except:
+                                perf = get_stock_perf(tid)
+                                now_price = perf[0] if isinstance(perf, tuple) else 0
                         
+                            if now_price > 0:
+                                try:
+                                    past_price = float(t.get('偵測價格', 0))
+                                except:
+                                    past_price = 0
+                                
+                                if past_price > 0:
+                                    change = ((now_price - past_price) / past_price) * 100
+                                    is_win = change > 0 
+                                    if is_win: win_count += 1
+                                    
+                                    results.append({
+                                        "代號": tid, "名稱": t.get('名稱', ''), 
+                                        "偵測價": past_price, "現價": now_price,
+                                        "戰果": f"{change:+.2f}%", 
+                                        "判決": "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
+                                    })
+                        
+                        # 循環結束後才計算勝率與顯示表格
                         st.session_state.accuracy = (win_count / len(targets)) * 100 if targets else 0
                         st.table(pd.DataFrame(results))
                         
@@ -1850,6 +1850,7 @@ with tab_brain:
                     st.error(f"複盤執行失敗: {e}")
 
     st.divider()
+
     
     # ==============================================================================
     # 【第二區：🚀 今日獵殺與 10-15 檔戰略推薦 - V32.1 修正校對版】
