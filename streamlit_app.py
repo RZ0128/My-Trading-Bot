@@ -1860,7 +1860,7 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (數據校準 + 強制噴發版)】
+    # 【第二區：🏆 步驟二：今日英雄榜 (暴力噴發版：抓到必顯、不准消失)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢基因學習")
     
@@ -1870,17 +1870,17 @@ with tab_brain:
     with st.container(border=True):
         st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股)")
         
-        # 1. 固定噴發容器
-        hero_display_area = st.empty()
+        # 關鍵：這是一個「死忠」容器
+        hero_wall = st.empty()
         
-        # 2. 歷史數據重現
+        # 初始顯示（固化舊數據）
         if st.session_state.hero_list:
-            hero_display_area.table(pd.DataFrame(st.session_state.hero_list))
+            hero_wall.table(pd.DataFrame(st.session_state.hero_list))
             
-        status_msg = st.empty()
+        status_hero = st.empty()
         
-        if st.button("📡 啟動全速掃描：採集今日最強基因", width="stretch", key="run_hero_scan_v100"):
-            st.session_state.hero_list = [] # 清空舊數據
+        if st.button("📡 啟動全速掃描：採集今日最強基因", width="stretch", key="run_hero_scan_vMAX"):
+            st.session_state.hero_list = [] # 重新開始
             
             all_targets = []
             for cat in pool_500:
@@ -1890,46 +1890,51 @@ with tab_brain:
             
             for idx, (tid, tname) in enumerate(all_targets):
                 pbar.progress((idx + 1) / len(all_targets))
-                status_msg.markdown(f"📡 **數據校準中：** `{tname} ({tid})`")
+                status_hero.markdown(f"📡 **掃描中：** `{tname} ({tid})`")
                 
                 try:
                     import twstock
                     pure_id = tid.replace(".TW", "").replace(".TWO", "")
                     stock = twstock.Stock(pure_id)
                     
-                    # --- [ 關鍵修復：強制更新今日數據 ] ---
-                    # 抓取最近 3 天的資料，確保包含今天
-                    data = stock.fetch(2026, 4) 
+                    # 強制拉取數據
+                    stock.fetch(2026, 4)
                     
                     if len(stock.price) >= 2:
-                        # 確保拿的是最新的一筆與前一筆
-                        latest_price = stock.price[-1]
-                        last_close = stock.price[-2]
-                        change = (latest_price - last_close) / last_close
+                        p_now = stock.price[-1]
+                        p_yesterday = stock.price[-2]
+                        change_val = (p_now - p_yesterday) / p_yesterday
                         
-                        # 門檻稍微寬放至 8.0%，防堵交易所數據微小價差
-                        if change >= 0.08:
-                            # 執行 AI 診斷
-                            score, msg, win, sent = ai_evolution_engine(tid, stock, latest_price)
-                            
-                            # 寫入 Session
-                            st.session_state.hero_list.append({
+                        # --- [ 暴力邏輯：只要漲幅夠，先顯示，再診斷 ] ---
+                        if change_val >= 0.088:
+                            # 1. 先給一筆初步數據，確保表格「秒噴」
+                            temp_entry = {
                                 "代號": tid, "名稱": tname, 
-                                "今日價格": latest_price,
-                                "今日漲幅": f"{change*100:+.2f}%", 
-                                "AI 評分": score, 
-                                "籌碼狀態": sent, 
-                                "基因分析": msg
-                            })
+                                "今日漲幅": f"{change_val*100:+.2f}%", 
+                                "AI 評分": "診斷中...", "籌碼狀態": "計算中...", "基因分析": "AI正在拆解基因..."
+                            }
+                            st.session_state.hero_list.append(temp_entry)
+                            hero_wall.table(pd.DataFrame(st.session_state.hero_list))
                             
-                            # --- 即時噴發：絕不拖延 ---
-                            hero_display_area.table(pd.DataFrame(st.session_state.hero_list))
-                except Exception as e:
+                            # 2. 隨即進行深度診斷，更新該筆數據
+                            try:
+                                score, msg, win, sent = ai_evolution_engine(tid, stock, p_now)
+                                # 更新最後一筆
+                                st.session_state.hero_list[-1]["AI 評分"] = score
+                                st.session_state.hero_list[-1]["籌碼狀態"] = sent
+                                st.session_state.hero_list[-1]["基因分析"] = msg
+                            except:
+                                st.session_state.hero_list[-1]["基因分析"] = "⚠️ 數據源獲取異常，暫以中性評估"
+                            
+                            # 3. 再次強制刷新表格（顯示最終診斷結果）
+                            hero_wall.table(pd.DataFrame(st.session_state.hero_list))
+                except:
                     continue
             
-            status_msg.success(f"✅ 採集完成！今日共捕捉 {len(st.session_state.hero_list)} 檔飆股特徵。")
+            status_hero.success(f"✅ 英雄基因捕捉完成！共入榜 {len(st.session_state.hero_list)} 檔。")
 
     st.divider()
+
 
 
     # ==============================================================================
