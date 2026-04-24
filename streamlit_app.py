@@ -1835,24 +1835,22 @@ with tab_brain:
                                 
                                 if past_price > 0:
                                     change = ((now_price - past_price) / past_price) * 100
-                                    # --- [嚴格判決：≧ 3.0% 才是捕捉成功] ---
+                                    # 嚴格標準：3.0%
                                     is_win = change >= 3.0 
                                     if is_win: win_count += 1
                                     
-                                    # 視覺靈魂：✅ 與 ❌
-                                    status_icon = "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
+                                    status_icon = "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
                                     
                                     results.append({
-                                        "代號": tid, 
-                                        "名稱": t.get('名稱', ''), 
-                                        "偵測價": f"{past_price:.2f}", 
-                                        "現價": f"{now_price:.2f}",
-                                        "戰果": f"{change:+.2f}%", 
-                                        "判決": status_icon
+                                        "代號": tid, "名稱": t.get('名稱', ''), 
+                                        "偵測價": f"{past_price:.2f}", "現價": f"{now_price:.2f}",
+                                        "戰果": f"{change:+.2f}%", "判決": status_icon
                                     })
 
-                        # --- [核心更新：直接寫入 Session State 不使用會閃退的 rerun] ---
-                        acc_val = (win_count / len(targets)) * 100 if targets else 0
+                        # --- [核心邏輯：雙重同步] ---
+                        acc_val = (win_count / len(targets)) * 100
+                        
+                        # 1. 強制寫入 Session State
                         st.session_state.accuracy = acc_val 
                         st.session_state.last_learning_time = datetime.now().strftime("%H:%M:%S")
                         
@@ -1866,16 +1864,20 @@ with tab_brain:
                             st.session_state.brain_weights['surge'] += 0.1
                             st.session_state.last_insight = f"戰果輝煌 ({acc_val:.1f}%)！AI 已成功複製強勢基因。"
 
-                        # --- [視覺呈現：確保表格與診斷訊息留在畫面上] ---
+                        # --- [視覺呈現：表格與訊息] ---
                         st.markdown("### 📝 今日實戰複盤戰果明細")
-                        st.table(pd.DataFrame(results)) # 表格噴發！
+                        st.table(pd.DataFrame(results)) 
                         
                         if acc_val < 50:
                             st.warning(f"⚠️ {st.session_state.last_insight}")
                         else:
                             st.success(f"🎊 {st.session_state.last_insight}")
                         
-                        # 重要：不再使用 st.rerun()，否則表格會因為頁面刷新而消失
+                        # --- [終極刷新策略] ---
+                        # 為了保住表格同時更新神經元，我們在表格下方顯示一個刷新按鈕
+                        # 或者利用 st.empty() 來觸發局部更新，但最穩定的方法是請老總「點一下側邊欄任意處」
+                        # 或者我們在這裡強制噴發一個 JavaScript 輕微觸發 UI 同步
+                        st.info("💡 數據已寫入大腦！請滑動或點擊任意處，頂端儀表板與神經元將立即同步變色。")
 
                     else:
                         st.info(f"📅 雲端尚無 {today_str} 的複盤名單。")
@@ -1883,6 +1885,7 @@ with tab_brain:
                     st.error(f"複盤執行失敗: {e}")
 
     st.divider()
+
 
     
     # ==============================================================================
