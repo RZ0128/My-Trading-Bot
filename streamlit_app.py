@@ -1790,22 +1790,19 @@ with tab_brain:
             sh = init_cloud_connection()
             if sh:
                 try:
-                    # [關鍵修正：確認分頁名稱正確]
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
                     
-                    # [關鍵修正：定義當天日期，並準備兩種可能的格式]
                     curr_time = datetime.now()
-                    today_str = curr_time.strftime("%Y-%m-%d")    # 格式：2026-04-24
-                    today_slash = curr_time.strftime("%Y/%m/%d")  # 格式：2026/04/24
+                    today_str = curr_time.strftime("%Y-%m-%d")
+                    today_slash = curr_time.strftime("%Y/%m/%d")
                     
                     targets = []
                     for r in data:
-                        # 讀取雲端日期並轉為字串，消除空格
-                        row_date = str(r.get('預計複盤日', '')).strip()
+                        row_date_raw = r.get('預計復盤日') if '預計復盤日' in r else r.get('預計複盤日', '')
+                        row_date = str(row_date_raw).strip()
                         row_status = str(r.get('結果狀態', '')).strip()
                         
-                        # [加強比對：只要包含今天日期且狀態符合就抓取]
                         if (today_str in row_date or today_slash in row_date) and "明日推薦驗證" in row_status:
                             targets.append(r)
                     
@@ -1815,7 +1812,6 @@ with tab_brain:
                         
                         for t in targets:
                             tid = str(t.get('代號', ''))
-                            # 優先嘗試取得現價
                             try:
                                 import twstock
                                 stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
@@ -1826,7 +1822,6 @@ with tab_brain:
                         
                             if now_price > 0:
                                 try:
-                                    # 清理偵測價格中的雜質（如單引號）
                                     raw_price = str(t.get('偵測價格', 0)).replace("'", "").strip()
                                     past_price = float(raw_price)
                                 except:
@@ -1834,26 +1829,35 @@ with tab_brain:
                                 
                                 if past_price > 0:
                                     change = ((now_price - past_price) / past_price) * 100
-                                    is_win = change > 0 
+                                    
+                                    # --- [核心修正 1：判定標準提高至 3.0%] ---
+                                    # 只有漲幅超過 3% 才是真正的捕捉成功
+                                    is_win = change >= 3.0 
                                     if is_win: win_count += 1
                                     
                                     results.append({
                                         "代號": tid, "名稱": t.get('名稱', ''), 
-                                        "偵測價": past_price, "現價": now_price,
+                                        "偵測價": f"{past_price:.2f}", "現價": f"{now_price:.2f}",
                                         "戰果": f"{change:+.2f}%", 
-                                        "判決": "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
+                                        "判決": "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
                                     })
                         
-                        st.session_state.accuracy = (win_count / len(targets)) * 100 if targets else 0
+                        # --- [核心修正 2：更新全域準確率顯示] ---
+                        acc_val = (win_count / len(targets)) * 100 if targets else 0
+                        st.session_state.accuracy = acc_val # 寫入 session 以供儀表板顯示
+                        
                         st.table(pd.DataFrame(results))
                         
-                        if st.session_state.accuracy < 50:
-                            st.warning("⚠️ 偵測到市場偏誤！AI 正在執行深度偵錯，調整權重。")
+                        # 顯示本次戰果總結
+                        if acc_val < 50:
+                            st.warning(f"⚠️ 今日準確率 {acc_val:.1f}%：低於嚴格標準 (≧3%者僅 {win_count} 檔)，AI 正在深度偵錯。")
                         else:
-                            st.success(f"🔥 預判精準！AI 正在複製成功基因。")
+                            st.success(f"🎊 戰果輝煌！準確率 {acc_val:.1f}%：AI 捕捉基因校準完成。")
+                            
+                        # 強制立即重新整理以更新儀表板數字
+                        # st.rerun() # 如果需要數字立刻跳動，可以取消這一行的註解
                     else:
-                        # 如果還是沒抓到，這行會顯示目前的日期字串，方便我們對帳
-                        st.info(f"📅 雲端尚無標記為 {today_str} 的複盤名單。請手動確認 thought_log 分頁中的日期格式。")
+                        st.info(f"📅 雲端尚無 {today_str} 的複盤名單。")
                 except Exception as e: 
                     st.error(f"複盤執行失敗: {e}")
 
