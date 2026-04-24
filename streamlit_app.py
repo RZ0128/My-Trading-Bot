@@ -1816,7 +1816,6 @@ with tab_brain:
                         results = []
                         win_count = 0
                         
-                        # --- [數據處理與嚴格判決：縫合綠勾勾與紅叉叉邏輯] ---
                         for t in targets:
                             tid = str(t.get('代號', ''))
                             try:
@@ -1836,11 +1835,11 @@ with tab_brain:
                                 
                                 if past_price > 0:
                                     change = ((now_price - past_price) / past_price) * 100
-                                    # --- [嚴格判決：漲幅 ≧ 3% 才是綠勾勾] ---
+                                    # --- [嚴格判決：≧ 3.0% 才是捕捉成功] ---
                                     is_win = change >= 3.0 
                                     if is_win: win_count += 1
                                     
-                                    # 視覺靈魂注入：✅ 與 ❌
+                                    # 視覺靈魂：✅ 與 ❌
                                     status_icon = "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
                                     
                                     results.append({
@@ -1852,39 +1851,31 @@ with tab_brain:
                                         "判決": status_icon
                                     })
 
-                        # --- [同步全域數據與大腦狀態] ---
+                        # --- [核心更新：直接寫入 Session State 不使用會閃退的 rerun] ---
                         acc_val = (win_count / len(targets)) * 100 if targets else 0
-                        
-                        # 1. 更新頂端儀表板數據
                         st.session_state.accuracy = acc_val 
-                        
-                        # 2. 觸發側邊欄變色 (變色的鑰匙)
                         st.session_state.last_learning_time = datetime.now().strftime("%H:%M:%S")
                         
-                        # 3. 執行權重進化
                         if 'brain_weights' not in st.session_state:
                             st.session_state.brain_weights = {'chip': 1.0, 'surge': 1.0, 'tech': 1.0}
                         
                         if acc_val < 50:
                             st.session_state.brain_weights['chip'] += 0.15 
-                            st.session_state.last_insight = f"今日準確率僅 {acc_val:.1f}%，大戶洗盤劇烈，已調高籌碼過濾權重。"
+                            st.session_state.last_insight = f"今日準確率 {acc_val:.1f}%：低於嚴格標準，已強化籌碼洗盤偵測。"
                         else:
                             st.session_state.brain_weights['surge'] += 0.1
-                            st.session_state.last_insight = f"戰果達標 ({acc_val:.1f}%)！成功捕捉強勢基因，已強化噴發敏感度。"
-                        
-                        # --- [視覺呈現：回歸老總最愛的戰績表格] ---
+                            st.session_state.last_insight = f"戰果輝煌 ({acc_val:.1f}%)！AI 已成功複製強勢基因。"
+
+                        # --- [視覺呈現：確保表格與診斷訊息留在畫面上] ---
                         st.markdown("### 📝 今日實戰複盤戰果明細")
-                        df_show = pd.DataFrame(results)
-                        st.table(df_show) # 噴發專業表格
+                        st.table(pd.DataFrame(results)) # 表格噴發！
                         
-                        # 顯示診斷訊息
                         if acc_val < 50:
                             st.warning(f"⚠️ {st.session_state.last_insight}")
                         else:
                             st.success(f"🎊 {st.session_state.last_insight}")
                         
-                        # 4. 強制刷新，讓數據噴發到全 App (頂端儀表板與側邊欄)
-                        st.rerun() 
+                        # 重要：不再使用 st.rerun()，否則表格會因為頁面刷新而消失
 
                     else:
                         st.info(f"📅 雲端尚無 {today_str} 的複盤名單。")
