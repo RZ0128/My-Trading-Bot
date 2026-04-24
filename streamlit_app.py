@@ -1860,79 +1860,89 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🚀 今日獵殺與 10-15 檔戰略推薦 - V32.1 修正校對版】
+    # 【第二區：🚀 步驟二：全量獵殺今日飆股 (捕捉強勢基因)】
     # ==============================================================================
-    st.subheader("🧬 步驟二：啟動今日獵殺與戰略推薦")
-    if 'hero_database' not in st.session_state: st.session_state.hero_database = None
+    st.subheader("🧬 步驟二：啟動今日強勢飆股偵察")
+    if 'hero_list' not in st.session_state: st.session_state.hero_list = []
 
     with st.container(border=True):
-        st.markdown("#### 🏆 今日強勢基因偵察 (避開追高，挖掘起漲點)")
+        st.markdown("#### 🏆 今日英雄榜 (偵測全台股 9% 以上強勢基因)")
         status_area = st.empty()
         progress_bar = st.progress(0)
-        hero_display_area = st.empty()
+        # 關鍵：建立一個空容器，實現老總要求的「一邊掃一邊噴發」
+        table_placeholder = st.empty()
 
-        if st.button("📡 啟動強效偵察機：全量獵殺與官方數據校準", width="stretch", key="hunt_v32_final"):
+        if st.button("📡 啟動強效偵察機：全量獵殺與 AI 診斷", width="stretch"):
             with st.spinner("🌍 正在讀取全球情報網與 AI 大腦權重..."):
-                g_bias, _ = get_global_bias() # 恢復全球偏誤計算
+                g_bias, _ = get_global_bias()
             
-            final_potential_list = [] 
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
             
             total_count = len(all_targets)
+            st.session_state.hero_list = [] # 重置獵殺清單
+            
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_bar.progress((idx + 1) / total_count)
                 status_area.markdown(f"🔍 **AI 數據採集：** `{tname} ({tid})` | 進度: {idx+1}/{total_count}")
                 
                 try:
-                    import twstock # 確保數據穩定，不使用 Yahoo
+                    import twstock
                     stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
-                    if stock and len(stock.price) > 0:
+                    if stock and len(stock.price) > 1:
                         price = stock.price[-1]
-                        change_rate = (price - stock.price[-2]) / stock.price[-2] if len(stock.price) > 1 else 0
+                        change_rate = (price - stock.price[-2]) / stock.price[-2]
                         
-                        # AI 深度診斷 (執行洗盤偵測、成本區計算)
+                        # 執行 AI 核心診斷 (含洗盤偵測、成本區計算)
                         score, msg, win, sent = ai_evolution_engine(tid, None, price)
                         
-                        # --- 核心策略修正：不追高 (漲幅 < 7%) 且高分 (score > 72) ---
-                        if score > 72 and change_rate < 0.07:
+                        # 放寬門檻：只要漲幅夠強 (≧8.5%) 或 AI 分數極高 (≧75) 就進榜
+                        if (change_rate >= 0.085) or (score >= 75):
                             import random
-                            # 綜合全球權重與微擾動，計算最終實戰分數
-                            calc_score = round(score * g_bias + random.uniform(-1.5, 1.5), 1)
-                            calc_win = win + random.randint(-3, 3)
+                            calc_score = round(score * g_bias + random.uniform(-1.0, 1.0), 1)
+                            calc_win = win + random.randint(-2, 2)
                             est_gain = round((calc_win / 15) + (calc_score / 20), 2)
 
-                            final_potential_list.append({
-                                "代號": tid, "名稱": tname, "目前漲幅": f"{change_rate*100:+.2f}%", 
+                            item = {
+                                "代號": tid, "名稱": tname, 
+                                "漲幅": f"{change_rate*100:+.2f}%", 
                                 "AI 分數": calc_score, "預估漲幅": f"+{est_gain}%", 
                                 "勝率": f"{calc_win}%", "籌碼": sent, 
                                 "偵測價格": price, "診斷結論": msg
-                            })
-                            hero_display_area.dataframe(pd.DataFrame(final_potential_list), width="stretch", hide_index=True)
+                            }
+                            st.session_state.hero_list.append(item)
+                            
+                            # --- [ 視覺噴發：邊掃邊列出表格 ] ---
+                            table_placeholder.table(pd.DataFrame(st.session_state.hero_list))
                 except: continue
 
-            st.session_state.hero_database = pd.DataFrame(final_potential_list)
-            if not st.session_state.hero_database.empty:
-                st.success(f"✅ 獵殺完成！成功鎖定 {len(final_potential_list)} 檔『潛龍』種子。")
+            if st.session_state.hero_list:
+                st.success(f"✅ 獵殺完成！今日共捕捉到 {len(st.session_state.hero_list)} 檔英雄標的。")
             else:
-                st.warning("⚠️ 數據採集成功，但全市場無符合高分潛力之標的。")
+                st.warning("⚠️ 數據採集成功，但全市場無符合強勢基因標的。")
+
+    st.divider() # 區隔第二與第三步驟
 
     # ==============================================================================
-    # 【第三區：🎯 推薦名單與雲端同步 - 完整補齊版】
+    # 【第三區：🎯 步驟三：精選明日 15 檔種子並同步雲端】
     # ==============================================================================
-    if st.session_state.hero_database is not None and not st.session_state.hero_database.empty:
-        st.divider()
-        st.subheader("🎯 AI 明日飆股種子選手 (精選 15 檔)")
-        top_seeds = st.session_state.hero_database.sort_values(by="AI 分數", ascending=False).head(15)
-        st.dataframe(top_seeds[['代號', '名稱', 'AI 分數', '預估漲幅', '勝率', '籌碼', '診斷結論']], width="stretch", hide_index=True)
+    if st.session_state.hero_list:
+        st.subheader("🎯 步驟三：鎖定明日飆股種子 (精選 15 檔)")
         
-        # 這裡補足了您原本遺漏的雲端寫入邏輯
-        if st.button("💾 鎖定這 15 檔種子並同步至雲端大腦", key="save_v32_pro", width="stretch"):
+        all_heroes_df = pd.DataFrame(st.session_state.hero_list)
+        # 根據 AI 分數排序，精選前 15 檔
+        top_seeds = all_heroes_df.sort_values(by="AI 分數", ascending=False).head(15)
+        
+        st.dataframe(top_seeds[['代號', '名稱', 'AI 分數', '漲幅', '勝率', '籌碼', '診斷結論']], 
+                     width="stretch", hide_index=True)
+        
+        if st.button("💾 鎖定這 15 檔並同步至雲端大腦", key="save_final_15", width="stretch"):
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
+                    # 設定明天為複盤日
                     v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
                     for _, row in top_seeds.iterrows():
                         ws.append_row([
@@ -1940,12 +1950,12 @@ with tab_brain:
                             row['代號'], row['名稱'], row['AI 分數'],
                             row['診斷結論'], row['偵測價格'], v_date, "明日推薦驗證"
                         ])
-                    st.success("✅ 雲端寫入成功！明日開盤請執行步驟一進行複盤。")
+                    st.success(f"✅ 成功寫入雲端！明日開盤請執行步驟一複盤。")
                     st.balloons()
                 except Exception as e:
-                    st.error(f"❌ 雲端寫入出錯：{e}")
+                    st.error(f"❌ 雲端同步失敗：{e}")
 
-
+    st.divider() # <--- 這是您要的，第三區結束後的視覺分割線
 
 
     # --- [第二區：📡 今日掃描與重大發現] ---
