@@ -1859,8 +1859,8 @@ with tab_brain:
 
     st.divider()
     
-    # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (大基石固化版 - 掃描即噴發)】
+        # ==============================================================================
+    # 【第二區：🏆 步驟二：今日英雄榜 (偵測到即刻噴發模式)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢基因學習")
     
@@ -1868,52 +1868,52 @@ with tab_brain:
         st.session_state.hero_list = []
 
     with st.container(border=True):
-        st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股，作為 AI 學習樣本)")
+        st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股)")
         
-        # --- 關鍵：無論有沒有按按鈕，只要有數據就先顯示表格 ---
-        hero_table_area = st.empty()
+        # 1. 這裡直接開一個空容器
+        placeholder = st.empty()
+        
+        # 2. 如果 session 已經有資料（比如剛跑完），先秀出來
         if st.session_state.hero_list:
-            hero_table_area.table(pd.DataFrame(st.session_state.hero_list))
-        
-        status_hero = st.empty()
-        
-        if st.button("📡 掃描今日飆股基因", width="stretch", key="btn_hero_scan_v33"):
+            placeholder.table(pd.DataFrame(st.session_state.hero_list))
+            
+        if st.button("📡 掃描今日飆股基因", width="stretch", key="scan_hero_direct"):
+            st.session_state.hero_list = [] # 按下重置
+            
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
             
-            st.session_state.hero_list = [] # 清空舊數據重新學習
-            progress_hero = st.progress(0)
+            progress_bar = st.progress(0)
+            status_txt = st.empty()
             
             for idx, (tid, tname) in enumerate(all_targets):
-                progress_hero.progress((idx + 1) / len(all_targets))
-                status_hero.markdown(f"🔍 **深度分析中：** `{tname} ({tid})`")
+                progress_bar.progress((idx + 1) / len(all_targets))
+                status_txt.markdown(f"🔍 掃描中: `{tname} ({tid})`")
                 
                 try:
                     import twstock
                     stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
-                    if stock and len(stock.price) >= 2:
+                    if len(stock.price) >= 2:
                         price = stock.price[-1]
-                        change_rate = (price - stock.price[-2]) / stock.price[-2]
+                        change = (price - stock.price[-2]) / stock.price[-2]
                         
-                        # 門檻：捕捉 9% 左右強勢股 (>= 8.5%)
-                        if change_rate >= 0.085:
-                            # 深度抓取歷史 (確保診斷不報錯)
-                            stock.fetch_from(2026, 4, 1) 
+                        # 門檻滿足，立刻診斷並噴發
+                        if change >= 0.085:
+                            stock.fetch_from(2026, 4, 1)
                             score, msg, win, sent = ai_evolution_engine(tid, stock, price)
                             
+                            # 寫入 session
                             st.session_state.hero_list.append({
-                                "代號": tid, "名稱": tname, 
-                                "今日漲幅": f"{change_rate*100:+.2f}%", 
-                                "AI 評分": score, 
-                                "籌碼狀態": sent, 
-                                "基因分析": msg
+                                "代號": tid, "名稱": tname, "今日漲幅": f"{change*100:+.2f}%", 
+                                "AI 評分": score, "籌碼": sent, "分析": msg
                             })
-                            # --- 實時噴發：每抓到一檔就更新一次畫面 ---
-                            hero_table_area.table(pd.DataFrame(st.session_state.hero_list))
-                except: continue
-            status_hero.success(f"✅ 英雄基因採集完成！目前鎖定 {len(st.session_state.hero_list)} 檔樣本。")
-
+                            # --- 重點：立刻更新同一個容器，達成「一邊掃一邊噴」 ---
+                            placeholder.table(pd.DataFrame(st.session_state.hero_list))
+                except:
+                    continue
+            status_txt.success(f"✅ 學習完成，共捕捉 {len(st.session_state.hero_list)} 檔飆股特徵。")
+            
     st.divider()
 
     # ==============================================================================
