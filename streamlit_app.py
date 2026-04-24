@@ -1859,62 +1859,72 @@ with tab_brain:
 
     st.divider()
     
-        # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (偵測到即刻噴發模式)】
+    # ==============================================================================
+    # 【第二區：🏆 步驟二：今日英雄榜 (歷史成功紀錄：穩定噴發版)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢基因學習")
     
+    # 歷史紀錄顯示：必須先初始化容器
     if 'hero_list' not in st.session_state:
         st.session_state.hero_list = []
 
     with st.container(border=True):
-        st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股)")
+        st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股，作為 AI 學習樣本)")
         
-        # 1. 這裡直接開一個空容器
-        placeholder = st.empty()
+        # 關鍵：建立一個固定的噴發區域，絕對不能動
+        hero_placeholder = st.empty()
         
-        # 2. 如果 session 已經有資料（比如剛跑完），先秀出來
+        # 如果已經有資料，一進入就要顯示
         if st.session_state.hero_list:
-            placeholder.table(pd.DataFrame(st.session_state.hero_list))
+            hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
             
-        if st.button("📡 掃描今日飆股基因", width="stretch", key="scan_hero_direct"):
-            st.session_state.hero_list = [] # 按下重置
+        status_hero = st.empty()
+        
+        if st.button("📡 啟動強效偵察機：全量獵殺與官方數據校準", width="stretch", key="btn_hero_scan_legacy"):
+            st.session_state.hero_list = [] # 清空舊資料
             
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
             
-            progress_bar = st.progress(0)
-            status_txt = st.empty()
+            pbar = st.progress(0)
             
             for idx, (tid, tname) in enumerate(all_targets):
-                progress_bar.progress((idx + 1) / len(all_targets))
-                status_txt.markdown(f"🔍 掃描中: `{tname} ({tid})`")
+                pbar.progress((idx + 1) / len(all_targets))
+                status_hero.markdown(f"📡 **掃描中：** `{tname} ({tid})`")
                 
                 try:
                     import twstock
+                    # 使用與成功版本一致的單次 fetch 邏輯
                     stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
+                    
                     if len(stock.price) >= 2:
                         price = stock.price[-1]
                         change = (price - stock.price[-2]) / stock.price[-2]
                         
-                        # 門檻滿足，立刻診斷並噴發
-                        if change >= 0.085:
-                            stock.fetch_from(2026, 4, 1)
+                        # 門檻嚴格對齊：大於等於 9%
+                        if change >= 0.088: # 考量到漲停可能不滿 10%，設 8.8% 確保抓到
+                            # 立刻抓歷史，補齊「籌碼洗盤偵測」需要的數據
+                            stock.fetch_from(2026, 4, 1) 
                             score, msg, win, sent = ai_evolution_engine(tid, stock, price)
                             
-                            # 寫入 session
+                            # 這是您要求的數據存放：AI 分數、籌碼狀態與基因分析全數入榜
                             st.session_state.hero_list.append({
-                                "代號": tid, "名稱": tname, "今日漲幅": f"{change*100:+.2f}%", 
-                                "AI 評分": score, "籌碼": sent, "分析": msg
+                                "代號": tid, "名稱": tname, 
+                                "今日漲幅": f"{change*100:+.2f}%", 
+                                "AI 評分": score, 
+                                "籌碼狀態": sent, 
+                                "基因分析": msg
                             })
-                            # --- 重點：立刻更新同一個容器，達成「一邊掃一邊噴」 ---
-                            placeholder.table(pd.DataFrame(st.session_state.hero_list))
+                            # --- 歷史成功關鍵：每一檔抓到都重新「噴發」完整表格 ---
+                            hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
                 except:
                     continue
-            status_txt.success(f"✅ 學習完成，共捕捉 {len(st.session_state.hero_list)} 檔飆股特徵。")
             
-    st.divider()
+            status_hero.success(f"✅ 掃描完成！今日共捕捉 {len(st.session_state.hero_list)} 檔飆股基因供 AI 學習。")
+
+    st.divider() # 嚴格保留分割線
+
 
     # ==============================================================================
     # 【第三區：🎯 步驟三：明天飆股獵殺行動 (固化同步版)】
