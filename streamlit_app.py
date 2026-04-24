@@ -1835,9 +1835,7 @@ with tab_brain:
                                 
                                 if past_price > 0:
                                     change = ((now_price - past_price) / past_price) * 100
-                                    
-                                    # --- [核心修正 1：判定標準提高至 3.0%] ---
-                                    # 只有漲幅超過 3% 才是真正的捕捉成功
+                                    # --- [嚴格判決：漲幅 ≧ 3% 才是火種] ---
                                     is_win = change >= 3.0 
                                     if is_win: win_count += 1
                                     
@@ -1847,34 +1845,31 @@ with tab_brain:
                                         "戰果": f"{change:+.2f}%", 
                                         "判決": "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
                                     })
-                        
+
                         # --- [核心修正：讓 AI 真正記取教訓並更新數據] ---
                         acc_val = (win_count / len(targets)) * 100 if targets else 0
                         
-                        # 1. 強制更新頂端儀表板的「實戰狙擊準確率」
+                        # 1. 更新頂端儀表板數據
                         st.session_state.accuracy = acc_val 
                         
-                        # 2. 觸發神經元學習狀態變化
-                        # 我們定義一個學習標籤，讓左側 sidebar 知道已經學過東西了
+                        # 2. 觸發側邊欄變色 (變色的鑰匙)
                         st.session_state.last_learning_time = datetime.now().strftime("%H:%M:%S")
                         
-                        # 3. 根據勝率執行「深度偵錯」或「複製基因」
-                        if acc_val < 50:
-                            st.warning(f"⚠️ 今日準確率 {acc_val:.1f}%：低於嚴格標準，AI 正在執行深度偵錯，調整大戶洗盤權重。")
-                            # 強化籌碼洗盤偵測邏輯：當準確率低，增加 chip 權重
-                            if 'brain_weights' not in st.session_state:
-                                st.session_state.brain_weights = {'chip': 1.0, 'surge': 1.0}
-                            st.session_state.brain_weights['chip'] += 0.15 
-                        else:
-                            st.success(f"🎊 戰果輝煌！準確率 {acc_val:.1f}%：AI 正在複製成功起漲基因。")
-                            # 強化噴發基因：當準確率高，增加 surge 權重
-                            if 'brain_weights' not in st.session_state:
-                                st.session_state.brain_weights = {'chip': 1.0, 'surge': 1.0}
-                            st.session_state.brain_weights['surge'] += 0.1
+                        # 3. 執行權重進化
+                        if 'brain_weights' not in st.session_state:
+                            st.session_state.brain_weights = {'chip': 1.0, 'surge': 1.0, 'tech': 1.0}
                         
+                        if acc_val < 50:
+                            st.session_state.brain_weights['chip'] += 0.15 
+                            st.session_state.last_insight = f"今日準確率僅 {acc_val:.1f}%，大戶洗盤劇烈，已調高籌碼過濾權重。"
+                        else:
+                            st.session_state.brain_weights['surge'] += 0.1
+                            st.session_state.last_insight = f"戰果達標 ({acc_val:.1f}%)！成功捕捉強勢基因，已強化噴發敏感度。"
+                        
+                        # 顯示結果表格
                         st.table(pd.DataFrame(results))
                         
-                        # 4. 最關鍵的一步：強制畫面重整，數據才會噴發到最上方與最左方
+                        # 4. 強制刷新，讓數據噴發到全 App
                         st.rerun() 
 
                     else:
