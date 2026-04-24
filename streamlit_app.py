@@ -1816,7 +1816,7 @@ with tab_brain:
                         results = []
                         win_count = 0
                         
-                        # --- [數據處理與嚴格判決] ---
+                        # --- [數據處理與嚴格判決：縫合綠勾勾與紅叉叉邏輯] ---
                         for t in targets:
                             tid = str(t.get('代號', ''))
                             try:
@@ -1836,18 +1836,23 @@ with tab_brain:
                                 
                                 if past_price > 0:
                                     change = ((now_price - past_price) / past_price) * 100
-                                    # --- [嚴格判決：漲幅 ≧ 3% 才是火種] ---
+                                    # --- [嚴格判決：漲幅 ≧ 3% 才是綠勾勾] ---
                                     is_win = change >= 3.0 
                                     if is_win: win_count += 1
                                     
+                                    # 視覺靈魂注入：✅ 與 ❌
+                                    status_icon = "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
+                                    
                                     results.append({
-                                        "代號": tid, "名稱": t.get('名稱', ''), 
-                                        "偵測價": f"{past_price:.2f}", "現價": f"{now_price:.2f}",
+                                        "代號": tid, 
+                                        "名稱": t.get('名稱', ''), 
+                                        "偵測價": f"{past_price:.2f}", 
+                                        "現價": f"{now_price:.2f}",
                                         "戰果": f"{change:+.2f}%", 
-                                        "判決": "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
+                                        "判決": status_icon
                                     })
 
-                        # --- [核心修正：讓 AI 真正記取教訓並更新數據] ---
+                        # --- [同步全域數據與大腦狀態] ---
                         acc_val = (win_count / len(targets)) * 100 if targets else 0
                         
                         # 1. 更新頂端儀表板數據
@@ -1867,15 +1872,18 @@ with tab_brain:
                             st.session_state.brain_weights['surge'] += 0.1
                             st.session_state.last_insight = f"戰果達標 ({acc_val:.1f}%)！成功捕捉強勢基因，已強化噴發敏感度。"
                         
-                        # --- [表格呈現：嚴格保留戰績列表表格] ---
-                        st.table(pd.DataFrame(results))
+                        # --- [視覺呈現：回歸老總最愛的戰績表格] ---
+                        st.markdown("### 📝 今日實戰複盤戰果明細")
+                        df_show = pd.DataFrame(results)
+                        st.table(df_show) # 噴發專業表格
                         
+                        # 顯示診斷訊息
                         if acc_val < 50:
                             st.warning(f"⚠️ {st.session_state.last_insight}")
                         else:
                             st.success(f"🎊 {st.session_state.last_insight}")
                         
-                        # 4. 強制刷新，讓數據噴發到全 App
+                        # 4. 強制刷新，讓數據噴發到全 App (頂端儀表板與側邊欄)
                         st.rerun() 
 
                     else:
@@ -1884,6 +1892,7 @@ with tab_brain:
                     st.error(f"複盤執行失敗: {e}")
 
     st.divider()
+
     
     # ==============================================================================
     # 【第二區：🚀 今日獵殺與 10-15 檔戰略推薦 - V32.1 修正校對版】
