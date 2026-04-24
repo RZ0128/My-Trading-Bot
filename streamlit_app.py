@@ -1320,6 +1320,12 @@ with st.sidebar:
     # --- [新增：AI 大腦神經元狀態監視器] ---
     # 放置於時間下方，讓老總第一眼掌握 AI 進化狀態
     with st.sidebar.expander("🧠 AI 大腦神經元狀態", expanded=True):
+        # --- 手術刀式縫合點：優先顯示學習狀態 ---
+        if st.session_state.get('last_learning_time'):
+            st.success(f"🧠 大腦已完成學習\n(最後校準：{st.session_state.last_learning_time})")
+        else:
+            st.info("💡 大腦尚未啟動學習，請執行下方複盤或學習按鈕")
+
         if 'brain_weights' in st.session_state:
             w = st.session_state.brain_weights
             
@@ -1336,11 +1342,11 @@ with st.sidebar:
             # 顯示 AI 自主學習後的最新心得
             if 'last_insight' in st.session_state:
                 st.caption(f"🤖 最新心得: {st.session_state['last_insight']}")
-            st.caption(f"最後進化時間: {datetime.now().strftime('%H:%M:%S')}")
-        else:
-            st.warning("💡 大腦尚未啟動學習，請執行下方自主學習按鈕")
+            
+            # 顯示最後進化時間
+            evolve_time = st.session_state.get('last_learning_time', datetime.now().strftime('%H:%M:%S'))
+            st.caption(f"最後進化時間: {evolve_time}")
 
-    st.markdown("---")
 
     # --- [核心修復：從資料庫同步客戶名單] ---
     db_clients = st.session_state.local_db['client'].unique().tolist()
