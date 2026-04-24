@@ -1860,53 +1860,70 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🚀 步驟二：全量獵殺今日飆股 (9% 強勢基因)】
+    # 【第二區：🏆 步驟二：今日英雄榜 (還原：即時噴發原始代碼)】
     # ==============================================================================
-    st.subheader("🧬 步驟二：啟動今日強勢飆股偵察")
-    with st.container(border=True):
-        st.markdown("#### 🏆 今日英雄榜 (偵測全台股 9% 以上強勢基因)")
-        status_area = st.empty()
-        progress_bar = st.progress(0)
-        table_placeholder = st.empty() # 邊掃描邊噴發的容器
+    st.subheader("🧬 步驟二：啟動今日強勢基因學習")
+    
+    if 'hero_list' not in st.session_state:
+        st.session_state.hero_list = []
 
-        if st.button("📡 啟動強效偵察機：全量獵殺與 AI 診斷", width="stretch", key="hunt_main"):
-            with st.spinner("🌍 正在讀取全球情報網..."):
-                g_bias, _ = get_global_bias()
+    with st.container(border=True):
+        st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股)")
+        
+        # 關鍵 1：這是一個永久佔位的容器，絕對不移動
+        hero_display_area = st.empty()
+        
+        # 關鍵 2：初始狀態顯示（如果已經有舊數據）
+        if st.session_state.hero_list:
+            hero_display_area.table(pd.DataFrame(st.session_state.hero_list))
+            
+        status_msg = st.empty()
+        
+        if st.button("📡 啟動全速掃描：採集今日最強基因", width="stretch", key="run_hero_scan_v99"):
+            st.session_state.hero_list = [] # 點擊立刻清空舊的
             
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
             
-            st.session_state.hero_list = []
-            total_count = len(all_targets)
+            pbar = st.progress(0)
             
             for idx, (tid, tname) in enumerate(all_targets):
-                progress_bar.progress((idx + 1) / total_count)
-                status_area.markdown(f"🔍 **AI 數據採集：** `{tname} ({tid})` | 進度: {idx+1}/{total_count}")
+                pbar.progress((idx + 1) / len(all_targets))
+                status_msg.markdown(f"📡 **掃描中：** `{tname} ({tid})`")
+                
                 try:
                     import twstock
+                    # 直接抓取，不做預過濾，確保 100% 抓到聯發科
                     stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
-                    if stock and len(stock.price) > 1:
+                    
+                    if len(stock.price) >= 2:
                         price = stock.price[-1]
-                        change_rate = (price - stock.price[-2]) / stock.price[-2]
-                        score, msg, win, sent = ai_evolution_engine(tid, None, price)
+                        change = (price - stock.price[-2]) / stock.price[-2]
                         
-                        # 恢復強勢篩選：9% 以上或 AI 極高分
-                        if (change_rate >= 0.085) or (score >= 75):
-                            import random
-                            calc_score = round(score * g_bias + random.uniform(-1.0, 1.0), 1)
-                            item = {
-                                "代號": tid, "名稱": tname, "漲幅": f"{change_rate*100:+.2f}%", 
-                                "AI 分數": calc_score, "勝率": f"{win}%", "籌碼": sent, 
-                                "偵測價格": price, "診斷結論": msg
-                            }
-                            st.session_state.hero_list.append(item)
-                            table_placeholder.table(pd.DataFrame(st.session_state.hero_list)) # 即時噴發表格
-                except: continue
-            st.success(f"✅ 獵殺完成！今日共捕捉到 {len(st.session_state.hero_list)} 檔英雄標的。")
+                        # 門檻設為 8.5%，確保不漏掉任何接近漲停的標的
+                        if change >= 0.085:
+                            # 深度診斷，供大腦學習
+                            stock.fetch_from(2026, 4, 1) 
+                            score, msg, win, sent = ai_evolution_engine(tid, stock, price)
+                            
+                            # 關鍵 3：寫入 Session
+                            st.session_state.hero_list.append({
+                                "代號": tid, "名稱": tname, 
+                                "今日漲幅": f"{change*100:+.2f}%", 
+                                "AI 評分": score, 
+                                "籌碼狀態": sent, 
+                                "基因分析": msg
+                            })
+                            
+                            # 關鍵 4：【這行最重要】只要一 append 成功，立刻叫容器重新噴發最新表格
+                            hero_display_area.table(pd.DataFrame(st.session_state.hero_list))
+                except:
+                    continue
+            
+            status_msg.success(f"✅ 採集完成！共鎖定 {len(st.session_state.hero_list)} 檔飆股特徵。")
 
-    st.divider() # <--- 這是您的基礎要求，我焊死了！
-
+    st.divider() # 嚴格保留分割線，絕不略過
 
 
     # ==============================================================================
