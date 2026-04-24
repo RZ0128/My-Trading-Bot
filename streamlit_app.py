@@ -1792,101 +1792,72 @@ with tab_brain:
     with st.expander("📊 步驟一：啟動昨日戰略複盤 (海量數據學習區)", expanded=True):
         st.info("💡 AI 將對今日預計複盤的 10-15 檔種子進行全面對帳，校準獵殺權重。")
         
+        # 核心：執行按鈕
         if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning"):
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
-                    
                     curr_time = datetime.now()
                     today_str = curr_time.strftime("%Y-%m-%d")
                     today_slash = curr_time.strftime("%Y/%m/%d")
                     
-                    targets = []
-                    for r in data:
-                        row_date_raw = r.get('預計復盤日') if '預計復盤日' in r else r.get('預計複盤日', '')
-                        row_date = str(row_date_raw).strip()
-                        row_status = str(r.get('結果狀態', '')).strip()
-                        
-                        if (today_str in row_date or today_slash in row_date) and "明日推薦驗證" in row_status:
-                            targets.append(r)
+                    targets = [r for r in data if (today_str in str(r.get('預計復盤日', r.get('預計複盤日', ''))) or today_slash in str(r.get('預計復盤日', r.get('預計複盤日', '')))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
                     
                     if targets:
                         results = []
                         win_count = 0
-                        
                         for t in targets:
                             tid = str(t.get('代號', ''))
-                            try:
-                                import twstock
-                                stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
-                                now_price = stock.price[-1] if (stock and len(stock.price) > 0) else 0
-                            except:
-                                perf = get_stock_perf(tid)
-                                now_price = perf[0] if isinstance(perf, tuple) else 0
-                        
-                            if now_price > 0:
-                                try:
-                                    raw_price = str(t.get('偵測價格', 0)).replace("'", "").strip()
-                                    past_price = float(raw_price)
-                                except:
-                                    past_price = 0
-                                
-                                if past_price > 0:
-                                    change = ((now_price - past_price) / past_price) * 100
-                                    # 嚴格標準：3.0%
-                                    is_win = change >= 3.0 
-                                    if is_win: win_count += 1
-                                    
-                                    status_icon = "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
-                                    
-                                    results.append({
-                                        "代號": tid, "名稱": t.get('名稱', ''), 
-                                        "偵測價": f"{past_price:.2f}", "現價": f"{now_price:.2f}",
-                                        "戰果": f"{change:+.2f}%", "判決": status_icon
-                                    })
+                            perf = get_stock_perf(tid)
+                            now_price = perf[0] if isinstance(perf, tuple) and perf[0] > 0 else 0
+                            
+                            past_price = float(str(t.get('偵測價格', 0)).replace("'", "").strip())
+                            if now_price > 0 and past_price > 0:
+                                change = ((now_price - past_price) / past_price) * 100
+                                is_win = change >= 3.0 # 嚴格 3% 判決
+                                if is_win: win_count += 1
+                                results.append({
+                                    "代號": tid, "名稱": t.get('名稱', ''), 
+                                    "偵測價": f"{past_price:.2f}", "現價": f"{now_price:.2f}",
+                                    "戰果": f"{change:+.2f}%", "判決": "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
+                                })
 
-                        # --- [核心邏輯：雙重同步] ---
+                        # --- [ 關鍵同步邏輯 ] ---
                         acc_val = (win_count / len(targets)) * 100
-                        
-                        # 1. 強制寫入 Session State
                         st.session_state.accuracy = acc_val 
                         st.session_state.last_learning_time = datetime.now().strftime("%H:%M:%S")
-                        
-                        if 'brain_weights' not in st.session_state:
-                            st.session_state.brain_weights = {'chip': 1.0, 'surge': 1.0, 'tech': 1.0}
+                        st.session_state.recap_results = results  # 將結果存入緩存，防止 rerun 消失
                         
                         if acc_val < 50:
-                            st.session_state.brain_weights['chip'] += 0.15 
-                            st.session_state.last_insight = f"今日準確率 {acc_val:.1f}%：低於嚴格標準，已強化籌碼洗盤偵測。"
+                            st.session_state.last_insight = f"今日準確率 {acc_val:.1f}%：低於標準，已強化籌碼洗盤偵測。"
                         else:
-                            st.session_state.brain_weights['surge'] += 0.1
                             st.session_state.last_insight = f"戰果輝煌 ({acc_val:.1f}%)！AI 已成功複製強勢基因。"
-
-                        # --- [視覺呈現：表格與訊息] ---
-                        st.markdown("### 📝 今日實戰複盤戰果明細")
-                        st.table(pd.DataFrame(results)) 
                         
-                        if acc_val < 50:
-                            st.warning(f"⚠️ {st.session_state.last_insight}")
-                        else:
-                            st.success(f"🎊 {st.session_state.last_insight}")
-                        
-                        # --- [終極刷新策略] ---
-                        # 為了保住表格同時更新神經元，我們在表格下方顯示一個刷新按鈕
-                        # 或者利用 st.empty() 來觸發局部更新，但最穩定的方法是請老總「點一下側邊欄任意處」
-                        # 或者我們在這裡強制噴發一個 JavaScript 輕微觸發 UI 同步
-                        st.info("💡 數據已寫入大腦！請滑動或點擊任意處，頂端儀表板與神經元將立即同步變色。")
+                        # 強制刷新：這會讓側邊欄神經元與頂端儀表板立即抓到新數據並變色
+                        st.rerun() 
 
                     else:
                         st.info(f"📅 雲端尚無 {today_str} 的複盤名單。")
                 except Exception as e: 
-                    st.error(f"複盤執行失敗: {e}")
+                    st.error(f"複盤失敗: {e}")
+
+        # --- [ 視覺噴發區：這部分在 rerun 後會自動顯示 ] ---
+        if 'recap_results' in st.session_state and st.session_state.recap_results:
+            st.markdown("### 📝 今日實戰複盤戰果明細")
+            st.table(pd.DataFrame(st.session_state.recap_results))
+            
+            if st.session_state.accuracy < 50:
+                st.warning(f"⚠️ {st.session_state.last_insight}")
+            else:
+                st.success(f"🎊 {st.session_state.last_insight}")
+            
+            if st.button("🗑️ 清除對帳看板"):
+                st.session_state.recap_results = None
+                st.rerun()
 
     st.divider()
-
-
     
     # ==============================================================================
     # 【第二區：🚀 今日獵殺與 10-15 檔戰略推薦 - V32.1 修正校對版】
