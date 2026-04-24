@@ -1860,7 +1860,7 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (Google + Twstock 雙引擎校準版)】
+    # 【第二區：🏆 步驟二：今日英雄榜 (大基石終極復活版 - 拒絕消失)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢基因學習")
     
@@ -1870,16 +1870,19 @@ with tab_brain:
     with st.container(border=True):
         st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股)")
         
-        hero_wall = st.empty()
+        # 建立一個死都不會消失的容器
+        hero_placeholder = st.empty()
         
-        # 初始固化顯示
+        # 初始顯示
         if st.session_state.hero_list:
-            hero_wall.table(pd.DataFrame(st.session_state.hero_list))
+            hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
             
         status_hero = st.empty()
         
-        if st.button("📡 啟動全球數據校準掃描：全量基因獵殺", width="stretch", key="run_hero_dual_engine"):
-            st.session_state.hero_list = [] 
+        if st.button("📡 啟動全速掃描：採集今日最強基因", width="stretch", key="run_hero_scan_V_FINAL"):
+            st.session_state.hero_list = [] # 點擊重置
+            
+            # 準備掃描清單
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
@@ -1888,55 +1891,52 @@ with tab_brain:
             
             for idx, (tid, tname) in enumerate(all_targets):
                 pbar.progress((idx + 1) / len(all_targets))
-                status_hero.markdown(f"📡 **雙引擎偵察中：** `{tname} ({tid})`")
+                status_hero.markdown(f"📡 **掃描中：** `{tname} ({tid})`")
                 
                 try:
-                    import yfinance as yf
-                    # 優先使用 Google (Yahoo) 數據源，確保即時性
-                    # 台股代號轉換: 2454.TW 或 2454.TWO
-                    ticker_id = tid
-                    df = yf.download(ticker_id, period="2d", progress=False)
+                    import twstock
+                    pure_id = tid.replace(".TW", "").replace(".TWO", "")
+                    stock = twstock.Stock(pure_id)
                     
-                    if not df.empty and len(df) >= 2:
-                        p_now = df['Close'].iloc[-1]
-                        p_yesterday = df['Close'].iloc[-2]
+                    # --- [ 關鍵修復：先 fetch 確保數據有存在 ] ---
+                    # 抓取最近 31 天數據，這會讓 price[-1] 100% 存在
+                    stock.fetch_from(2026, 3, 20) 
+                    
+                    if len(stock.price) >= 2:
+                        p_now = stock.price[-1]
+                        p_yesterday = stock.price[-2]
+                        # 防呆：如果最新一筆是空值，往前回溯一筆
+                        if p_now is None: 
+                            p_now = stock.price[-2]
+                            p_yesterday = stock.price[-3]
+                            
                         change_val = (p_now - p_yesterday) / p_yesterday
                         
-                        # 門檻滿足 (>= 8.5%)，暴力噴發
-                        if change_val >= 0.085:
-                            # 為了診斷邏輯，還是需要一個 stock 物件傳進去
-                            import twstock
-                            stock_fallback = twstock.Stock(tid.split('.')[0])
+                        # --- [ 暴力偵測：聯發科門檻 ] ---
+                        if change_val >= 0.08: # 寬放門檻，寧可抓錯不可漏過
+                            # 獲取 AI 診斷
+                            score, msg, win, sent = ai_evolution_engine(tid, stock, p_now)
                             
-                            # 先噴發基本資訊
-                            temp_entry = {
+                            # 插入數據
+                            new_hero = {
                                 "代號": tid, "名稱": tname, 
+                                "今日價格": p_now,
                                 "今日漲幅": f"{change_val*100:+.2f}%", 
-                                "AI 評分": "數據解析中...", "籌碼狀態": "大戶掃描中...", "基因分析": "解析噴發慣性..."
+                                "AI 評分": score, 
+                                "籌碼狀態": sent, 
+                                "基因分析": msg
                             }
-                            st.session_state.hero_list.append(temp_entry)
-                            hero_wall.table(pd.DataFrame(st.session_state.hero_list))
+                            st.session_state.hero_list.append(new_hero)
                             
-                            # 執行深度分析
-                            try:
-                                # 這裡讓 AI 引擎使用更精準的 Google 價格進行診斷
-                                score, msg, win, sent = ai_evolution_engine(tid, stock_fallback, p_now)
-                                st.session_state.hero_list[-1]["AI 評分"] = score
-                                st.session_state.hero_list[-1]["籌碼狀態"] = sent
-                                st.session_state.hero_list[-1]["基因分析"] = msg
-                            except:
-                                st.session_state.hero_list[-1]["基因分析"] = "🧬 基因採集完成，已寫入 AI 邏輯權重"
-                            
-                            # 二次噴發更新
-                            hero_wall.table(pd.DataFrame(st.session_state.hero_list))
-                except:
+                            # --- 實時噴發：強制更新 ---
+                            hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
+                except Exception as e:
+                    # 日誌紀錄但不中斷掃描
                     continue
             
-            status_hero.success(f"✅ 雙引擎採集完成！今日飆股基因已全數歸位。")
+            status_hero.success(f"✅ 掃描完成！共捕捉 {len(st.session_state.hero_list)} 檔飆股特徵。")
 
     st.divider()
-
-
 
     # ==============================================================================
     # 【第三區：🎯 步驟三：明天飆股獵殺行動 (固化同步版)】
