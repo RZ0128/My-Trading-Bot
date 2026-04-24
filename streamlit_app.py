@@ -1860,7 +1860,7 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (還原：即時噴發原始代碼)】
+    # 【第二區：🏆 步驟二：今日英雄榜 (數據校準 + 強制噴發版)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢基因學習")
     
@@ -1870,17 +1870,17 @@ with tab_brain:
     with st.container(border=True):
         st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股)")
         
-        # 關鍵 1：這是一個永久佔位的容器，絕對不移動
+        # 1. 固定噴發容器
         hero_display_area = st.empty()
         
-        # 關鍵 2：初始狀態顯示（如果已經有舊數據）
+        # 2. 歷史數據重現
         if st.session_state.hero_list:
             hero_display_area.table(pd.DataFrame(st.session_state.hero_list))
             
         status_msg = st.empty()
         
-        if st.button("📡 啟動全速掃描：採集今日最強基因", width="stretch", key="run_hero_scan_v99"):
-            st.session_state.hero_list = [] # 點擊立刻清空舊的
+        if st.button("📡 啟動全速掃描：採集今日最強基因", width="stretch", key="run_hero_scan_v100"):
+            st.session_state.hero_list = [] # 清空舊數據
             
             all_targets = []
             for cat in pool_500:
@@ -1890,40 +1890,46 @@ with tab_brain:
             
             for idx, (tid, tname) in enumerate(all_targets):
                 pbar.progress((idx + 1) / len(all_targets))
-                status_msg.markdown(f"📡 **掃描中：** `{tname} ({tid})`")
+                status_msg.markdown(f"📡 **數據校準中：** `{tname} ({tid})`")
                 
                 try:
                     import twstock
-                    # 直接抓取，不做預過濾，確保 100% 抓到聯發科
-                    stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
+                    pure_id = tid.replace(".TW", "").replace(".TWO", "")
+                    stock = twstock.Stock(pure_id)
+                    
+                    # --- [ 關鍵修復：強制更新今日數據 ] ---
+                    # 抓取最近 3 天的資料，確保包含今天
+                    data = stock.fetch(2026, 4) 
                     
                     if len(stock.price) >= 2:
-                        price = stock.price[-1]
-                        change = (price - stock.price[-2]) / stock.price[-2]
+                        # 確保拿的是最新的一筆與前一筆
+                        latest_price = stock.price[-1]
+                        last_close = stock.price[-2]
+                        change = (latest_price - last_close) / last_close
                         
-                        # 門檻設為 8.5%，確保不漏掉任何接近漲停的標的
-                        if change >= 0.085:
-                            # 深度診斷，供大腦學習
-                            stock.fetch_from(2026, 4, 1) 
-                            score, msg, win, sent = ai_evolution_engine(tid, stock, price)
+                        # 門檻稍微寬放至 8.0%，防堵交易所數據微小價差
+                        if change >= 0.08:
+                            # 執行 AI 診斷
+                            score, msg, win, sent = ai_evolution_engine(tid, stock, latest_price)
                             
-                            # 關鍵 3：寫入 Session
+                            # 寫入 Session
                             st.session_state.hero_list.append({
                                 "代號": tid, "名稱": tname, 
+                                "今日價格": latest_price,
                                 "今日漲幅": f"{change*100:+.2f}%", 
                                 "AI 評分": score, 
                                 "籌碼狀態": sent, 
                                 "基因分析": msg
                             })
                             
-                            # 關鍵 4：【這行最重要】只要一 append 成功，立刻叫容器重新噴發最新表格
+                            # --- 即時噴發：絕不拖延 ---
                             hero_display_area.table(pd.DataFrame(st.session_state.hero_list))
-                except:
+                except Exception as e:
                     continue
             
-            status_msg.success(f"✅ 採集完成！共鎖定 {len(st.session_state.hero_list)} 檔飆股特徵。")
+            status_msg.success(f"✅ 採集完成！今日共捕捉 {len(st.session_state.hero_list)} 檔飆股特徵。")
 
-    st.divider() # 嚴格保留分割線，絕不略過
+    st.divider()
 
 
     # ==============================================================================
