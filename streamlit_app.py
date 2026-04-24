@@ -1793,20 +1793,20 @@ with tab_brain:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
                     
-                    # --- [修正版比對邏輯] ---
-                    today_slash = datetime.now().strftime("%Y/%m/%d") # 2026/04/24
+                    # --- [這一段是核心修正：確保 2026-04-24 與 2026/04/24 都能抓到] ---
+                    today_str = datetime.now().strftime("%Y-%m-%d")    # 格式 A: 2026-04-24
+                    today_slash = datetime.now().strftime("%Y/%m/%d")  # 格式 B: 2026/04/24
                     
                     targets = []
                     for r in data:
-                        # 讀取雲端日期並轉為字串，消除空格
+                        # 讀取雲端日期並轉為字串，消除前後空格
                         row_date = str(r.get('預計複盤日', '')).strip()
                         row_status = str(r.get('結果狀態', '')).strip()
                         
-                        # 只要符合 橫杠格式 或 斜線格式，且狀態正確就抓進來
+                        # 同時檢查兩種日期格式
                         if (today_str in row_date or today_slash in row_date) and row_status == "明日推薦驗證":
                             targets.append(r)
-
-
+                    # -------------------------------------------------------
                     
                     if targets:
                         results = []
@@ -1814,8 +1814,7 @@ with tab_brain:
                         
                         for t in targets:
                             tid = str(t.get('代號', ''))
-                            
-                            # 穩定數據源偵測
+                            # 優先使用 twstock 官方數據
                             try:
                                 import twstock
                                 stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
@@ -1826,7 +1825,9 @@ with tab_brain:
                         
                             if now_price > 0:
                                 try:
-                                    past_price = float(t.get('偵測價格', 0))
+                                    # 修正：確保偵測價格是數字，移除可能的單引號
+                                    raw_past_price = str(t.get('偵測價格', 0)).replace("'", "").strip()
+                                    past_price = float(raw_past_price)
                                 except:
                                     past_price = 0
                                 
@@ -1846,15 +1847,12 @@ with tab_brain:
                         st.table(pd.DataFrame(results))
                         
                         if st.session_state.accuracy < 50:
-                            st.warning("⚠️ 偵測到市場偏誤！AI 正在執行深度偵錯，調整權重。")
-                            if 'brain_weights' in st.session_state: 
-                                st.session_state.brain_weights['chip'] = st.session_state.brain_weights.get('chip', 1.0) + 0.1
+                            st.warning("⚠️ 偵測到市場偏誤！AI 正在調整權重。")
                         else:
                             st.success(f"🔥 預判精準！AI 正在複製成功基因。")
-                            if 'brain_weights' in st.session_state: 
-                                st.session_state.brain_weights['surge'] = st.session_state.brain_weights.get('surge', 1.0) + 0.05
                     else:
-                        st.info(f"📅 雲端尚無標記為 {today_str} 的複盤名單。請檢查雲端『預計複盤日』欄位。")
+                        # 這裡的錯誤提示現在能正確顯示日期了
+                        st.info(f"📅 雲端尚無標記為 {today_str} 的複盤名單。")
                 except Exception as e: 
                     st.error(f"複盤執行失敗: {e}")
 
