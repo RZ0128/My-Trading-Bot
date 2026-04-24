@@ -1793,9 +1793,20 @@ with tab_brain:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
                     
-                    # 修正：直接抓取「預計複盤日」為今天的資料
-                    today_str = datetime.now().strftime("%Y-%m-%d")
-                    targets = [r for r in data if str(r.get('預計複盤日', '')) == today_str and r.get('結果狀態') == "明日推薦驗證"]
+                    # --- [修正版比對邏輯] ---
+                    today_slash = datetime.now().strftime("%Y/%m/%d") # 2026/04/24
+                    
+                    targets = []
+                    for r in data:
+                        # 讀取雲端日期並轉為字串，消除空格
+                        row_date = str(r.get('預計複盤日', '')).strip()
+                        row_status = str(r.get('結果狀態', '')).strip()
+                        
+                        # 只要符合 橫杠格式 或 斜線格式，且狀態正確就抓進來
+                        if (today_str in row_date or today_slash in row_date) and row_status == "明日推薦驗證":
+                            targets.append(r)
+
+
                     
                     if targets:
                         results = []
