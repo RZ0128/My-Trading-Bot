@@ -1784,7 +1784,7 @@ with tab_brain:
     # 【第一區：📊 戰略複盤：高強度海量對帳與自我偵錯】
     # ==============================================================================
     with st.expander("📊 步驟一：啟動昨日戰略複盤 (海量數據學習區)", expanded=True):
-        st.info("💡 AI 將對昨日鎖定的 10-15 檔種子進行全面對帳，校準獵殺權重。")
+        st.info("💡 AI 將對今日預計複盤的 10-15 檔種子進行全面對帳，校準獵殺權重。")
         
         if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning"):
             sh = init_cloud_connection()
@@ -1792,20 +1792,19 @@ with tab_brain:
                 try:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
-                    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
                     
-                    # 關鍵對齊：使用 8 個標準中文標題搜尋
-                    targets = [r for r in data if str(r.get('預計複盤日', '')) == yesterday and r.get('結果狀態') == "明日推薦驗證"]
+                    # 修正：直接抓取「預計複盤日」為今天的資料
+                    today_str = datetime.now().strftime("%Y-%m-%d")
+                    targets = [r for r in data if str(r.get('預計複盤日', '')) == today_str and r.get('結果狀態') == "明日推薦驗證"]
                     
                     if targets:
                         results = []
                         win_count = 0
                         
-                        # --- 核心對帳循環：已修正縮排 ---
                         for t in targets:
                             tid = str(t.get('代號', ''))
                             
-                            # 優先確保現價抓得到
+                            # 穩定數據源偵測
                             try:
                                 import twstock
                                 stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
@@ -1832,7 +1831,6 @@ with tab_brain:
                                         "判決": "✅ 捕捉成功" if is_win else "❌ 預判偏誤"
                                     })
                         
-                        # 循環結束後才計算勝率與顯示表格
                         st.session_state.accuracy = (win_count / len(targets)) * 100 if targets else 0
                         st.table(pd.DataFrame(results))
                         
@@ -1845,7 +1843,7 @@ with tab_brain:
                             if 'brain_weights' in st.session_state: 
                                 st.session_state.brain_weights['surge'] = st.session_state.brain_weights.get('surge', 1.0) + 0.05
                     else:
-                        st.info(f"📅 雲端尚無 {yesterday} 的推薦名單。請先執行今日獵殺並按『存檔』。")
+                        st.info(f"📅 雲端尚無標記為 {today_str} 的複盤名單。請檢查雲端『預計複盤日』欄位。")
                 except Exception as e: 
                     st.error(f"複盤執行失敗: {e}")
 
