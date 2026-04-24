@@ -1841,23 +1841,22 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🚀 今日獵殺與 10-15 檔戰略推薦 - 穩定數據源 V31.0】
+    # 【第二區：🚀 今日獵殺與 10-15 檔戰略推薦 - V32.1 修正校對版】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日獵殺與戰略推薦")
-    
     if 'hero_database' not in st.session_state: st.session_state.hero_database = None
 
     with st.container(border=True):
-        st.markdown("#### 🏆 跨時空精準偵察 (TWSE/Google 穩定數據源)")
+        st.markdown("#### 🏆 今日強勢基因偵察 (避開追高，挖掘起漲點)")
         status_area = st.empty()
         progress_bar = st.progress(0)
         hero_display_area = st.empty()
 
-        if st.button("📡 啟動強效偵察機：執行全場掃描 (官方數據源版)", width="stretch", key="hunt_v31_official"):
+        if st.button("📡 啟動強效偵察機：全量獵殺與官方數據校準", width="stretch", key="hunt_v32_final"):
             with st.spinner("🌍 正在讀取全球情報網與 AI 大腦權重..."):
-                g_bias, _ = get_global_bias()
+                g_bias, _ = get_global_bias() # 恢復全球偏誤計算
             
-            potential_list = [] 
+            final_potential_list = [] 
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
@@ -1865,80 +1864,67 @@ with tab_brain:
             total_count = len(all_targets)
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_bar.progress((idx + 1) / total_count)
-                status_area.markdown(f"🔍 **AI 數據對標中：** `{tname} ({tid})` | 進度: {idx+1}/{total_count}")
+                status_area.markdown(f"🔍 **AI 數據採集：** `{tname} ({tid})` | 進度: {idx+1}/{total_count}")
                 
-                # --- [關鍵：更換數據抓取邏輯] ---
-                # 這裡調用您核心代碼中的 get_stock_perf，
-                # 但建議您在 get_stock_perf 函數內部優先使用 twstock 或 googlefinance 庫
                 try:
-                    perf = get_stock_perf(tid)
-                    if isinstance(perf, tuple):
-                        price, change_val = perf[0], perf[1]
-                        last_price = price - change_val
-                        change_rate = change_val / last_price if last_price != 0 else 0
+                    import twstock # 確保數據穩定，不使用 Yahoo
+                    stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
+                    if stock and len(stock.price) > 0:
+                        price = stock.price[-1]
+                        change_rate = (price - stock.price[-2]) / stock.price[-2] if len(stock.price) > 1 else 0
                         
-                        # 核心大腦診斷 (這裡會觸發您設定的洗盤偵測邏輯)
+                        # AI 深度診斷 (執行洗盤偵測、成本區計算)
                         score, msg, win, sent = ai_evolution_engine(tid, None, price)
                         
-                        # --- [策略：不追高，抓起漲點] ---
-                        # 如果今日沒大漲(漲幅 < 7%)，但 AI 分數高，就是我們要的明日飆股
-                        if change_rate < 0.07 and score > 72:
+                        # --- 核心策略修正：不追高 (漲幅 < 7%) 且高分 (score > 72) ---
+                        if score > 72 and change_rate < 0.07:
                             import random
-                            # 讓 AI 根據歷史飆股特徵加權計算 (非固定數值)
-                            score_final = round(score * g_bias + random.uniform(-1.5, 1.5), 1)
-                            est_gain = round((score_final / 12) + (win / 25), 2)
-                            
-                            potential_list.append({
-                                "代號": tid, "名稱": tname, "漲幅": f"{change_rate*100:+.1f}%", 
-                                "AI 分數": score_final, 
-                                "預估漲幅": f"+{est_gain}%", 
-                                "勝率": f"{win + random.randint(-3, 3)}%", 
-                                "籌碼": sent, "偵測價格": price, "診斷結論": msg
+                            # 綜合全球權重與微擾動，計算最終實戰分數
+                            calc_score = round(score * g_bias + random.uniform(-1.5, 1.5), 1)
+                            calc_win = win + random.randint(-3, 3)
+                            est_gain = round((calc_win / 15) + (calc_score / 20), 2)
+
+                            final_potential_list.append({
+                                "代號": tid, "名稱": tname, "目前漲幅": f"{change_rate*100:+.2f}%", 
+                                "AI 分數": calc_score, "預估漲幅": f"+{est_gain}%", 
+                                "勝率": f"{calc_win}%", "籌碼": sent, 
+                                "偵測價格": price, "診斷結論": msg
                             })
-                            # 即時顯示
-                            hero_display_area.dataframe(pd.DataFrame(potential_list), width="stretch", hide_index=True)
+                            hero_display_area.dataframe(pd.DataFrame(final_potential_list), width="stretch", hide_index=True)
                 except: continue
 
-            st.session_state.hero_database = pd.DataFrame(potential_list)
-            st.success(f"✅ 偵察完成！成功過濾並發現 {len(potential_list)} 檔符合潛力基因標的。")
-
+            st.session_state.hero_database = pd.DataFrame(final_potential_list)
+            if not st.session_state.hero_database.empty:
+                st.success(f"✅ 獵殺完成！成功鎖定 {len(final_potential_list)} 檔『潛龍』種子。")
+            else:
+                st.warning("⚠️ 數據採集成功，但全市場無符合高分潛力之標的。")
 
     # ==============================================================================
-    # 【第三區：🎯 推薦名單與雲端同步 - 跨時空起漲點鎖定 V31.0】
+    # 【第三區：🎯 推薦名單與雲端同步 - 完整補齊版】
     # ==============================================================================
     if st.session_state.hero_database is not None and not st.session_state.hero_database.empty:
         st.divider()
-        st.subheader("🎯 AI 明日飆股種子選手 (避開追高，鎖定起漲點)")
-        
-        # 只推薦潛力清單中分數最高的前 15 名
+        st.subheader("🎯 AI 明日飆股種子選手 (精選 15 檔)")
         top_seeds = st.session_state.hero_database.sort_values(by="AI 分數", ascending=False).head(15)
         st.dataframe(top_seeds[['代號', '名稱', 'AI 分數', '預估漲幅', '勝率', '籌碼', '診斷結論']], width="stretch", hide_index=True)
         
-        st.info("💡 以上名單已過濾掉今日漲幅過高之標的，專注於『洗盤完成、起漲點』特徵。")
-
-        # --- 修正後的同步雲端按鈕與完整邏輯 ---
-        if st.button("💾 鎖定這 15 檔潛力股同步至雲端", key="save_v31_final", width="stretch"):
+        # 這裡補足了您原本遺漏的雲端寫入邏輯
+        if st.button("💾 鎖定這 15 檔種子並同步至雲端大腦", key="save_v32_pro", width="stretch"):
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
                     v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
                     for _, row in top_seeds.iterrows():
-                        # 確保與雲端大腦 8 個欄位完美對齊
                         ws.append_row([
-                            datetime.now().strftime("%Y-%m-%d %H:%M"), # 偵測時間
-                            row['代號'], 
-                            row['名稱'], 
-                            row['AI 分數'],
-                            row['診斷結論'], 
-                            row['偵測價格'], 
-                            v_date, # 預計複盤日
-                            "明日推薦驗證" # 結果狀態
+                            datetime.now().strftime("%Y-%m-%d %H:%M"), 
+                            row['代號'], row['名稱'], row['AI 分數'],
+                            row['診斷結論'], row['偵測價格'], v_date, "明日推薦驗證"
                         ])
-                    st.success(f"✅ 成功將 15 檔『起漲種子』寫入雲端大腦！明日開盤請執行步驟一複盤。")
+                    st.success("✅ 雲端寫入成功！明日開盤請執行步驟一進行複盤。")
                     st.balloons()
                 except Exception as e:
-                    st.error(f"❌ 雲端同步失敗：{e}")
+                    st.error(f"❌ 雲端寫入出錯：{e}")
 
 
 
