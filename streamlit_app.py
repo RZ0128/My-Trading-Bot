@@ -1860,81 +1860,78 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (大基石：純淨本地噴發版)】
+    # 【第二區：🏆 步驟二：今日英雄榜 (實戰即時偵測版 - 拒絕造假)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢基因學習")
     
-    # 確保英雄榜容器在 session 中是乾淨且存在的
     if 'hero_list' not in st.session_state:
         st.session_state.hero_list = []
 
     with st.container(border=True):
-        st.markdown("#### 🏆 今日英雄榜 (偵測今日 9% 飆股)")
+        st.markdown("#### 🏆 今日英雄榜 (實戰掃描今日 9% 飆股)")
         
-        # 建立一個固定的表格噴發口
-        hero_table_placeholder = st.empty()
+        # 建立動態表格容器
+        hero_placeholder = st.empty()
         
-        # 如果之前有跑出名單，先顯示出來，不要讓它消失
+        # 固化顯示（如果 Session 已有偵測結果）
         if st.session_state.hero_list:
-            hero_table_placeholder.table(pd.DataFrame(st.session_state.hero_list))
+            hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
             
-        status_text = st.empty()
+        status_hero = st.empty()
         
-        if st.button("📡 啟動全量基因掃描", width="stretch", key="scan_hero_vFINAL_FIX"):
-            # 按下按鈕時才重置名單
-            st.session_state.hero_list = [] 
+        if st.button("📡 啟動即時行情全量掃描", width="stretch", key="realtime_hero_scan"):
+            st.session_state.hero_list = [] # 每次掃描都重新憑實力說話
             
             all_targets = []
             for cat in pool_500:
                 for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
             
-            progress_bar = st.progress(0)
+            pbar = st.progress(0)
             
             for idx, (tid, tname) in enumerate(all_targets):
-                progress_bar.progress((idx + 1) / len(all_targets))
-                status_text.markdown(f"🔍 **大腦掃描中：** `{tname} ({tid})`")
+                pbar.progress((idx + 1) / len(all_targets))
+                status_hero.markdown(f"📡 **實時偵測中：** `{tname} ({tid})`")
                 
                 try:
                     import twstock
-                    # 使用本地庫，不再去外面亂抓被封鎖
-                    stock = twstock.Stock(tid.split('.')[0])
+                    pure_id = tid.split('.')[0]
                     
-                    if len(stock.price) >= 2:
-                        # 拿最新兩筆算漲幅
-                        current_p = stock.price[-1]
-                        last_p = stock.price[-2]
-                        diff = (current_p - last_p) / last_p
+                    # --- [ 核心改變：使用即時行情數據 ] ---
+                    realdata = twstock.realtime.get(pure_id)
+                    
+                    if realdata and realdata['success']:
+                        # 抓取即時成交價與昨日收盤價
+                        # yf (昨日收盤), latest_price (最新成交)
+                        latest_p = float(realdata['realtime']['latest_trade_price'])
+                        yesterday_p = float(realdata['stock_info']['last_close'])
                         
-                        # 門檻稍微寬放至 8.5%，確保漲停的聯發科一定進得來
-                        if diff >= 0.085:
-                            # 深度採集歷史，確保 ai_evolution_engine 診斷時有數據
-                            stock.fetch_from(2026, 4, 1)
+                        if yesterday_p > 0:
+                            actual_change = (latest_p - yesterday_p) / yesterday_p
                             
-                            # 執行 AI 診斷
-                            try:
-                                score, msg, win, sent = ai_evolution_engine(tid, stock, current_p)
-                            except:
-                                # 萬一引擎當掉，也保證基本數據要噴出來
-                                score, msg, win, sent = 88, "強勢噴發基因偵測完成", "85%", "大戶掃貨"
-                            
-                            # 寫入 Session 名單
-                            st.session_state.hero_list.append({
-                                "代號": tid, 
-                                "名稱": tname, 
-                                "今日漲幅": f"{diff*100:+.2f}%", 
-                                "AI 評分": score, 
-                                "籌碼狀態": sent, 
-                                "基因分析": msg
-                            })
-                            
-                            # ---【這行是命根子】一邊偵測，一邊馬上噴發更新表格 ---
-                            hero_table_placeholder.table(pd.DataFrame(st.session_state.hero_list))
+                            # 實力說話：漲幅達標才入榜
+                            if actual_change >= 0.088:
+                                # 只有達標標的才進行深度抓取與 AI 診斷
+                                stock_obj = twstock.Stock(pure_id)
+                                stock_obj.fetch_from(2026, 4, 1)
+                                
+                                score, msg, win, sent = ai_evolution_engine(tid, stock_obj, latest_p)
+                                
+                                st.session_state.hero_list.append({
+                                    "代號": tid, 
+                                    "名稱": tname, 
+                                    "今日漲幅": f"{actual_change*100:+.2f}%", 
+                                    "AI 評分": score, 
+                                    "籌碼狀態": sent, 
+                                    "基因分析": msg
+                                })
+                                # --- 偵測到一檔，立刻噴發一檔 ---
+                                hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
                 except:
                     continue
             
-            status_text.success(f"✅ 英雄基因捕捉完成！今日共列出 {len(st.session_state.hero_list)} 檔飆股。")
+            status_hero.success(f"✅ 實戰掃描完成！AI 已獲取今日強勢股之基因參數。")
 
-    st.divider() # 第二區結束，畫下漂亮的分割線
+    st.divider()
 
     # ==============================================================================
     # 【第三區：🎯 步驟三：明天飆股獵殺行動 (固化同步版)】
