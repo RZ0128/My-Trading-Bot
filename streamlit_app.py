@@ -1842,20 +1842,35 @@ with tab_brain:
                                         "判決": "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
                                     })
                         
-                        # --- [核心修正 2：更新全域準確率顯示] ---
+                        # --- [核心修正：讓 AI 真正記取教訓並更新數據] ---
                         acc_val = (win_count / len(targets)) * 100 if targets else 0
-                        st.session_state.accuracy = acc_val # 寫入 session 以供儀表板顯示
+                        
+                        # 1. 強制更新頂端儀表板的「實戰狙擊準確率」
+                        st.session_state.accuracy = acc_val 
+                        
+                        # 2. 觸發神經元學習狀態變化
+                        # 我們定義一個學習標籤，讓左側 sidebar 知道已經學過東西了
+                        st.session_state.last_learning_time = datetime.now().strftime("%H:%M:%S")
+                        
+                        # 3. 根據勝率執行「深度偵錯」或「複製基因」
+                        if acc_val < 50:
+                            st.warning(f"⚠️ 今日準確率 {acc_val:.1f}%：低於嚴格標準，AI 正在執行深度偵錯，調整大戶洗盤權重。")
+                            # 強化籌碼洗盤偵測邏輯：當準確率低，增加 chip 權重
+                            if 'brain_weights' not in st.session_state:
+                                st.session_state.brain_weights = {'chip': 1.0, 'surge': 1.0}
+                            st.session_state.brain_weights['chip'] += 0.15 
+                        else:
+                            st.success(f"🎊 戰果輝煌！準確率 {acc_val:.1f}%：AI 正在複製成功起漲基因。")
+                            # 強化噴發基因：當準確率高，增加 surge 權重
+                            if 'brain_weights' not in st.session_state:
+                                st.session_state.brain_weights = {'chip': 1.0, 'surge': 1.0}
+                            st.session_state.brain_weights['surge'] += 0.1
                         
                         st.table(pd.DataFrame(results))
                         
-                        # 顯示本次戰果總結
-                        if acc_val < 50:
-                            st.warning(f"⚠️ 今日準確率 {acc_val:.1f}%：低於嚴格標準 (≧3%者僅 {win_count} 檔)，AI 正在深度偵錯。")
-                        else:
-                            st.success(f"🎊 戰果輝煌！準確率 {acc_val:.1f}%：AI 捕捉基因校準完成。")
-                            
-                        # 強制立即重新整理以更新儀表板數字
-                        # st.rerun() # 如果需要數字立刻跳動，可以取消這一行的註解
+                        # 4. 最關鍵的一步：強制畫面重整，數據才會噴發到最上方與最左方
+                        st.rerun() 
+
                     else:
                         st.info(f"📅 雲端尚無 {today_str} 的複盤名單。")
                 except Exception as e: 
