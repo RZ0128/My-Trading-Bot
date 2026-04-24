@@ -1816,6 +1816,7 @@ with tab_brain:
                         results = []
                         win_count = 0
                         
+                        # --- [數據處理與嚴格判決] ---
                         for t in targets:
                             tid = str(t.get('代號', ''))
                             try:
@@ -1866,8 +1867,13 @@ with tab_brain:
                             st.session_state.brain_weights['surge'] += 0.1
                             st.session_state.last_insight = f"戰果達標 ({acc_val:.1f}%)！成功捕捉強勢基因，已強化噴發敏感度。"
                         
-                        # 顯示結果表格
+                        # --- [表格呈現：嚴格保留戰績列表表格] ---
                         st.table(pd.DataFrame(results))
+                        
+                        if acc_val < 50:
+                            st.warning(f"⚠️ {st.session_state.last_insight}")
+                        else:
+                            st.success(f"🎊 {st.session_state.last_insight}")
                         
                         # 4. 強制刷新，讓數據噴發到全 App
                         st.rerun() 
@@ -1878,7 +1884,6 @@ with tab_brain:
                     st.error(f"複盤執行失敗: {e}")
 
     st.divider()
-
     
     # ==============================================================================
     # 【第二區：🚀 今日獵殺與 10-15 檔戰略推薦 - V32.1 修正校對版】
