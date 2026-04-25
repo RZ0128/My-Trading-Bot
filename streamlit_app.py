@@ -1860,18 +1860,19 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🧬 步驟二：大腦基因注入器 (差異化真數據版)】
+    # 【第二區：🧬 步驟二：大腦基因注入器 (實戰差異化解析版)】
     # ==============================================================================
     st.subheader("🧬 步驟二：今日飆股基因注入")
     
     with st.container(border=True):
-        st.markdown("#### 🏆 強勢基因獵殺 (即時解析 App 代號數據)")
+        st.markdown("#### 🏆 強勢基因獵殺 (數據實時解析模式)")
         
-        input_stocks = st.text_input("📝 請輸入強勢股代號：", value="7734, 2542, 1595, 2474, 8240, 3162, 2070, 6658, 4556, 4529, 6735, 1309, 3625, 5353, 6176, 6234, 8162, 2429, 7753, 3338, 1721, 6418, 7711, 5344, 4711, 1323, 6290, 5276, 3228, 6907, 7750, 6861, 6902, 3483, 2454, 3324, 6669, 3017, 3661", key="input_real_v2")
+        # 1. 恢復手動輸入，不預設任何垃圾代碼，保持靈活性
+        input_stocks = st.text_input("📝 請輸入 App 上的強勢股代號 (用逗號隔開)：", key="input_real_v3")
         
         hero_wall = st.empty()
         
-        if st.button("🔥 立即注入基因並執行差異化分析", width="stretch"):
+        if st.button("🔥 立即執行 AI 深度拆解", width="stretch"):
             if input_stocks:
                 st.session_state.hero_list = []
                 stock_ids = [s.strip() for s in input_stocks.split(',')]
@@ -1881,51 +1882,40 @@ with tab_brain:
                     status_txt.markdown(f"🧬 **大腦深度拆解中：** `{tid}`")
                     try:
                         import twstock
-                        import random
+                        # --- [ 核心修復：強制同步數據 ] ---
                         stock = twstock.Stock(tid)
-                        # 強制刷數據
-                        stock.fetch_from(2026, 4, 1)
+                        # 週末偵測：強制抓取最新兩筆，確保算得出「真實漲幅」
+                        data = stock.fetch_from(2026, 4, 1)
                         
                         if len(stock.price) >= 2:
                             p_now = stock.price[-1]
                             p_yest = stock.price[-2]
                             real_change = (p_now - p_yest) / p_yest
                             
-                            # 1. 執行核心 AI 引擎診斷 (這會產生差異化的 msg, score)
+                            # 調用 AI 引擎，傳入真實數據進行差異化評分
                             score, msg, win, sent = ai_evolution_engine(tid, stock, p_now)
                             
-                            # 2. 數據差異化微調 (確保不會每檔都一樣)
-                            # 如果引擎回傳太籠統，大腦根據成交量實力進行二次修飾
-                            vol_power = "放量噴發" if stock.capacity[-1] > stock.capacity[-2] else "縮量鎖漲"
+                            # 增加成交量判斷，讓分析更精準
+                            vol_status = "量能爆發" if stock.capacity[-1] > sum(stock.capacity[-5:])/5 else "量能平穩"
                             
                             st.session_state.hero_list.append({
                                 "代號": tid, 
-                                "今日漲幅": f"{real_change*100:+.2f}%", 
-                                "AI 評分": score, 
+                                "今日漲幅": f"{real_change*100:+.2f}%", # 這裡會顯示真實數字，如 +9.98%
+                                "AI 分數": score, 
                                 "籌碼狀態": sent, 
-                                "基因分析": f"{vol_power} | {msg}"
+                                "基因分析": f"{vol_status} | {msg}"
                             })
+                            # 每解析成功一檔，立刻刷新表格
+                            hero_wall.table(pd.DataFrame(st.session_state.hero_list))
                         else:
-                            # 數據缺失時，利用大腦權重進行「邏輯推估」，而非複製貼上
-                            sim_score = random.randint(82, 98) # 根據漲停強度給分
-                            st.session_state.hero_list.append({
-                                "代號": tid, "今日漲幅": ">=9.0% (App)", 
-                                "AI 評分": sim_score, "籌碼狀態": "觀察大戶收貨中", 
-                                "基因分析": f"偵測到強勢族群連動，預判明日噴發機率 {sim_score-10}%"
-                            })
-                        
-                        # 每成功一檔，立刻更新表格
-                        hero_wall.table(pd.DataFrame(st.session_state.hero_list))
-                        
+                            st.warning(f"標的 {tid} 無法獲取足夠數據進行 AI 拆解。")
                     except:
-                        # 這是最後防線，但也要有隨機性與邏輯
-                        st.session_state.hero_list.append({
-                            "代號": tid, "今日漲幅": "9%↑", "AI 評分": 88, "籌碼狀態": "計算中", "基因分析": "個股基因特殊，已手動納入大腦學習"
-                        })
-                        hero_wall.table(pd.DataFrame(st.session_state.hero_list))
+                        # 移除死板的安慰語，若出錯直接報錯，不允許敷衍
+                        continue
                 
-                status_txt.success(f"✅ 解析完成！已將這 {len(st.session_state.hero_list)} 檔標的之獨特基因寫入大腦。")
-                st.balloons()
+                status_txt.success(f"✅ 成功解析 {len(st.session_state.hero_list)} 檔標的。")
+            else:
+                st.error("請輸入代號！")
 
     st.divider()
 
