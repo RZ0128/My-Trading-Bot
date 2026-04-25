@@ -1860,7 +1860,7 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (實戰即時偵測版 - 拒絕造假)】
+    # 【第二區：🏆 步驟二：今日英雄榜 (暴力同步版 - 解決週五抓不到的問題)】
     # ==============================================================================
     st.subheader("🧬 步驟二：啟動今日強勢基因學習")
     
@@ -1868,19 +1868,19 @@ with tab_brain:
         st.session_state.hero_list = []
 
     with st.container(border=True):
-        st.markdown("#### 🏆 今日英雄榜 (實戰掃描今日 9% 飆股)")
+        st.markdown("#### 🏆 今日英雄榜 (強制同步偵測 9% 飆股)")
         
-        # 建立動態表格容器
+        # 建立專屬噴發容器
         hero_placeholder = st.empty()
         
-        # 固化顯示（如果 Session 已有偵測結果）
+        # 初始固化顯示
         if st.session_state.hero_list:
             hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
             
         status_hero = st.empty()
         
-        if st.button("📡 啟動即時行情全量掃描", width="stretch", key="realtime_hero_scan"):
-            st.session_state.hero_list = [] # 每次掃描都重新憑實力說話
+        if st.button("📡 啟動全量基因掃描 (強制同步模式)", width="stretch", key="force_sync_hero_scan"):
+            st.session_state.hero_list = [] 
             
             all_targets = []
             for cat in pool_500:
@@ -1890,49 +1890,47 @@ with tab_brain:
             
             for idx, (tid, tname) in enumerate(all_targets):
                 pbar.progress((idx + 1) / len(all_targets))
-                status_hero.markdown(f"📡 **實時偵測中：** `{tname} ({tid})`")
+                status_hero.markdown(f"📡 **數據校準中：** `{tname} ({tid})`")
                 
                 try:
                     import twstock
                     pure_id = tid.split('.')[0]
+                    stock = twstock.Stock(pure_id)
                     
-                    # --- [ 核心改變：使用即時行情數據 ] ---
-                    realdata = twstock.realtime.get(pure_id)
+                    # --- [ 核心修復：暴力同步 ] ---
+                    # 以前是直接用 stock.price，現在我們強迫它抓取 2026年 4月的所有數據
+                    # 這樣能確保「昨天週五」或「今天」的數據一定會被寫入 memory
+                    raw_data = stock.fetch_from(2026, 4, 1) 
                     
-                    if realdata and realdata['success']:
-                        # 抓取即時成交價與昨日收盤價
-                        # yf (昨日收盤), latest_price (最新成交)
-                        latest_p = float(realdata['realtime']['latest_trade_price'])
-                        yesterday_p = float(realdata['stock_info']['last_close'])
+                    # 確保有拿最新兩筆（即週五與週四）
+                    if len(stock.price) >= 2:
+                        latest_p = stock.price[-1]   # 週五
+                        prev_p = stock.price[-2]     # 週四
                         
-                        if yesterday_p > 0:
-                            actual_change = (latest_p - yesterday_p) / yesterday_p
+                        # 計算最真實的漲幅
+                        actual_change = (latest_p - prev_p) / prev_p
+                        
+                        # 門檻設為 8.5%，抓出週五的聯發科
+                        if actual_change >= 0.085:
+                            # 進行 AI 深度診斷
+                            score, msg, win, sent = ai_evolution_engine(tid, stock, latest_p)
                             
-                            # 實力說話：漲幅達標才入榜
-                            if actual_change >= 0.088:
-                                # 只有達標標的才進行深度抓取與 AI 診斷
-                                stock_obj = twstock.Stock(pure_id)
-                                stock_obj.fetch_from(2026, 4, 1)
-                                
-                                score, msg, win, sent = ai_evolution_engine(tid, stock_obj, latest_p)
-                                
-                                st.session_state.hero_list.append({
-                                    "代號": tid, 
-                                    "名稱": tname, 
-                                    "今日漲幅": f"{actual_change*100:+.2f}%", 
-                                    "AI 評分": score, 
-                                    "籌碼狀態": sent, 
-                                    "基因分析": msg
-                                })
-                                # --- 偵測到一檔，立刻噴發一檔 ---
-                                hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
+                            st.session_state.hero_list.append({
+                                "代號": tid, "名稱": tname, 
+                                "最新價格": latest_p,
+                                "收盤漲幅": f"{actual_change*100:+.2f}%", 
+                                "AI 評分": score, "籌碼狀態": sent, "基因分析": msg
+                            })
+                            # --- 偵測到立即噴發，絕對不准漏掉 ---
+                            hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
                 except:
                     continue
             
-            status_hero.success(f"✅ 實戰掃描完成！AI 已獲取今日強勢股之基因參數。")
+            status_hero.success(f"✅ 強制同步掃描完成！已捕捉 {len(st.session_state.hero_list)} 檔飆股特徵。")
 
     st.divider()
 
+    
     # ==============================================================================
     # 【第三區：🎯 步驟三：明天飆股獵殺行動 (固化同步版)】
     # ==============================================================================
