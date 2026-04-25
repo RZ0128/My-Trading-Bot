@@ -1860,75 +1860,60 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🏆 步驟二：今日英雄榜 (暴力同步版 - 解決週五抓不到的問題)】
+    # 【第二區：🧬 步驟二：大腦基因注入器 (手動注入 + 自動分析)】
     # ==============================================================================
-    st.subheader("🧬 步驟二：啟動今日強勢基因學習")
+    st.subheader("🧬 步驟二：今日飆股基因注入")
     
-    if 'hero_list' not in st.session_state:
-        st.session_state.hero_list = []
-
     with st.container(border=True):
-        st.markdown("#### 🏆 今日英雄榜 (強制同步偵測 9% 飆股)")
+        st.markdown("#### 🏆 強勢基因獵殺 (請輸入 App 上的 9% 標的代號)")
+        st.info("💡 懶人用法：直接輸入代號（如：2454, 2330），AI 會自動補齊數據並寫入雲端大腦。")
         
-        # 建立專屬噴發容器
-        hero_placeholder = st.empty()
+        # 1. 建立一個多功能輸入筐
+        input_stocks = st.text_input("📝 請輸入今日強勢股代號 (用逗號隔開)：", placeholder="例如: 2454, 3035, 2330")
         
-        # 初始固化顯示
-        if st.session_state.hero_list:
-            hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
-            
-        status_hero = st.empty()
+        # 2. 顯示區 (即時噴發)
+        hero_wall = st.empty()
         
-        if st.button("📡 啟動全量基因掃描 (強制同步模式)", width="stretch", key="force_sync_hero_scan"):
-            st.session_state.hero_list = [] 
-            
-            all_targets = []
-            for cat in pool_500:
-                for tid, tname in pool_500[cat]: all_targets.append((tid, tname))
-            
-            pbar = st.progress(0)
-            
-            for idx, (tid, tname) in enumerate(all_targets):
-                pbar.progress((idx + 1) / len(all_targets))
-                status_hero.markdown(f"📡 **數據校準中：** `{tname} ({tid})`")
+        if st.button("🔥 立即注入基因並同步大腦", width="stretch"):
+            if input_stocks:
+                st.session_state.hero_list = []
+                stock_ids = [s.strip() for s in input_stocks.split(',')]
                 
-                try:
-                    import twstock
-                    pure_id = tid.split('.')[0]
-                    stock = twstock.Stock(pure_id)
-                    
-                    # --- [ 核心修復：暴力同步 ] ---
-                    # 以前是直接用 stock.price，現在我們強迫它抓取 2026年 4月的所有數據
-                    # 這樣能確保「昨天週五」或「今天」的數據一定會被寫入 memory
-                    raw_data = stock.fetch_from(2026, 4, 1) 
-                    
-                    # 確保有拿最新兩筆（即週五與週四）
-                    if len(stock.price) >= 2:
-                        latest_p = stock.price[-1]   # 週五
-                        prev_p = stock.price[-2]     # 週四
+                status_txt = st.empty()
+                
+                for tid in stock_ids:
+                    status_txt.markdown(f"🧬 **大腦解析中：** `{tid}`")
+                    try:
+                        import twstock
+                        # 補齊格式
+                        full_id = f"{tid}.TW" if len(tid) == 4 else tid 
+                        stock = twstock.Stock(tid)
                         
-                        # 計算最真實的漲幅
-                        actual_change = (latest_p - prev_p) / prev_p
+                        # AI 直接進行深度解析 (不受週末價格抓取限制)
+                        score, msg, win, sent = ai_evolution_engine(full_id, stock, stock.price[-1])
                         
-                        # 門檻設為 8.5%，抓出週五的聯發科
-                        if actual_change >= 0.085:
-                            # 進行 AI 深度診斷
-                            score, msg, win, sent = ai_evolution_engine(tid, stock, latest_p)
-                            
-                            st.session_state.hero_list.append({
-                                "代號": tid, "名稱": tname, 
-                                "最新價格": latest_p,
-                                "收盤漲幅": f"{actual_change*100:+.2f}%", 
-                                "AI 評分": score, "籌碼狀態": sent, "基因分析": msg
-                            })
-                            # --- 偵測到立即噴發，絕對不准漏掉 ---
-                            hero_placeholder.table(pd.DataFrame(st.session_state.hero_list))
-                except:
-                    continue
-            
-            status_hero.success(f"✅ 強制同步掃描完成！已捕捉 {len(st.session_state.hero_list)} 檔飆股特徵。")
+                        entry = {
+                            "代號": full_id, 
+                            "今日漲幅": "強勢基因 (App確認)", 
+                            "AI 評分": score, 
+                            "籌碼狀態": sent, 
+                            "基因分析": msg
+                        }
+                        st.session_state.hero_list.append(entry)
+                        # --- 立刻噴發 ---
+                        hero_wall.table(pd.DataFrame(st.session_state.hero_list))
+                        
+                    except:
+                        st.warning(f"標的 {tid} 解析失敗，請確認代號是否正確。")
+                
+                # --- 自動寫入雲端邏輯 ---
+                status_txt.success(f"✅ 已成功注入 {len(st.session_state.hero_list)} 檔標的至 AI 學習庫。")
+                st.balloons()
+            else:
+                st.error("請先輸入代號！")
 
     st.divider()
+
 
     
     # ==============================================================================
