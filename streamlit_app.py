@@ -1787,7 +1787,7 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第一區：📊 戰略複盤：高強度海量對帳與自我偵錯】
+    # 【第一區：📊 戰略複盤：高強度海量對帳與自我偵錯 (週末自動回溯優化版)】
     # ==============================================================================
     with st.expander("📊 步驟一：啟動昨日戰略複盤 (海量數據學習區)", expanded=True):
         st.info("💡 AI 將對今日預計複盤的 10-15 檔種子進行全面對帳，校準獵殺權重。")
@@ -1799,11 +1799,23 @@ with tab_brain:
                 try:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
-                    curr_time = datetime.now()
-                    today_str = curr_time.strftime("%Y-%m-%d")
-                    today_slash = curr_time.strftime("%Y/%m/%d")
                     
-                    targets = [r for r in data if (today_str in str(r.get('預計復盤日', r.get('預計複盤日', ''))) or today_slash in str(r.get('預計復盤日', r.get('預計複盤日', '')))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
+                    # --- [ 🔧 核心修復：週末自動回溯邏輯 ] ---
+                    curr_time = datetime.now()
+                    # weekday(): 0=Mon, 4=Fri, 5=Sat, 6=Sun
+                    target_time = curr_time
+                    if curr_time.weekday() == 5: # 週六，回溯 1 天找週五
+                        target_time = curr_time - timedelta(days=1)
+                    elif curr_time.weekday() == 6: # 週日，回溯 2 天找週五
+                        target_time = curr_time - timedelta(days=2)
+                    
+                    # 重新定義搜尋字串
+                    target_str = target_time.strftime("%Y-%m-%d")
+                    target_slash = target_time.strftime("%Y/%m/%d")
+                    # ----------------------------------------
+                    
+                    # 使用 target_str 取代原有的 today_str
+                    targets = [r for r in data if (target_str in str(r.get('預計復盤日', r.get('預計複盤日', ''))) or target_slash in str(r.get('預計復盤日', r.get('預計複盤日', '')))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
                     
                     if targets:
                         results = []
@@ -1828,24 +1840,23 @@ with tab_brain:
                         acc_val = (win_count / len(targets)) * 100
                         st.session_state.accuracy = acc_val 
                         st.session_state.last_learning_time = datetime.now().strftime("%H:%M:%S")
-                        st.session_state.recap_results = results  # 將結果存入緩存，防止 rerun 消失
+                        st.session_state.recap_results = results  # 將結果存入緩存
                         
                         if acc_val < 50:
-                            st.session_state.last_insight = f"今日準確率 {acc_val:.1f}%：低於標準，已強化籌碼洗盤偵測。"
+                            st.session_state.last_insight = f"昨日 ({target_str}) 準確率 {acc_val:.1f}%：低於標準，已強化偵測。"
                         else:
-                            st.session_state.last_insight = f"戰果輝煌 ({acc_val:.1f}%)！AI 已成功複製強勢基因。"
+                            st.session_state.last_insight = f"昨日 ({target_str}) 戰果輝煌 ({acc_val:.1f}%)！已成功複製基因。"
                         
-                        # 強制刷新：這會讓側邊欄神經元與頂端儀表板立即抓到新數據並變色
                         st.rerun() 
 
                     else:
-                        st.info(f"📅 雲端尚無 {today_str} 的複盤名單。")
+                        st.info(f"📅 雲端尚無 {target_str} (由本日回溯) 的複盤名單。")
                 except Exception as e: 
                     st.error(f"複盤失敗: {e}")
 
-        # --- [ 視覺噴發區：這部分在 rerun 後會自動顯示 ] ---
+        # --- [ 視覺噴發區 ] ---
         if 'recap_results' in st.session_state and st.session_state.recap_results:
-            st.markdown("### 📝 今日實戰複盤戰果明細")
+            st.markdown(f"### 📝 複盤戰報明細 (對帳基準日: {st.session_state.get('last_learning_time', '')})")
             st.table(pd.DataFrame(st.session_state.recap_results))
             
             if st.session_state.accuracy < 50:
@@ -1858,6 +1869,7 @@ with tab_brain:
                 st.rerun()
 
     st.divider()
+
     
     # ==============================================================================
     # 【第二區：🧬 步驟二：大腦基因注入器 (AI 參數解析與權重進化版)】
