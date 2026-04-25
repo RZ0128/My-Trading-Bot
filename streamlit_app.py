@@ -1860,68 +1860,43 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第二區：🧬 步驟二：大腦基因注入器 (實戰差異化解析版)】
+    # 【第二區：🧬 步驟二：大腦基因注入器 (AI 參數解析與權重進化版)】
     # ==============================================================================
-    st.subheader("🧬 步驟二：今日飆股基因注入")
+    st.subheader("🧬 步驟二：今日飆股基因注入與大腦進化")
     
+    if 'brain_weights' not in st.session_state:
+        st.session_state.brain_weights = {"hot_sectors": [], "avg_score": 80}
+
     with st.container(border=True):
-        st.markdown("#### 🏆 強勢基因獵殺 (數據實時解析模式)")
+        st.markdown("#### 🏆 接收 AI 雲端指令 (請貼入 Gemini 生成的基因代碼)")
         
-        # 1. 恢復手動輸入，不預設任何垃圾代碼，保持靈活性
-        input_stocks = st.text_input("📝 請輸入 App 上的強勢股代號 (用逗號隔開)：", key="input_real_v3")
+        # 這是連結點：我會給您這段 JSON 代碼
+        brain_input = st.text_area("📡 貼入 AI 基因指令集：", height=100, placeholder='{"date": "2026-04-24", "genes": [...]}')
         
         hero_wall = st.empty()
         
-        if st.button("🔥 立即執行 AI 深度拆解", width="stretch"):
-            if input_stocks:
-                st.session_state.hero_list = []
-                stock_ids = [s.strip() for s in input_stocks.split(',')]
-                status_txt = st.empty()
-                
-                for tid in stock_ids:
-                    status_txt.markdown(f"🧬 **大腦深度拆解中：** `{tid}`")
-                    try:
-                        import twstock
-                        # --- [ 核心修復：強制同步數據 ] ---
-                        stock = twstock.Stock(tid)
-                        # 週末偵測：強制抓取最新兩筆，確保算得出「真實漲幅」
-                        data = stock.fetch_from(2026, 4, 1)
-                        
-                        if len(stock.price) >= 2:
-                            p_now = stock.price[-1]
-                            p_yest = stock.price[-2]
-                            real_change = (p_now - p_yest) / p_yest
-                            
-                            # 調用 AI 引擎，傳入真實數據進行差異化評分
-                            score, msg, win, sent = ai_evolution_engine(tid, stock, p_now)
-                            
-                            # 增加成交量判斷，讓分析更精準
-                            vol_status = "量能爆發" if stock.capacity[-1] > sum(stock.capacity[-5:])/5 else "量能平穩"
-                            
-                            st.session_state.hero_list.append({
-                                "代號": tid, 
-                                "今日漲幅": f"{real_change*100:+.2f}%", # 這裡會顯示真實數字，如 +9.98%
-                                "AI 分數": score, 
-                                "籌碼狀態": sent, 
-                                "基因分析": f"{vol_status} | {msg}"
-                            })
-                            # 每解析成功一檔，立刻刷新表格
-                            hero_wall.table(pd.DataFrame(st.session_state.hero_list))
-                        else:
-                            st.warning(f"標的 {tid} 無法獲取足夠數據進行 AI 拆解。")
-                    except:
-                        # 移除死板的安慰語，若出錯直接報錯，不允許敷衍
-                        continue
-                
-                status_txt.success(f"✅ 成功解析 {len(st.session_state.hero_list)} 檔標的。")
-            else:
-                st.error("請輸入代號！")
+        if st.button("🔥 啟動大腦進化：融合今日英雄基因", width="stretch"):
+            if brain_input:
+                try:
+                    import json
+                    data = json.loads(brain_input)
+                    st.session_state.hero_list = data['genes']
+                    
+                    # --- 關鍵：從基因中提取「熱門族群」與「噴發特徵」 ---
+                    # 比如：偵測到聯發科，就將 'IC設計' 納入加權名單
+                    st.session_state.brain_weights['hot_sectors'] = [g.get('sector', '') for g in data['genes']]
+                    st.session_state.brain_weights['avg_score'] = sum([g['AI 評分'] for g in data['genes']]) / len(data['genes'])
+                    
+                    hero_wall.table(pd.DataFrame(st.session_state.hero_list))
+                    st.success(f"✅ 大腦進化完成！已記住 {len(data['genes'])} 檔英雄特徵。")
+                except:
+                    st.error("代碼格式錯誤，請重新向 Gemini 索取基因指令。")
 
     st.divider()
 
     
     # ==============================================================================
-    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (固化同步版)】
+    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (大腦基因加權進化版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
     
@@ -1940,6 +1915,7 @@ with tab_brain:
         
         if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v33"):
             with st.spinner("🧠 AI 大腦進行戰略演算..."):
+                # 獲取第一步複盤後的全局偏誤
                 g_bias, _ = get_global_bias()
             
             all_targets = []
@@ -1961,31 +1937,53 @@ with tab_brain:
                     
                     # 獵殺門檻：避開今日已噴發 (>7%)
                     if change_today < 0.07: 
+                        # 初步診斷
                         score, msg, win, sent = ai_evolution_engine(tid, None, price)
+                        
                         if score >= 72:
+                            # 深度診斷
                             stock.fetch_from(2026, 4, 1) 
                             score, msg, win, sent = ai_evolution_engine(tid, stock, price)
+                            
+                            # --- 🤖 【AI 融會貫通：基因加權邏輯開始】 ---
+                            # 如果第二步有注入強勢基因，這裡會自動掃描並連動
+                            if 'brain_weights' in st.session_state:
+                                hot_sectors = st.session_state.brain_weights.get('hot_sectors', [])
+                                if hot_sectors:
+                                    # 檢查此股票是否屬於今日強勢族群
+                                    for cat, members in pool_500.items():
+                                        if any(tid == m[0] for m in members):
+                                            if cat in hot_sectors:
+                                                score += 5.0  # 族群基因連動加權
+                                                msg = f"🌟【基因共振】{msg}"
+                            # --- 【AI 融會貫通結束】 ---
                             
                             import random
                             calc_score = round(score * g_bias + random.uniform(-1, 1), 1)
                             calc_win = win + random.randint(-2, 2)
                             
                             st.session_state.final_seeds.append({
-                                "代號": tid, "名稱": tname, "AI 分數": calc_score,
-                                "勝率": f"{calc_win}%", "籌碼": sent, 
+                                "代號": tid, 
+                                "名稱": tname, 
+                                "AI 分數": calc_score,
+                                "勝率": f"{calc_win}%", 
+                                "籌碼": sent, 
                                 "預估漲幅": f"+{round((calc_win/10), 1)}%", 
-                                "偵測價格": price, "戰略結論": msg
+                                "偵測價格": price, 
+                                "戰略結論": msg
                             })
-                            # --- 實時噴發 ---
+                            # --- 實時噴發更新表格 ---
                             hunt_table_area.table(pd.DataFrame(st.session_state.final_seeds))
-                except: continue
+                except: 
+                    continue
             
             if st.session_state.final_seeds:
                 df_all = pd.DataFrame(st.session_state.final_seeds)
+                # 最終排序：分數越高越前面
                 st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(15).to_dict('records')
-                # 最終排序後的精美顯示
+                # 最終精美顯示
                 hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
-                status_hunt.success("🎯 獵殺完成！種子已就位。")
+                status_hunt.success("🎯 獵殺完成！種子已根據最新基因權重就位。")
 
         # --- 雲端同步 (自動化) ---
         if st.session_state.final_seeds:
@@ -1994,19 +1992,27 @@ with tab_brain:
                 sh = init_cloud_connection()
                 if sh:
                     try:
+                        from datetime import datetime, timedelta
                         ws = sh.worksheet("thought_log")
+                        # 預測日期為下一個交易日（簡單加1天）
                         v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
                         for row in st.session_state.final_seeds:
                             ws.append_row([
-                                datetime.now().strftime("%Y-%m-%d %H:%M"), row['代號'], row['名稱'], 
-                                row['AI 分數'], row['戰略結論'], row['偵測價格'], v_date, "明日推薦驗證"
+                                datetime.now().strftime("%Y-%m-%d %H:%M"), 
+                                row['代號'], 
+                                row['名稱'], 
+                                row['AI 分數'], 
+                                row['戰略結論'], 
+                                row['偵測價格'], 
+                                v_date, 
+                                "明日推薦驗證"
                             ])
-                        st.success(f"✅ 同步成功！已傳入雲端。")
+                        st.success(f"✅ 同步成功！獵殺成果已傳入雲端。")
                         st.balloons()
-                    except: st.error("同步失敗")
+                    except Exception as e: 
+                        st.error(f"同步失敗: {str(e)}")
 
     st.divider()
-
 
 
     # --- [第二區：📡 今日掃描與重大發現] ---
