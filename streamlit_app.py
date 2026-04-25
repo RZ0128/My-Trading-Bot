@@ -1908,7 +1908,7 @@ with tab_brain:
 
     
     # ==============================================================================
-    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (大腦基因加權進化版)】
+    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (流暢加速 + 雲端同步完整版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
     
@@ -1918,17 +1918,17 @@ with tab_brain:
     with st.container(border=True):
         st.info("💡 結合『複盤心得』與『飆股基因』，重新尋找明天具備 3-10% 潛力的標的。")
         
-        # --- 關鍵：預先顯示數據，防止點擊雲端同步後消失 ---
+        # --- 顯示區 ---
         hunt_table_area = st.empty()
         if st.session_state.final_seeds:
             hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
 
         status_hunt = st.empty()
         
-        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v33"):
+        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v35"):
             with st.spinner("🧠 AI 大腦進行戰略演算..."):
-                # 獲取第一步複盤後的全局偏誤
-                g_bias, _ = get_global_bias()
+                # 從第一步複盤結果獲取 g_bias
+                g_bias = st.session_state.get('g_bias', 1.0)
             
             all_targets = []
             for cat in pool_500:
@@ -1937,76 +1937,63 @@ with tab_brain:
             st.session_state.final_seeds = [] 
             progress_hunt = st.progress(0)
             
+            # --- ⚡ 執行加速掃描 ---
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_hunt.progress((idx + 1) / len(all_targets))
                 status_hunt.markdown(f"🎯 **精準獵殺中：** `{tname} ({tid})`")
                 
                 try:
-                    import twstock
-                    stock = twstock.Stock(tid.replace(".TW", "").replace(".TWO", ""))
-                    price = stock.price[-1]
-                    change_today = (price - stock.price[-2]) / stock.price[-2]
+                    # 使用高效能偵測函數，避免重複初始化導致卡死
+                    perf = get_stock_perf(tid)
+                    if not perf or perf[0] <= 0: continue
+                    
+                    price = perf[0]
+                    change_today = perf[1] 
                     
                     # 獵殺門檻：避開今日已噴發 (>7%)
-                    if change_today < 0.07: 
-                        # 初步診斷
+                    if change_today < 7.0: 
                         score, msg, win, sent = ai_evolution_engine(tid, None, price)
                         
-                        if score >= 72:
-                            # 深度診斷
-                            stock.fetch_from(2026, 4, 1) 
-                            score, msg, win, sent = ai_evolution_engine(tid, stock, price)
-                            
-                            # --- 🤖 【AI 融會貫通：基因加權邏輯開始】 ---
-                            # 如果第二步有注入強勢基因，這裡會自動掃描並連動
-                            if 'brain_weights' in st.session_state:
-                                hot_sectors = st.session_state.brain_weights.get('hot_sectors', [])
-                                if hot_sectors:
-                                    # 檢查此股票是否屬於今日強勢族群
-                                    for cat, members in pool_500.items():
-                                        if any(tid == m[0] for m in members):
-                                            if cat in hot_sectors:
-                                                score += 5.0  # 族群基因連動加權
-                                                msg = f"🌟【基因共振】{msg}"
-                            # --- 【AI 融會貫通結束】 ---
-                            
+                        # --- 🧬 基因加權邏輯 (連動第二步注入的熱門族群) ---
+                        if 'brain_weights' in st.session_state:
+                            hot_sectors = st.session_state.brain_weights.get('hot_sectors', [])
+                            for cat, members in pool_500.items():
+                                if any(tid == m[0] for m in members) and cat in hot_sectors:
+                                    score += 5.0
+                                    msg = f"🌟【基因共振】{msg}"
+                        
+                        # 門檻校準：只有高分才進入候選
+                        if score >= 75:
                             import random
                             calc_score = round(score * g_bias + random.uniform(-1, 1), 1)
-                            calc_win = win + random.randint(-2, 2)
+                            calc_win = int(win + random.randint(-2, 2))
                             
                             st.session_state.final_seeds.append({
-                                "代號": tid, 
-                                "名稱": tname, 
-                                "AI 分數": calc_score,
-                                "勝率": f"{calc_win}%", 
-                                "籌碼": sent, 
+                                "代號": tid, "名稱": tname, "AI 分數": calc_score,
+                                "勝率": f"{calc_win}%", "籌碼": sent, 
                                 "預估漲幅": f"+{round((calc_win/10), 1)}%", 
-                                "偵測價格": price, 
-                                "戰略結論": msg
+                                "偵測價格": price, "戰略結論": msg
                             })
-                            # --- 實時噴發更新表格 ---
-                            hunt_table_area.table(pd.DataFrame(st.session_state.final_seeds))
-                except: 
-                    continue
+                            # 實時更新 DataFrame 顯示
+                            hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
+                except: continue
             
             if st.session_state.final_seeds:
                 df_all = pd.DataFrame(st.session_state.final_seeds)
-                # 最終排序：分數越高越前面
                 st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(15).to_dict('records')
-                # 最終精美顯示
                 hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
-                status_hunt.success("🎯 獵殺完成！種子已根據最新基因權重就位。")
+                status_hunt.success("🎯 獵殺完成！種子已結合最新基因就位。")
 
-        # --- 雲端同步 (自動化) ---
+        # --- 💾 雲端同步按鈕 (確保這一區被完整保留) ---
         if st.session_state.final_seeds:
             st.divider()
-            if st.button("💾 鎖定這 15 檔種子並自動同步至雲端大腦", width="stretch", key="sync_v33"):
+            if st.button("💾 鎖定這 15 檔種子並自動同步至雲端大腦", width="stretch", key="sync_final_v35"):
                 sh = init_cloud_connection()
                 if sh:
                     try:
                         from datetime import datetime, timedelta
                         ws = sh.worksheet("thought_log")
-                        # 預測日期為下一個交易日（簡單加1天）
+                        # 預測日期為下一個交易日
                         v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
                         for row in st.session_state.final_seeds:
                             ws.append_row([
