@@ -1787,10 +1787,29 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第一區：📊 戰略複盤：高強度海量對帳與自我偵錯 (週末自動回溯優化版)】
+    # 【第一區：📊 戰略複盤：高強度海量對帳與自我偵錯 (持久記憶持久版)】
     # ==============================================================================
     with st.expander("📊 步驟一：啟動昨日戰略複盤 (海量數據學習區)", expanded=True):
         st.info("💡 AI 將對今日預計複盤的 10-15 檔種子進行全面對帳，校準獵殺權重。")
+
+        # --- 🧠 核心：開機自動恢復記憶 (防止重新整理歸零) ---
+        if 'accuracy' not in st.session_state:
+            sh = init_cloud_connection()
+            if sh:
+                try:
+                    ws = sh.worksheet("thought_log")
+                    # 從雲端抓取最後一筆標記為「複盤戰報」的紀錄
+                    all_logs = ws.get_all_records()
+                    last_recaps = [r for r in all_logs if str(r.get('結果狀態', '')) == "複盤戰報"]
+                    if last_recaps:
+                        last_data = last_recaps[-1]
+                        st.session_state.accuracy = float(last_data.get('AI 分數', 0))
+                        st.session_state.last_insight = last_data.get('戰略結論', '已恢復歷史戰果。')
+                        st.session_state.last_learning_time = "歷史紀錄"
+                    else:
+                        st.session_state.accuracy = 0.0
+                except:
+                    st.session_state.accuracy = 0.0
         
         # 核心：執行按鈕
         if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning"):
@@ -1802,19 +1821,15 @@ with tab_brain:
                     
                     # --- [ 🔧 核心修復：週末自動回溯邏輯 ] ---
                     curr_time = datetime.now()
-                    # weekday(): 0=Mon, 4=Fri, 5=Sat, 6=Sun
                     target_time = curr_time
-                    if curr_time.weekday() == 5: # 週六，回溯 1 天找週五
+                    if curr_time.weekday() == 5: # 週六
                         target_time = curr_time - timedelta(days=1)
-                    elif curr_time.weekday() == 6: # 週日，回溯 2 天找週五
+                    elif curr_time.weekday() == 6: # 週日
                         target_time = curr_time - timedelta(days=2)
                     
-                    # 重新定義搜尋字串
                     target_str = target_time.strftime("%Y-%m-%d")
                     target_slash = target_time.strftime("%Y/%m/%d")
-                    # ----------------------------------------
                     
-                    # 使用 target_str 取代原有的 today_str
                     targets = [r for r in data if (target_str in str(r.get('預計復盤日', r.get('預計複盤日', ''))) or target_slash in str(r.get('預計復盤日', r.get('預計複盤日', '')))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
                     
                     if targets:
@@ -1846,6 +1861,12 @@ with tab_brain:
                             st.session_state.last_insight = f"昨日 ({target_str}) 準確率 {acc_val:.1f}%：低於標準，已強化偵測。"
                         else:
                             st.session_state.last_insight = f"昨日 ({target_str}) 戰果輝煌 ({acc_val:.1f}%)！已成功複製基因。"
+                        
+                        # --- 💾 關鍵持久化：寫回雲端石碑 ---
+                        ws.append_row([
+                            datetime.now().strftime("%Y-%m-%d %H:%M"), "SYSTEM", "大腦自我校準", 
+                            acc_val, st.session_state.last_insight, "-", "-", "複盤戰報"
+                        ])
                         
                         st.rerun() 
 
