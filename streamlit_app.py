@@ -960,11 +960,16 @@ def ai_hero_study_and_evolution():
             st.write("🌍 正在同步世界新聞：AI 偵測到半導體供應鏈需求持續擴張...")
             st.write("📊 正在分析英雄基因：發現共同點為『窒息量後首放量』與『大戶洗盤結束』...")
             
-            # --- [核心：全自動權重分配邏輯] --- 
+            # --- [核心：全自動權重分配邏輯 (修正版)] --- 
+            # 動作 A：如果完全沒初始化過，直接建立完整的字典
             if 'brain_weights' not in st.session_state:
                 st.session_state.brain_weights = {"tech": 1.0, "chip": 1.0, "surge": 1.0}
             
-            # AI 根據英雄基因自動計算權重，不再需要老總手動拉桿
+            # 動作 B：【關鍵修復】如果字典已存在但缺了 surge，強制補位防止報錯
+            if 'surge' not in st.session_state.brain_weights:
+                st.session_state.brain_weights['surge'] = 1.0
+            
+            # 現在可以安全地進行 AI 權重自動重校
             st.session_state.brain_weights['surge'] += 0.05
             st.session_state.brain_weights['tech'] = 0.95 
             
@@ -977,6 +982,7 @@ def ai_hero_study_and_evolution():
             status.update(label="✅ 狙擊學習完成：權重已自動重校，明日預測已寫入雲端", state="complete")
 
         st.info(f"🎯 明日潛力狙擊對象：{', '.join(st.session_state['tomorrow_picks'])}")
+
 
 def save_prediction_to_cloud(picks):
     """將 AI 預測寫入 Sheet，用於隔天自動對比驗證"""
