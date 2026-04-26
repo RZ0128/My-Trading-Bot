@@ -960,7 +960,7 @@ def ai_hero_study_and_evolution():
             st.write("🌍 正在同步世界新聞：AI 偵測到半導體供應鏈需求持續擴張...")
             st.write("📊 正在分析英雄基因：發現共同點為『窒息量後首放量』與『大戶洗盤結束』...")
             
-            # --- [核心：全自動權重分配邏輯] ---
+            # --- [核心：全自動權重分配邏輯] --- 
             if 'brain_weights' not in st.session_state:
                 st.session_state.brain_weights = {"tech": 1.0, "chip": 1.0, "surge": 1.0}
             
