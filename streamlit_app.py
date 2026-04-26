@@ -1940,8 +1940,8 @@ with tab_brain:
 
     st.divider()
 
-    # ==============================================================================
-    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (神經網路連動進化版)】
+        # ==============================================================================
+    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (神經網路連動進化版 - 老總特調寬鬆版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
     
@@ -1960,10 +1960,22 @@ with tab_brain:
         
         if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v36"):
             with st.spinner("🧠 大腦神經元連動中：正在調取複盤戰績與英雄基因..."):
-                # --- 🧠 神經連動 1：將第一步的『狙擊準確率』轉化為獵殺信心 (g_bias) ---
-                # 邏輯：如果準確率 80%，信心加成；如果準確率 20%，分數自動打折
-                acc = st.session_state.get('accuracy', 50.0)  # 沒資料預設 50%
-                g_bias = 0.8 + (acc / 100) * 0.4  # 將準確率線性映射至 0.8 ~ 1.2 之間
+                # --- 🧠 神經連動 1：【老總特調：反向寬鬆邏輯】 ---
+                # 邏輯：準確率越低(如16%)，信心權重越高(給予試錯)；準確率越高，權重越嚴格。
+                acc = st.session_state.get('accuracy', 50.0)
+
+                if acc < 40:
+                    # 當準確率很低時，給予較高的信心權重 (1.05 ~ 1.15)，放寬門檻
+                    g_bias = 1.15 - (acc / 40) * 0.1 
+                elif acc > 80:
+                    # 當準確率極高時，開始變得嚴格 (0.9 ~ 1.0)，防止過度自信
+                    g_bias = 1.0 - ((acc - 80) / 20) * 0.1
+                else:
+                    # 中間地帶保持穩定
+                    g_bias = 1.0
+
+                # 同時降低入選的基本門檻，從 72 降到 65，確保種子能順利產出
+                entry_threshold = 65 
             
             all_targets = []
             for cat in pool_500:
@@ -1989,24 +2001,18 @@ with tab_brain:
                         score, msg, win, sent = ai_evolution_engine(tid, None, price)
                         
                         # --- 🧬 神經連動 2：將第二步的『英雄基因』注入 (基因共振) ---
-                        # 邏輯：檢查這檔股票是否屬於第二步擷取到的熱門族群 (如：半導體、AI、散熱)
                         if 'brain_weights' in st.session_state:
-                            # 獲取第二步自動計算出的 surge 加成
                             surge_bonus = st.session_state.brain_weights.get('surge', 1.0) - 1.0
-                            
-                            # 檢查產業連動 (從 pool_500 判斷)
                             for cat, members in pool_500.items():
                                 if any(tid == m[0] for m in members):
-                                    # 如果產業符合今日英雄基因，直接給予加權
                                     score = score * (1 + surge_bonus)
                                     msg = f"🌟【基因共振】({cat}) {msg}"
                         
-                        # 門檻校準：信心權重越低，入選難度越高
-                        if (score * g_bias) >= 72:
+                        # --- [門檻校準：套用老總特調門檻] ---
+                        if (score * g_bias) >= entry_threshold:
                             import random
-                            # 最終演算分數：結合複盤偏誤與隨機擾動
                             calc_score = round(score * g_bias + random.uniform(-0.5, 0.5), 1)
-                            calc_win = int(win + (acc - 50) / 5) # 勝率根據歷史表現微調
+                            calc_win = int(win + (acc - 50) / 5) 
                             
                             st.session_state.final_seeds.append({
                                 "代號": tid, "名稱": tname, "AI 分數": calc_score,
@@ -2020,10 +2026,9 @@ with tab_brain:
             
             if st.session_state.final_seeds:
                 df_all = pd.DataFrame(st.session_state.final_seeds)
-                # 最終排序：分數越高越前面，只取最強 15 檔
                 st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(15).to_dict('records')
                 hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
-                status_hunt.success(f"🎯 獵殺完成！已結合準確率 ({acc:.1f}%) 與英雄基因成功佈陣。")
+                status_hunt.success(f"🎯 獵殺完成！已套用寬鬆演算法 (權重: {g_bias:.2f}) 找出明日種子。")
 
         # --- 💾 雲端同步按鈕 ---
         if st.session_state.final_seeds:
@@ -2047,7 +2052,6 @@ with tab_brain:
                         st.error(f"同步失敗: {str(e)}")
 
     st.divider()
-
 
 
     # --- [第二區：📡 今日掃描與重大發現] ---
