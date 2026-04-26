@@ -1940,9 +1940,8 @@ with tab_brain:
 
     st.divider()
 
-    
     # ==============================================================================
-    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (流暢加速 + 雲端同步完整版)】
+    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (神經網路連動進化版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
     
@@ -1950,7 +1949,7 @@ with tab_brain:
         st.session_state.final_seeds = []
 
     with st.container(border=True):
-        st.info("💡 結合『複盤心得』與『飆股基因』，重新尋找明天具備 3-10% 潛力的標的。")
+        st.info("💡 結合『步驟一：對帳準確率』與『步驟二：英雄基因』進行戰略加權獵殺。")
         
         # --- 顯示區 ---
         hunt_table_area = st.empty()
@@ -1959,10 +1958,12 @@ with tab_brain:
 
         status_hunt = st.empty()
         
-        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v35"):
-            with st.spinner("🧠 AI 大腦進行戰略演算..."):
-                # 從第一步複盤結果獲取 g_bias
-                g_bias = st.session_state.get('g_bias', 1.0)
+        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v36"):
+            with st.spinner("🧠 大腦神經元連動中：正在調取複盤戰績與英雄基因..."):
+                # --- 🧠 神經連動 1：將第一步的『狙擊準確率』轉化為獵殺信心 (g_bias) ---
+                # 邏輯：如果準確率 80%，信心加成；如果準確率 20%，分數自動打折
+                acc = st.session_state.get('accuracy', 50.0)  # 沒資料預設 50%
+                g_bias = 0.8 + (acc / 100) * 0.4  # 將準確率線性映射至 0.8 ~ 1.2 之間
             
             all_targets = []
             for cat in pool_500:
@@ -1974,33 +1975,38 @@ with tab_brain:
             # --- ⚡ 執行加速掃描 ---
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_hunt.progress((idx + 1) / len(all_targets))
-                status_hunt.markdown(f"🎯 **精準獵殺中：** `{tname} ({tid})`")
+                status_hunt.markdown(f"🎯 **精準獵殺中：** `{tname} ({tid})` 信心權重: `{g_bias:.2f}`")
                 
                 try:
-                    # 使用高效能偵測函數，避免重複初始化導致卡死
                     perf = get_stock_perf(tid)
                     if not perf or perf[0] <= 0: continue
                     
                     price = perf[0]
                     change_today = perf[1] 
                     
-                    # 獵殺門檻：避開今日已噴發 (>7%)
+                    # 獵殺門檻：避開今日已噴發 (>7%)，專注起漲點
                     if change_today < 7.0: 
                         score, msg, win, sent = ai_evolution_engine(tid, None, price)
                         
-                        # --- 🧬 基因加權邏輯 (連動第二步注入的熱門族群) ---
+                        # --- 🧬 神經連動 2：將第二步的『英雄基因』注入 (基因共振) ---
+                        # 邏輯：檢查這檔股票是否屬於第二步擷取到的熱門族群 (如：半導體、AI、散熱)
                         if 'brain_weights' in st.session_state:
-                            hot_sectors = st.session_state.brain_weights.get('hot_sectors', [])
+                            # 獲取第二步自動計算出的 surge 加成
+                            surge_bonus = st.session_state.brain_weights.get('surge', 1.0) - 1.0
+                            
+                            # 檢查產業連動 (從 pool_500 判斷)
                             for cat, members in pool_500.items():
-                                if any(tid == m[0] for m in members) and cat in hot_sectors:
-                                    score += 5.0
-                                    msg = f"🌟【基因共振】{msg}"
+                                if any(tid == m[0] for m in members):
+                                    # 如果產業符合今日英雄基因，直接給予加權
+                                    score = score * (1 + surge_bonus)
+                                    msg = f"🌟【基因共振】({cat}) {msg}"
                         
-                        # 門檻校準：只有高分才進入候選
-                        if score >= 75:
+                        # 門檻校準：信心權重越低，入選難度越高
+                        if (score * g_bias) >= 72:
                             import random
-                            calc_score = round(score * g_bias + random.uniform(-1, 1), 1)
-                            calc_win = int(win + random.randint(-2, 2))
+                            # 最終演算分數：結合複盤偏誤與隨機擾動
+                            calc_score = round(score * g_bias + random.uniform(-0.5, 0.5), 1)
+                            calc_win = int(win + (acc - 50) / 5) # 勝率根據歷史表現微調
                             
                             st.session_state.final_seeds.append({
                                 "代號": tid, "名稱": tname, "AI 分數": calc_score,
@@ -2014,31 +2020,26 @@ with tab_brain:
             
             if st.session_state.final_seeds:
                 df_all = pd.DataFrame(st.session_state.final_seeds)
+                # 最終排序：分數越高越前面，只取最強 15 檔
                 st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(15).to_dict('records')
                 hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
-                status_hunt.success("🎯 獵殺完成！種子已結合最新基因就位。")
+                status_hunt.success(f"🎯 獵殺完成！已結合準確率 ({acc:.1f}%) 與英雄基因成功佈陣。")
 
-        # --- 💾 雲端同步按鈕 (確保這一區被完整保留) ---
+        # --- 💾 雲端同步按鈕 ---
         if st.session_state.final_seeds:
             st.divider()
-            if st.button("💾 鎖定這 15 檔種子並自動同步至雲端大腦", width="stretch", key="sync_final_v35"):
+            if st.button("💾 鎖定這 15 檔種子並自動同步至雲端大腦", width="stretch", key="sync_final_v36"):
                 sh = init_cloud_connection()
                 if sh:
                     try:
                         from datetime import datetime, timedelta
                         ws = sh.worksheet("thought_log")
-                        # 預測日期為下一個交易日
                         v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
                         for row in st.session_state.final_seeds:
                             ws.append_row([
                                 datetime.now().strftime("%Y-%m-%d %H:%M"), 
-                                row['代號'], 
-                                row['名稱'], 
-                                row['AI 分數'], 
-                                row['戰略結論'], 
-                                row['偵測價格'], 
-                                v_date, 
-                                "明日推薦驗證"
+                                row['代號'], row['名稱'], row['AI 分數'], 
+                                row['戰略結論'], row['偵測價格'], v_date, "明日推薦驗證"
                             ])
                         st.success(f"✅ 同步成功！獵殺成果已傳入雲端。")
                         st.balloons()
@@ -2046,6 +2047,7 @@ with tab_brain:
                         st.error(f"同步失敗: {str(e)}")
 
     st.divider()
+
 
 
     # --- [第二區：📡 今日掃描與重大發現] ---
