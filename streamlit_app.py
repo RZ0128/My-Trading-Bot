@@ -1981,12 +1981,14 @@ with tab_brain:
             st.session_state.final_seeds = [] 
             progress_hunt = st.progress(0)
             
-            # --- ⚡ 執行全量加速掃描 ---
+        
+            # --- ⚡ 執行全量加速掃描 (除錯與數據保護版) ---
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_hunt.progress((idx + 1) / len(all_targets))
                 
                 try:
                     perf = get_stock_perf(tid)
+                    # 【保護 1】：如果價格或漲跌數據抓不到，直接跳過，不准搞笑入榜
                     if not perf or perf[0] <= 0: continue
                     
                     price = perf[0]
@@ -1994,45 +1996,34 @@ with tab_brain:
                     
                     score, msg, win, sent = ai_evolution_engine(tid, None, price)
                     
-                    # 第二步基因加成
+                    # 【保護 2】：如果顯示數據異常，代表 AI 在盲打，直接過濾掉
+                    if "異常" in msg or "數據缺失" in sent: continue
+                    
+                    # 計算加權與預估漲幅 (公式維持鬆綁但加入門檻保護)
                     surge_bonus = 0
                     if 'brain_weights' in st.session_state:
                         surge_bonus = st.session_state.brain_weights.get('surge', 1.0) - 1.0
                     
                     final_calc_score = score * (1 + surge_bonus) * g_bias
-                    
-                    # --- 【關鍵：公式鬆綁】將分母從 5 改為 8，減緩信心扣分速度 ---
                     est_gain = round((win + (acc - 50) / 8) / 10, 1)
                     
-                    status_hunt.markdown(f"🎯 **掃描中：** `{tname}` (今日: `{change_today}%` | 預估明日: `+{est_gain}%`) 權重: `{g_bias:.2f}`")
+                    status_hunt.markdown(f"🎯 **掃描中：** `{tname}` (預估: `+{est_gain}%`) 權重: `{g_bias:.2f}`")
 
-                    # --- [入選判斷：分數達標 或 預估漲幅 ≥ 5% ] ---
-                    if final_calc_score >= entry_threshold or est_gain >= 5.0:
+                    # 【保護 3】：提高入選的硬性門檻
+                    # 只有真正預估明日 > 5% 或 分數極高的標的才能進榜
+                    if est_gain >= 5.0 or final_calc_score >= 68:
                         import random
                         calc_score = round(final_calc_score + random.uniform(-0.5, 0.5), 1)
                         
-                        # 自動分類標籤
-                        if change_today >= 7.0:
-                            strategy_tag = f"🔥【強勢連貫】今日已噴{change_today}%，AI 預判仍有餘力。"
-                        elif est_gain >= 5.0:
-                            strategy_tag = f"🚀【預測噴發】{msg}"
-                        else:
-                            strategy_tag = msg
-
                         st.session_state.final_seeds.append({
-                            "代號": tid, 
-                            "名稱": tname, 
-                            "今日漲幅": f"{change_today}%",
-                            "AI 分數": calc_score,
-                            "預估明日": f"+{est_gain}%", 
-                            "籌碼": sent, 
-                            "偵測價格": price, 
-                            "戰略結論": strategy_tag
+                            "代號": tid, "名稱": tname, "今日漲幅": f"{change_today}%",
+                            "AI 分數": calc_score, "預估明日": f"+{est_gain}%", 
+                            "籌碼": sent, "偵測價格": price, 
+                            "戰略結論": f"🚀【預測噴發】{msg}" if est_gain >= 5.0 else msg
                         })
-                        # 即時更新，讓老總立刻看到結果
                         hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
-                except:
-                    continue
+                except: continue
+
             
             if st.session_state.final_seeds:
                 df_all = pd.DataFrame(st.session_state.final_seeds)
