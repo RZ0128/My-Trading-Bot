@@ -1940,8 +1940,8 @@ with tab_brain:
 
     st.divider()
 
-    # ==============================================================================
-    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (公式鬆綁 + 5% 潛力優先版)】
+        # ==============================================================================
+    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (V41 異常封殺 + 5% 精準優先版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
     
@@ -1949,7 +1949,7 @@ with tab_brain:
         st.session_state.final_seeds = []
 
     with st.container(border=True):
-        st.info("💡 戰略核心：已執行公式鬆綁，放寬信心扣分權重，確保 AI 能透過試錯進行深度學習。")
+        st.info("💡 戰略核心：已執行公式鬆綁與數據防火牆。凡 AI 預估明日 ≥ 5.0% 標的將破格錄取。")
         
         # --- 顯示區 ---
         hunt_table_area = st.empty()
@@ -1958,7 +1958,7 @@ with tab_brain:
 
         status_hunt = st.empty()
         
-        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v40"):
+        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v41"):
             with st.spinner("🧠 大腦神經元連動中：正在調取複盤戰績與英雄基因..."):
                 # --- 🧠 神經連動 1：【老總特調：公式鬆綁版】 ---
                 acc = st.session_state.get('accuracy', 50.0)
@@ -1966,13 +1966,14 @@ with tab_brain:
                 if acc < 40:
                     # 鬆綁權重：從 0.07 降至 0.04，減少低分期的負面影響
                     g_bias = 1.15 - (acc / 40) * 0.04 
-                    entry_threshold = 55  # 門檻同步下修，增加樣本數供 AI 學習
+                    # 防火牆：打破平庸加成，門檻由 55 拉回至 68，過濾掉那些盲目的 3.6%
+                    entry_threshold = 68  
                 elif acc > 75:
                     g_bias = 1.0 - ((acc - 75) / 25) * 0.08
                     entry_threshold = 72
                 else:
                     g_bias = 1.0
-                    entry_threshold = 62
+                    entry_threshold = 65
             
             all_targets = []
             for cat in pool_500:
@@ -1981,14 +1982,13 @@ with tab_brain:
             st.session_state.final_seeds = [] 
             progress_hunt = st.progress(0)
             
-        
-            # --- ⚡ 執行全量加速掃描 (除錯與數據保護版) ---
+            # --- ⚡ 執行全量加速掃描 ---
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_hunt.progress((idx + 1) / len(all_targets))
                 
                 try:
                     perf = get_stock_perf(tid)
-                    # 【保護 1】：如果價格或漲跌數據抓不到，直接跳過，不准搞笑入榜
+                    # 【防火牆 1：基本數據缺失跳過】
                     if not perf or perf[0] <= 0: continue
                     
                     price = perf[0]
@@ -1996,46 +1996,65 @@ with tab_brain:
                     
                     score, msg, win, sent = ai_evolution_engine(tid, None, price)
                     
-                    # 【保護 2】：如果顯示數據異常，代表 AI 在盲打，直接過濾掉
-                    if "異常" in msg or "數據缺失" in sent: continue
+                    # 【防火牆 2：異常數據封殺】防止滿屏的數據源獲取異常
+                    if "異常" in msg or "數據缺失" in sent or "None" in str(msg):
+                        status_hunt.markdown(f"⚠️ `{tname}` 數據源不穩定，自動略過...")
+                        continue
                     
-                    # 計算加權與預估漲幅 (公式維持鬆綁但加入門檻保護)
+                    # 第二步基因加成
                     surge_bonus = 0
                     if 'brain_weights' in st.session_state:
                         surge_bonus = st.session_state.brain_weights.get('surge', 1.0) - 1.0
                     
                     final_calc_score = score * (1 + surge_bonus) * g_bias
+                    
+                    # --- 【關鍵：公式鬆綁】將分母從 5 改為 8，減緩信心扣分速度 ---
                     est_gain = round((win + (acc - 50) / 8) / 10, 1)
                     
-                    status_hunt.markdown(f"🎯 **掃描中：** `{tname}` (預估: `+{est_gain}%`) 權重: `{g_bias:.2f}`")
+                    # --- 【重要：細部內容顯示】讓老總一邊跑一邊看到每一檔的狀態 ---
+                    status_hunt.markdown(f"🎯 **掃描中：** `{tname}` (今日: `{change_today}%` | 預估: `+{est_gain}%`) 分數: `{final_calc_score:.1f}`")
 
-                    # 【保護 3】：提高入選的硬性門檻
-                    # 只有真正預估明日 > 5% 或 分數極高的標的才能進榜
-                    if est_gain >= 5.0 or final_calc_score >= 68:
+                    # --- 【防火牆 3：精準入選條件】分數達標 OR 真正強勢 (≥ 5.0%) ---
+                    if est_gain >= 5.0 or final_calc_score >= entry_threshold:
                         import random
                         calc_score = round(final_calc_score + random.uniform(-0.5, 0.5), 1)
                         
-                        st.session_state.final_seeds.append({
-                            "代號": tid, "名稱": tname, "今日漲幅": f"{change_today}%",
-                            "AI 分數": calc_score, "預估明日": f"+{est_gain}%", 
-                            "籌碼": sent, "偵測價格": price, 
-                            "戰略結論": f"🚀【預測噴發】{msg}" if est_gain >= 5.0 else msg
-                        })
-                        hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
-                except: continue
+                        # 自動分類標籤
+                        if change_today >= 7.0:
+                            strategy_tag = f"🔥【強勢連貫】今日已噴{change_today}%，AI 預判仍有餘力。"
+                        elif est_gain >= 5.0:
+                            strategy_tag = f"🚀【預測噴發】{msg}"
+                        else:
+                            strategy_tag = msg
 
+                        st.session_state.final_seeds.append({
+                            "代號": tid, 
+                            "名稱": tname, 
+                            "今日漲幅": f"{change_today}%",
+                            "AI 分數": calc_score,
+                            "預估明日": f"+{est_gain}%", 
+                            "籌碼": sent, 
+                            "偵測價格": price, 
+                            "戰略結論": strategy_tag
+                        })
+                        # 即時更新，找到就馬上彈出來！
+                        hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
+                except Exception as e:
+                    continue
             
             if st.session_state.final_seeds:
                 df_all = pd.DataFrame(st.session_state.final_seeds)
-                # 最終排序，取前 20 檔供老總複盤挑選
-                st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(20).to_dict('records')
+                # 最終排序，取前 15 檔最強精華
+                st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(15).to_dict('records')
                 hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
-                status_hunt.success(f"🎯 獵殺完成！公式已鬆綁，當前信心權重為 {g_bias:.2f}。")
+                status_hunt.success(f"🎯 獵殺完成！已過濾異常數據，當前信心權重為 {g_bias:.2f}。")
+            else:
+                status_hunt.warning("💡 獵殺結束，但今日數據不穩或未偵測到符合 ≥ 5.0% 之標的。")
 
         # --- 💾 雲端同步按鈕 ---
         if st.session_state.final_seeds:
             st.divider()
-            if st.button("💾 鎖定這批種子並自動同步至雲端大腦", width="stretch", key="sync_final_v40"):
+            if st.button("💾 鎖定這批種子並自動同步至雲端大腦", width="stretch", key="sync_final_v41"):
                 sh = init_cloud_connection()
                 if sh:
                     try:
@@ -2054,6 +2073,7 @@ with tab_brain:
                     except Exception as e: 
                         st.error(f"同步失敗: {str(e)}")
     st.divider()
+
 
 
 
