@@ -1940,8 +1940,8 @@ with tab_brain:
 
     st.divider()
 
-        # ==============================================================================
-    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (老總特調：動態嚴謹度 + 5% 優先版)】
+    # ==============================================================================
+    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (公式鬆綁 + 5% 潛力優先版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
     
@@ -1949,7 +1949,7 @@ with tab_brain:
         st.session_state.final_seeds = []
 
     with st.container(border=True):
-        st.info("💡 戰略核心：結合『反向寬鬆邏輯』。低狙擊率時放寬試錯，高狙擊率時嚴謹把關。")
+        st.info("💡 戰略核心：已執行公式鬆綁，放寬信心扣分權重，確保 AI 能透過試錯進行深度學習。")
         
         # --- 顯示區 ---
         hunt_table_area = st.empty()
@@ -1958,23 +1958,21 @@ with tab_brain:
 
         status_hunt = st.empty()
         
-        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v39"):
+        if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v40"):
             with st.spinner("🧠 大腦神經元連動中：正在調取複盤戰績與英雄基因..."):
-                # --- 🧠 神經連動 1：【老總特調：動態比例適中版】 ---
+                # --- 🧠 神經連動 1：【老總特調：公式鬆綁版】 ---
                 acc = st.session_state.get('accuracy', 50.0)
                 
                 if acc < 40:
-                    # 低分期：信心權重加成 (1.05 ~ 1.12)，適度寬鬆
-                    g_bias = 1.12 - (acc / 40) * 0.07 
-                    entry_threshold = 58  # 門檻同步降低，確保一定找得到股票
+                    # 鬆綁權重：從 0.07 降至 0.04，減少低分期的負面影響
+                    g_bias = 1.15 - (acc / 40) * 0.04 
+                    entry_threshold = 55  # 門檻同步下修，增加樣本數供 AI 學習
                 elif acc > 75:
-                    # 高分期：信心權重壓抑 (0.92 ~ 1.0)，增加嚴謹度
                     g_bias = 1.0 - ((acc - 75) / 25) * 0.08
-                    entry_threshold = 72  # 門檻拉高，精挑細選
+                    entry_threshold = 72
                 else:
-                    # 平穩期
                     g_bias = 1.0
-                    entry_threshold = 65
+                    entry_threshold = 62
             
             all_targets = []
             for cat in pool_500:
@@ -1994,28 +1992,28 @@ with tab_brain:
                     price = perf[0]
                     change_today = perf[1] 
                     
-                    # 執行 AI 核心打分
                     score, msg, win, sent = ai_evolution_engine(tid, None, price)
                     
-                    # 連動第二步基因加成
+                    # 第二步基因加成
                     surge_bonus = 0
                     if 'brain_weights' in st.session_state:
                         surge_bonus = st.session_state.brain_weights.get('surge', 1.0) - 1.0
                     
                     final_calc_score = score * (1 + surge_bonus) * g_bias
-                    est_gain = round((win + (acc - 50) / 5) / 10, 1)
                     
-                    # 實時監控狀態
-                    status_hunt.markdown(f"🎯 **掃描中：** `{tname}` (今日: `{change_today}%` / 預估明日: `+{est_gain}%`) 信心權重: `{g_bias:.2f}`")
+                    # --- 【關鍵：公式鬆綁】將分母從 5 改為 8，減緩信心扣分速度 ---
+                    est_gain = round((win + (acc - 50) / 8) / 10, 1)
+                    
+                    status_hunt.markdown(f"🎯 **掃描中：** `{tname}` (今日: `{change_today}%` | 預估明日: `+{est_gain}%`) 權重: `{g_bias:.2f}`")
 
-                    # --- [入選判斷：分數達標 或 漲幅 ≥ 5% ] ---
+                    # --- [入選判斷：分數達標 或 預估漲幅 ≥ 5% ] ---
                     if final_calc_score >= entry_threshold or est_gain >= 5.0:
                         import random
                         calc_score = round(final_calc_score + random.uniform(-0.5, 0.5), 1)
                         
-                        # 結論分類
+                        # 自動分類標籤
                         if change_today >= 7.0:
-                            strategy_tag = f"🔥【強勢連貫】今日已噴{change_today}%，明日續航力強。"
+                            strategy_tag = f"🔥【強勢連貫】今日已噴{change_today}%，AI 預判仍有餘力。"
                         elif est_gain >= 5.0:
                             strategy_tag = f"🚀【預測噴發】{msg}"
                         else:
@@ -2031,22 +2029,22 @@ with tab_brain:
                             "偵測價格": price, 
                             "戰略結論": strategy_tag
                         })
-                        # 找到就馬上出現，老總不用等！
+                        # 即時更新，讓老總立刻看到結果
                         hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
                 except:
                     continue
             
             if st.session_state.final_seeds:
                 df_all = pd.DataFrame(st.session_state.final_seeds)
-                # 最終排序，取前 15-20 檔最精華
+                # 最終排序，取前 20 檔供老總複盤挑選
                 st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(20).to_dict('records')
                 hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
-                status_hunt.success(f"🎯 獵殺完成！已根據當前準確率 ({acc:.1f}%) 自動調適嚴謹度。")
+                status_hunt.success(f"🎯 獵殺完成！公式已鬆綁，當前信心權重為 {g_bias:.2f}。")
 
         # --- 💾 雲端同步按鈕 ---
         if st.session_state.final_seeds:
             st.divider()
-            if st.button("💾 鎖定這批種子並自動同步至雲端大腦", width="stretch", key="sync_final_v39"):
+            if st.button("💾 鎖定這批種子並自動同步至雲端大腦", width="stretch", key="sync_final_v40"):
                 sh = init_cloud_connection()
                 if sh:
                     try:
