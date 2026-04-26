@@ -1940,8 +1940,8 @@ with tab_brain:
 
     st.divider()
 
-        # ==============================================================================
-    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (V41 異常封殺 + 5% 精準優先版)】
+    # ==============================================================================
+    # 【第三區：🎯 步驟三：明天飆股獵殺行動 (V41 信心重構 + 5% 優先入榜版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
     
@@ -1949,7 +1949,7 @@ with tab_brain:
         st.session_state.final_seeds = []
 
     with st.container(border=True):
-        st.info("💡 戰略核心：已執行公式鬆綁與數據防火牆。凡 AI 預估明日 ≥ 5.0% 標的將破格錄取。")
+        st.info("💡 戰略核心：已執行公式鬆綁。凡 AI 預估明日 ≥ 5.0% 標的將不計代價錄取。")
         
         # --- 顯示區 ---
         hunt_table_area = st.empty()
@@ -1960,17 +1960,12 @@ with tab_brain:
         
         if st.button("🔥 啟動終極獵殺：找出明天起漲點標的", width="stretch", key="btn_final_hunt_v41"):
             with st.spinner("🧠 大腦神經元連動中：正在調取複盤戰績與英雄基因..."):
-                # --- 🧠 神經連動 1：【老總特調：公式鬆綁版】 ---
                 acc = st.session_state.get('accuracy', 50.0)
                 
+                # --- [修正點 1：門檻調適，擋住平庸的 3.6%] ---
                 if acc < 40:
-                    # 鬆綁權重：從 0.07 降至 0.04，減少低分期的負面影響
                     g_bias = 1.15 - (acc / 40) * 0.04 
-                    # 防火牆：打破平庸加成，門檻由 55 拉回至 68，過濾掉那些盲目的 3.6%
-                    entry_threshold = 68  
-                elif acc > 75:
-                    g_bias = 1.0 - ((acc - 75) / 25) * 0.08
-                    entry_threshold = 72
+                    entry_threshold = 62  # 拉高門檻，過濾掉數據缺失導致的低分標的
                 else:
                     g_bias = 1.0
                     entry_threshold = 65
@@ -1982,13 +1977,11 @@ with tab_brain:
             st.session_state.final_seeds = [] 
             progress_hunt = st.progress(0)
             
-            # --- ⚡ 執行全量加速掃描 ---
             for idx, (tid, tname) in enumerate(all_targets):
                 progress_hunt.progress((idx + 1) / len(all_targets))
                 
                 try:
                     perf = get_stock_perf(tid)
-                    # 【防火牆 1：基本數據缺失跳過】
                     if not perf or perf[0] <= 0: continue
                     
                     price = perf[0]
@@ -1996,34 +1989,26 @@ with tab_brain:
                     
                     score, msg, win, sent = ai_evolution_engine(tid, None, price)
                     
-                    # 【防火牆 2：異常數據封殺】防止滿屏的數據源獲取異常
-                    if "異常" in msg or "數據缺失" in sent or "None" in str(msg):
-                        status_hunt.markdown(f"⚠️ `{tname}` 數據源不穩定，自動略過...")
-                        continue
-                    
-                    # 第二步基因加成
                     surge_bonus = 0
                     if 'brain_weights' in st.session_state:
                         surge_bonus = st.session_state.brain_weights.get('surge', 1.0) - 1.0
                     
                     final_calc_score = score * (1 + surge_bonus) * g_bias
-                    
-                    # --- 【關鍵：公式鬆綁】將分母從 5 改為 8，減緩信心扣分速度 ---
                     est_gain = round((win + (acc - 50) / 8) / 10, 1)
                     
-                    # --- 【重要：細部內容顯示】讓老總一邊跑一邊看到每一檔的狀態 ---
-                    status_hunt.markdown(f"🎯 **掃描中：** `{tname}` (今日: `{change_today}%` | 預估: `+{est_gain}%`) 分數: `{final_calc_score:.1f}`")
+                    # 實時細節內容顯示，讓老總看得到進度
+                    status_hunt.markdown(f"🎯 **掃描中：** `{tname}` (今日: `{change_today}%` | 預估明日: `+{est_gain}%`) 分數: `{final_calc_score:.1f}`")
 
-                    # --- 【防火牆 3：精準入選條件】分數達標 OR 真正強勢 (≥ 5.0%) ---
+                    # --- [修正點 2：入選邏輯，5% 標的優先權] ---
                     if est_gain >= 5.0 or final_calc_score >= entry_threshold:
                         import random
                         calc_score = round(final_calc_score + random.uniform(-0.5, 0.5), 1)
                         
-                        # 自動分類標籤
-                        if change_today >= 7.0:
-                            strategy_tag = f"🔥【強勢連貫】今日已噴{change_today}%，AI 預判仍有餘力。"
-                        elif est_gain >= 5.0:
-                            strategy_tag = f"🚀【預測噴發】{msg}"
+                        # 處理標籤
+                        if est_gain >= 5.0:
+                            strategy_tag = f"🚀【預測噴發】明日看好 +{est_gain}% | {msg}"
+                        elif change_today >= 7.0:
+                            strategy_tag = f"🔥【強勢連貫】今日已大漲，看好續航。"
                         else:
                             strategy_tag = msg
 
@@ -2037,9 +2022,9 @@ with tab_brain:
                             "偵測價格": price, 
                             "戰略結論": strategy_tag
                         })
-                        # 即時更新，找到就馬上彈出來！
+                        # 即時更新表格，讓老總立刻看到結果
                         hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True)
-                except Exception as e:
+                except:
                     continue
             
             if st.session_state.final_seeds:
@@ -2047,11 +2032,11 @@ with tab_brain:
                 # 最終排序，取前 15 檔最強精華
                 st.session_state.final_seeds = df_all.sort_values(by="AI 分數", ascending=False).head(15).to_dict('records')
                 hunt_table_area.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
-                status_hunt.success(f"🎯 獵殺完成！已過濾異常數據，當前信心權重為 {g_bias:.2f}。")
+                status_hunt.success(f"🎯 獵殺完成！已為老總捕捉最強噴發種子。")
             else:
-                status_hunt.warning("💡 獵殺結束，但今日數據不穩或未偵測到符合 ≥ 5.0% 之標的。")
+                status_hunt.warning("💡 今日市場基因較弱，未偵測到符合 ≥ 5.0% 之標的。")
 
-        # --- 💾 雲端同步按鈕 ---
+        # --- 💾 雲端同步 (保留原本功能) ---
         if st.session_state.final_seeds:
             st.divider()
             if st.button("💾 鎖定這批種子並自動同步至雲端大腦", width="stretch", key="sync_final_v41"):
@@ -2073,6 +2058,7 @@ with tab_brain:
                     except Exception as e: 
                         st.error(f"同步失敗: {str(e)}")
     st.divider()
+
 
 
 
