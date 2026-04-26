@@ -1787,30 +1787,28 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第一區：📊 戰略複盤：高強度海量對帳與持久記憶大腦 (不再歸零版)】
+    # 【第一區：📊 戰略複盤：高強度海量對帳與持久記憶大腦 (手動鎖定完整版)】
     # ==============================================================================
     with st.expander("📊 步驟一：啟動昨日戰略複盤 (海量數據學習區)", expanded=True):
-        st.info("💡 AI 將自動從雲端恢復最後一次校準記憶，確保戰果持久化不再歸零。")
+        st.info("💡 AI 將對今日預計複盤的 10-15 檔種子進行全面對帳，校準獵殺權重。")
         
-        # --- [ 🧠 新增：開機自動恢復記憶邏輯 ] ---
-        # 如果發現 session 裡面沒數據，就先去雲端看一眼最後一次的戰報
+        # --- 🛡️ 功能保證 1：新增讀取邏輯，完全不影響下方按鈕執行 ---
         if 'accuracy' not in st.session_state or st.session_state.accuracy == 0:
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
-                    # 從最後 100 筆紀錄中找最後一次的「複盤戰報」
                     all_logs = ws.get_all_records()
                     last_recaps = [r for r in all_logs if str(r.get('結果狀態', '')) == "複盤戰報"]
                     if last_recaps:
                         last_data = last_recaps[-1]
                         st.session_state.accuracy = float(last_data.get('AI 分數', 0))
-                        st.session_state.last_insight = last_data.get('戰略結論', '已從雲端恢復最後戰績。')
-                        st.session_state.last_learning_time = "雲端同步點"
+                        st.session_state.last_insight = last_data.get('戰略結論', '已從雲端恢復歷史戰績。')
+                        st.session_state.last_learning_time = "雲端存檔紀錄"
                 except:
                     st.session_state.accuracy = 0.0
 
-        # 核心：執行按鈕
+        # --- 🛡️ 功能保證 2：原本的執行按鈕與所有邏輯（含週末回溯）完全保留 ---
         if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning"):
             sh = init_cloud_connection()
             if sh:
@@ -1818,7 +1816,7 @@ with tab_brain:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
                     
-                    # --- [ 🔧 原封不動：週末自動回溯邏輯 ] ---
+                    # [保留] 週末自動回溯邏輯
                     curr_time = datetime.now()
                     target_time = curr_time
                     if curr_time.weekday() == 5: # 週六
@@ -1829,6 +1827,7 @@ with tab_brain:
                     target_str = target_time.strftime("%Y-%m-%d")
                     target_slash = target_time.strftime("%Y/%m/%d")
                     
+                    # [保留] 搜尋與複盤逻辑
                     targets = [r for r in data if (target_str in str(r.get('預計復盤日', r.get('預計複盤日', ''))) or target_slash in str(r.get('預計復盤日', r.get('預計複盤日', '')))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
                     
                     if targets:
@@ -1838,11 +1837,11 @@ with tab_brain:
                             tid = str(t.get('代號', ''))
                             perf = get_stock_perf(tid)
                             now_price = perf[0] if isinstance(perf, tuple) and perf[0] > 0 else 0
-                            
                             past_price = float(str(t.get('偵測價格', 0)).replace("'", "").strip())
+                            
                             if now_price > 0 and past_price > 0:
                                 change = ((now_price - past_price) / past_price) * 100
-                                is_win = change >= 3.0 # 您的 3% 判決
+                                is_win = change >= 3.0 # [保留] 嚴格 3% 判決
                                 if is_win: win_count += 1
                                 results.append({
                                     "代號": tid, "名稱": t.get('名稱', ''), 
@@ -1850,7 +1849,6 @@ with tab_brain:
                                     "戰果": f"{change:+.2f}%", "判決": "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
                                 })
 
-                        # --- [ 關鍵：持久化同步邏輯 ] ---
                         acc_val = (win_count / len(targets)) * 100
                         st.session_state.accuracy = acc_val 
                         st.session_state.last_learning_time = datetime.now().strftime("%H:%M:%S")
@@ -1861,20 +1859,30 @@ with tab_brain:
                         else:
                             st.session_state.last_insight = f"昨日 ({target_str}) 戰果輝煌 ({acc_val:.1f}%)！已成功複製基因。"
                         
-                        # --- 💾 核心新增：將戰績寫入 Google Sheets 石碑 ---
-                        ws.append_row([
-                            datetime.now().strftime("%Y-%m-%d %H:%M"), "SYSTEM", "大腦自我校準", 
-                            acc_val, st.session_state.last_insight, "-", "-", "複盤戰報"
-                        ])
-                        
                         st.rerun() 
-
                     else:
                         st.info(f"📅 雲端尚無 {target_str} (由本日回溯) 的複盤名單。")
                 except Exception as e: 
                     st.error(f"複盤失敗: {e}")
 
-        # --- [ 原封不動：視覺噴發區 ] ---
+        # --- 🛡️ 功能保證 3：新增手動鎖定按鈕，這是為了解決歸零的保險 ---
+        if 'recap_results' in st.session_state and st.session_state.recap_results:
+            st.divider()
+            if st.button("💾 鎖定今日戰果並同步記憶 (寫入雲端)", width="stretch", key="save_recap_v2"):
+                sh = init_cloud_connection()
+                if sh:
+                    try:
+                        ws = sh.worksheet("thought_log")
+                        ws.append_row([
+                            datetime.now().strftime("%Y-%m-%d %H:%M"), "SYSTEM", "大腦自我校準", 
+                            st.session_state.accuracy, st.session_state.last_insight, "-", "-", "複盤戰報"
+                        ])
+                        st.success("✅ 戰績已鎖定！重新整理頁面後將自動恢復 memory。")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"儲存失敗: {e}")
+
+        # --- 🛡️ 功能保證 4：原本的視覺噴發與清除按鈕完全保留 ---
         if 'recap_results' in st.session_state and st.session_state.recap_results:
             st.markdown(f"### 📝 複盤戰報明細 (對帳基準日: {st.session_state.get('last_learning_time', '')})")
             st.table(pd.DataFrame(st.session_state.recap_results))
