@@ -1895,7 +1895,7 @@ with tab_brain:
     st.divider()
 
     
-        # ==============================================================================
+    # ==============================================================================
     # 【第二區：🧬 步驟二：今日英雄榜 (漲幅 >7% 分析與基因注入)】
     # ==============================================================================
     st.subheader("🧬 步驟二：今日英雄榜 (飆股基因分析)")
@@ -1943,10 +1943,13 @@ with tab_brain:
     st.divider()
 
     # ==============================================================================
-    # 【第三區：🎯 步驟三：明天狙擊榜 (預估漲幅 >5% 推薦)】
+    # 【第三區：🎯 步驟三：明天狙擊榜 (V43 雙腦合一實戰版)】
     # ==============================================================================
     st.subheader("🎯 步驟三：獵殺明天 10-15 檔潛力種子")
     
+    if 'final_seeds' not in st.session_state:
+        st.session_state.final_seeds = []
+
     with st.container(border=True):
         st.markdown("#### 🚀 藉由今日分析，推薦明天預估大漲 >5% 之飆股")
         st.caption("💡 指令：對 Gemini 說『老總要明天 V43 格式之人工種子（推薦明天 >5% 標的）』")
@@ -1954,24 +1957,55 @@ with tab_brain:
         manual_input = st.text_area("🧠 貼入明日預測種子代碼：", height=100, placeholder="在此貼入 Gemini 產出的預測清單...")
         
         c1, c2 = st.columns(2)
-        if c1.button("⚡ 注入明日種子數據", width="stretch"):
+        if c1.button("⚡ 注入明日種子數據", width="stretch", key="inject_v43"):
             if manual_input:
                 try:
                     import json
                     st.session_state.final_seeds = json.loads(manual_input)
                     st.success("✅ 明日預測數據已注入，準備執行雲端同步！")
                 except: st.error("❌ 格式錯誤")
-        if c2.button("🧹 清空", width="stretch"):
+        if c2.button("🧹 清空", width="stretch", key="clear_v43"):
             st.session_state.final_seeds = []; st.rerun()
 
         if st.session_state.get('final_seeds'):
             st.dataframe(pd.DataFrame(st.session_state.final_seeds), hide_index=True, width="stretch")
             
-            if st.button("💾 鎖定種子並一鍵同步至 Sheets 雲端", width="stretch"):
-                # ... (保留原有的雲端寫入邏輯) ...
-                st.success("✅ 已同步至 thought_log！")
+            # --- 💡 這裡就是關鍵：完整的寫入邏輯 ---
+            if st.button("💾 鎖定種子並一鍵同步至 Sheets 雲端", width="stretch", key="sync_final_v43_fix"):
+                sh = init_cloud_connection()
+                if sh:
+                    try:
+                        from datetime import datetime, timedelta
+                        ws = sh.worksheet("thought_log")
+                        
+                        # 這是預計明天複盤的日期
+                        v_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        
+                        # 暴力循環寫入每一筆
+                        for row in st.session_state.final_seeds:
+                            # 嚴格對照您 Sheets 的欄位：時間, 代號, 名稱, 分數, 戰略, 價格, 預計複盤日, 狀態
+                            payload = [
+                                timestamp, 
+                                str(row['代號']), 
+                                row['名稱'], 
+                                row['AI 分數'], 
+                                f"今日:{row.get('今日漲幅','?')} | {row['戰略結論']}",
+                                row['偵測價格'], 
+                                v_date, 
+                                "明日推薦驗證"
+                            ]
+                            ws.append_row(payload)
+                        
+                        st.success(f"✅ 已成功將 {len(st.session_state.final_seeds)} 檔飆股寫入 thought_log！")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"❌ 寫入失敗，原因：{str(e)}")
+                else:
+                    st.error("❌ 無法建立雲端連接，請檢查 init_cloud_connection 函數。")
 
     st.divider()
+
 
 
     # --- [第二區：📡 今日掃描與重大發現] ---
