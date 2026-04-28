@@ -1906,39 +1906,55 @@ with tab_brain:
 
     
     # ==============================================================================
-    # 【第二區：🧬 步驟二：大腦基因注入器 (AI 參數解析與權重進化版)】
+    # 【第二區：🧬 步驟二：大腦基因注入器 (AI 指令聯動版)】
     # ==============================================================================
     st.subheader("🧬 步驟二：今日飆股基因注入與大腦進化")
     
     if 'brain_weights' not in st.session_state:
-        st.session_state.brain_weights = {"hot_sectors": [], "avg_score": 80}
+        # 初始化加權參數：surge(噴發力), strength(撐盤力), chip(籌碼度)
+        st.session_state.brain_weights = {"hot_sectors": [], "avg_score": 80, "surge": 1.0, "strength": 1.0}
 
     with st.container(border=True):
-        st.markdown("#### 🏆 接收 AI 雲端指令 (請貼入 Gemini 生成的基因代碼)")
+        st.markdown("#### 🏆 接收 AI 雲端指令")
+        st.caption("💡 指令導引：對 Gemini 說『請產出今日 V43 格式之基因指令集』")
         
-        # 這是連結點：我會給您這段 JSON 代碼
-        brain_input = st.text_area("📡 貼入 AI 基因指令集：", height=100, placeholder='{"date": "2026-04-24", "genes": [...]}')
+        # 接收區域
+        brain_input = st.text_area("📡 貼入 AI 基因指令集：", height=120, placeholder='請將 Gemini 生成的 {"date": "...", "genes": [...]} 代碼貼於此')
         
+        # 建立一個權重顯示儀表板
+        weight_cols = st.columns(3)
+        surge_val = weight_cols[0].empty()
+        strength_val = weight_cols[1].empty()
+        sector_val = weight_cols[2].empty()
+
         hero_wall = st.empty()
         
-        if st.button("🔥 啟動大腦進化：融合今日英雄基因", width="stretch"):
+        if st.button("🔥 啟動大腦進化：融合今日英雄基因", width="stretch", key="btn_brain_evo_v43"):
             if brain_input:
                 try:
                     import json
                     data = json.loads(brain_input)
                     st.session_state.hero_list = data['genes']
                     
-                    # --- 關鍵：從基因中提取「熱門族群」與「噴發特徵」 ---
-                    # 比如：偵測到聯發科，就將 'IC設計' 納入加權名單
-                    st.session_state.brain_weights['hot_sectors'] = [g.get('sector', '') for g in data['genes']]
-                    st.session_state.brain_weights['avg_score'] = sum([g['AI 評分'] for g in data['genes']]) / len(data['genes'])
+                    # --- 🧠 核心進化：提取權重設定 ---
+                    # 這是 AI 對明日盤勢的預判加權
+                    weights = data.get('weights', {"surge": 1.1, "strength": 1.0})
+                    st.session_state.brain_weights['surge'] = weights.get('surge', 1.0)
+                    st.session_state.brain_weights['strength'] = weights.get('strength', 1.0)
+                    st.session_state.brain_weights['hot_sectors'] = [g.get('sector', '通用') for g in data['genes']]
+                    
+                    # 更新 UI 顯示
+                    surge_val.metric("⚡ 噴發權重", f"x{st.session_state.brain_weights['surge']}")
+                    strength_val.metric("🛡️ 撐盤力道", f"x{st.session_state.brain_weights['strength']}")
+                    sector_val.metric("🔥 焦點族群", f"{len(set(st.session_state.brain_weights['hot_sectors']))} 類")
                     
                     hero_wall.table(pd.DataFrame(st.session_state.hero_list))
-                    st.success(f"✅ 大腦進化完成！已記住 {len(data['genes'])} 檔英雄特徵。")
-                except:
-                    st.error("代碼格式錯誤，請重新向 Gemini 索取基因指令。")
+                    st.success(f"✅ 大腦進化完成！已將 {data['date']} 之市場基因寫入核心。")
+                except Exception as e:
+                    st.error(f"❌ 代碼格式解析失敗：{str(e)}")
 
     st.divider()
+
 
     # ==============================================================================
     # 【第三區：🎯 步驟三：明天飆股獵殺行動 (V43 雙腦合一・人工干預版)】
