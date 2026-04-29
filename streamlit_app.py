@@ -1776,13 +1776,11 @@ with tab_brain:
     col_stat1, col_stat2 = st.columns(2)
     with col_stat1:
         st.markdown("#### 🎯 實戰狙擊準確率")
-        # 這裡改回進度條模式，讓老總更有感覺
         st.progress(st.session_state.accuracy / 100)
         st.metric(label="當前勝率", value=f"{st.session_state.accuracy:.1f}%")
         
     with col_stat2:
         st.markdown("#### 🧪 大腦百科進化度")
-        # 進化度由勝率加權計算
         evolution_val = min(5.2 + (st.session_state.accuracy / 10), 100.0)
         st.progress(evolution_val / 100)
         st.caption(f"已完成 {evolution_val:.1f}% 歷史數據特徵吸收")
@@ -1790,120 +1788,117 @@ with tab_brain:
     st.divider()
     
     # ==============================================================================
-    # 【第一區：📊 戰略複盤：持久記憶大腦 (V43 雙腦合一自動校準版)】
+    # 【第一區：📊 戰略複盤：持久記憶大腦 (V43.1 雙腦對齊版)】
     # ==============================================================================
     with st.expander("📊 步驟一：啟動昨日戰略複盤 (持久記憶大腦)", expanded=True):
-        st.info("💡 雙腦合一核心：AI 將自動對齊雲端戰報，恢復昨日戰績與獵殺權重。")
+        st.info("💡 雙腦合一核心：採用與診斷頁面一致的行情引擎，確保 100% 數據同步。")
         
-        # --- 🛡️ 核心進化：主動記憶恢復邏輯 ---
+        # --- 🛡️ 記憶恢復邏輯 (讀取雲端最後一筆複盤戰報) ---
         if 'accuracy' not in st.session_state or st.session_state.accuracy == 0:
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
-                    # 只抓最後 50 筆，效率更高
                     records = ws.get_all_records()
-                    # 尋找最後一次的「複盤戰報」
                     recap_logs = [r for r in records if "複盤戰報" in str(r.get('結果狀態', ''))]
                     if recap_logs:
                         last_recap = recap_logs[-1]
                         st.session_state.accuracy = float(last_recap.get('AI 分數', 0))
                         st.session_state.last_insight = last_recap.get('戰略結論', '已從雲端恢復歷史戰績。')
-                        st.session_state.last_learning_time = last_recap.get('日期時間', '歷史紀錄')
                 except:
                     st.session_state.accuracy = 0.0
 
-        # --- 顯示今日狙擊率儀錶板 ---
+        # --- 顯示現況儀錶板 ---
         acc_cols = st.columns([1, 2])
         acc_cols[0].metric("🎯 昨日狙擊率", f"{st.session_state.get('accuracy', 0):.1f}%")
         acc_cols[1].markdown(f"**🧠 大腦洞察：**\n{st.session_state.get('last_insight', '等待執行複盤...')}")
 
         st.divider()
 
-        # --- 📈 執行海量複盤：【雙腦同步精準對齊版】 ---
-        if st.button("📈 執行海量複盤：自動抓取正確現價", width="stretch", key="recap_learning_v43_final"):
+        # --- 📈 執行海量複盤：同步診斷引擎 ---
+        if st.button("📈 執行同步複盤：對齊個股診斷價格", width="stretch", key="recap_sync_v43"):
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
                     
+                    # 處理週末與日期邏輯
                     curr_time = datetime.now()
-                    # 鋼鐵通用回溯邏輯：週一回溯 3 天，其餘 1 天
                     days_to_back = 3 if curr_time.weekday() == 0 else 1
-                    target_time = curr_time - timedelta(days=days_to_back)
-                    target_str = target_time.strftime("%Y-%m-%d")
+                    target_str = (curr_time - timedelta(days=days_to_back)).strftime("%Y-%m-%d")
                     
-                    # 搜尋符合昨日預計複盤的名單
                     targets = [r for r in data if target_str in str(r.get('預計複盤日', r.get('預計復盤日', ''))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
                     
                     if targets:
                         results = []
                         win_count = 0
                         for t in targets:
-                            # --- 🛡️ 核心同步：採用與診斷頁面完全一致的邏輯 ---
+                            # 🛡️ 核心同步：使用與診斷頁面一模一樣的取值方法
                             raw_tid = str(t.get('代號', '')).strip()
-                            # 1. 取得完整代號 (對齊診斷頁 sel_sid)
                             sel_sid = get_full_ticker(raw_tid)
-                            # 2. 調用診斷頁面專用行情引擎 (傳入 0 參數)
-                            p, d, cc = get_stock_perf(sel_sid, 0)
+                            p, d, cc = get_stock_perf(sel_sid, 0) # 傳入 0 對齊
                             
                             now_price = p
                             try:
-                                # 3. 處理偵測價格式
                                 past_price = float(str(t.get('偵測價格', 0)).replace("'", "").replace(",", "").strip())
-                            except: 
-                                past_price = 0
+                            except: past_price = 0
 
-                            # 4. 戰果判斷：防止數據異常 (若現價比原價高出一倍，通常是 API 抽風，標註異常)
+                            # 判定數據有效性 (防止 API 噴出異常大的數值)
                             if now_price > 0 and past_price > 0 and (now_price < past_price * 2):
                                 change = ((now_price - past_price) / past_price) * 100
-                                is_win = change >= 3.0 # 老總的 3% 獲利門檻
+                                is_win = change >= 3.0 
                                 if is_win: win_count += 1
                                 results.append({
                                     "代號": raw_tid, "名稱": t.get('名稱', ''), 
-                                    "偵測價": f"{past_price:.2f}", "現價": f"{now_price:.2f}",
+                                    "偵測價": past_price, "現價": now_price,
                                     "戰果": f"{change:+.2f}%", "判決": "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
                                 })
                             else:
                                 results.append({
                                     "代號": raw_tid, "名稱": t.get('名稱', ''), 
-                                    "偵測價": f"{past_price:.2f}", "現價": "數據偏離",
-                                    "戰果": "N/A", "判決": "⚠️ 需手動複核"
+                                    "偵測價": past_price, "現價": 0.0,
+                                    "戰果": "N/A", "判決": "⚠️ 數據異常"
                                 })
 
-                        # 更新大腦勝率
-                        acc_val = (win_count / len(targets)) * 100 if targets else 0
+                        acc_val = (win_count / len(targets)) * 100
                         st.session_state.accuracy = acc_val 
                         st.session_state.recap_results = results 
+                        st.session_state.last_insight = f"對帳完成 ({target_str})：抓取 {len(targets)} 檔，準確度 {acc_val:.1f}%。"
                         
-                        # 同步大腦洞察結論
-                        st.session_state.last_insight = f"複盤對齊成功 ({target_str})！準確率 {acc_val:.1f}%。"
-                        
-                        # 核心：複盤完自動寫入雲端紀錄，防止下次開啟歸零
+                        # 寫入雲端複盤戰報
                         ws.append_row([
-                            datetime.now().strftime("%Y-%m-%d %H:%M"), "SYSTEM", "大腦同步校準", 
+                            datetime.now().strftime("%Y-%m-%d %H:%M"), "SYSTEM", "大腦自我校準", 
                             acc_val, st.session_state.last_insight, "-", "-", "複盤戰報"
                         ])
-                        
-                        st.success(f"✅ 數據同步複盤完成！已抓取 {len(targets)} 檔精確價格。")
+                        st.success(f"✅ 複盤對齊成功！基準日：{target_str}")
                         st.rerun() 
                     else:
-                        st.info(f"📅 雲端尚無 {target_str} 的預計複盤名單。")
-                except Exception as e: 
-                    st.error(f"複盤失敗: {str(e)}")
+                        st.warning(f"📅 找不到 {target_str} 的待複盤名單，請檢查雲端日期。")
+                except Exception as e: st.error(f"複盤失敗: {str(e)}")
 
-
-
-        # --- 顯示複盤明細 ---
+        # --- 顯示明細與人工反饋 ---
         if 'recap_results' in st.session_state and st.session_state.recap_results:
             st.divider()
-            st.table(pd.DataFrame(st.session_state.recap_results))
-            if st.button("🗑️ 清除看板"):
+            df_recap = pd.DataFrame(st.session_state.recap_results)
+            st.table(df_recap)
+            
+            c1, c2 = st.columns(2)
+            if c1.button("🗑️ 清除看板"):
                 st.session_state.recap_results = None
                 st.rerun()
+            
+            # --- 🚀 老總專屬按鈕：數據異常人工修正回報 ---
+            if c2.button("⚠️ 數據異常？修正並反饋雲端", use_container_width=True):
+                sh = init_cloud_connection()
+                if sh:
+                    ws = sh.worksheet("thought_log")
+                    # 標註這筆數據需要人工檢查，並降低勝率權重以示負責
+                    ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M"), "USER", "手動回報", 0, "回報 API 數據抓取異常，申請手動對帳", "-", "-", "數據異常告警"])
+                    st.toast("🚨 已向雲端發送數據異常告警，工程師（AI）將進行學習。")
 
     st.divider()
+
 
     
     # ==============================================================================
