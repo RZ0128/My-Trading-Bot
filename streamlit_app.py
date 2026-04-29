@@ -1823,82 +1823,85 @@ with tab_brain:
 
         st.divider()
 
-        # --- 📈 執行海量複盤：數據精準校正版 ---
-        if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning_v43_fix"):
+        # --- 📈 執行海量複盤：【鋼鐵通用回溯版】 ---
+        if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning_v43_universal"):
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
                     
+                    # --- 🛡️ 核心：通用日期回溯邏輯 ---
                     curr_time = datetime.now()
-                    target_str = curr_time.strftime("%Y-%m-%d")
+                    # 預設回溯 1 天 (複盤昨日)
+                    days_to_back = 1
                     
-                    # 搜尋今日該複盤的名單
+                    # 如果今天是週一 (weekday == 0)，則回溯 3 天 (複盤週五)
+                    if curr_time.weekday() == 0:
+                        days_to_back = 3
+                        
+                    target_time = curr_time - timedelta(days=days_to_back)
+                    target_str = target_time.strftime("%Y-%m-%d")
+                    
+                    # 搜尋符合「該複盤日」的名單 (G欄: 預計複盤日)
                     targets = [r for r in data if target_str in str(r.get('預計複盤日', r.get('預計復盤日', ''))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
                     
-                    # 備案：找昨天的
-                    if not targets:
-                        yesterday_str = (curr_time - timedelta(days=1)).strftime("%Y-%m-%d")
-                        targets = [r for r in data if yesterday_str in str(r.get('預計複盤日', r.get('預計復盤日', ''))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
-                        if targets: target_str = yesterday_str
-
                     if targets:
                         results = []
                         win_count = 0
                         for t in targets:
-                            raw_tid = str(t.get('代號', '')).strip()
-                            # 🛡️ 關鍵修正 1：確保代號乾淨，防止抓錯
-                            tid = raw_tid.replace(".TW", "").replace(".TWO", "")
+                            # 1. 清理代號
+                            raw_tid = str(t.get('代號', '')).strip().replace(".TW", "").replace(".TWO", "")
+                            # 2. 呼叫數據 (假設您的 get_stock_perf 處理台股代號)
+                            perf = get_stock_perf(f"{raw_tid}.TW") 
                             
-                            # 🛡️ 關鍵修正 2：重新格式化台股代號 (依據您的 get_stock_perf 習慣)
-                            # 如果您的函數需要 .TW，請在此統一補上
-                            api_tid = f"{tid}.TW" 
-                            
-                            perf = get_stock_perf(api_tid) 
-                            
-                            # 🛡️ 關鍵修正 3：嚴格驗證現價 (防止抓到成交量或其他大數值)
-                            # 假設台股目前沒有超過 5000 元的股票，若現價異常大於偵測價 5 倍，則視為異常
-                            raw_now = perf[0] if isinstance(perf, tuple) and perf[0] > 0 else 0
-                            past_price = float(str(t.get('偵測價格', 0)).replace("'", "").replace(",", "").strip())
-                            
-                            # 數據合理性檢查：防止現價抓到成交量 (成交量通常很大)
-                            if raw_now > past_price * 10: 
-                                # 如果抓到的現價超過原價 10 倍，極大機率是抓到了「成交量」欄位
-                                # 強制改回 perf 裡的其他索引試試，或標註錯誤
-                                now_price = 0 
-                            else:
-                                now_price = raw_now
+                            # 3. 抓取現價與偵測價 (加入防呆機制)
+                            try:
+                                now_price = float(perf[0]) if isinstance(perf, tuple) and perf[0] > 0 else 0
+                                raw_past = str(t.get('偵測價格', 0)).replace("'", "").replace(",", "").strip()
+                                past_price = float(raw_past) if raw_past else 0
+                                
+                                # 💡 數據異常偵測：如果現價與偵測價落差超過 50%，通常是抓錯欄位
+                                if now_price > past_price * 1.5 or now_price < past_price * 0.5:
+                                    # 可能抓到成交量，嘗試標註為數據異常
+                                    is_data_error = True
+                                else:
+                                    is_data_error = False
+                            except:
+                                now_price = 0
+                                is_data_error = True
 
-                            if now_price > 0 and past_price > 0:
+                            if not is_data_error and now_price > 0 and past_price > 0:
                                 change = ((now_price - past_price) / past_price) * 100
-                                is_win = change >= 3.0 
+                                is_win = change >= 3.0 # 達標門檻
                                 if is_win: win_count += 1
                                 results.append({
-                                    "代號": tid, "名稱": t.get('名稱', ''), 
+                                    "代號": raw_tid, "名稱": t.get('名稱', ''), 
                                     "偵測價": f"{past_price:.2f}", "現價": f"{now_price:.2f}",
                                     "戰果": f"{change:+.2f}%", "判決": "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
                                 })
                             else:
                                 results.append({
-                                    "代號": tid, "名稱": t.get('名稱', ''), 
-                                    "偵測價": f"{past_price:.2f}", "現價": "數據錯誤",
-                                    "戰果": "N/A", "判決": "⚠️ 抓取失敗"
+                                    "代號": raw_tid, "名稱": t.get('名稱', ''), 
+                                    "偵測價": f"{past_price:.2f}", "現價": "數據異常",
+                                    "戰果": "N/A", "判決": "⚠️ 需手動複核"
                                 })
 
                         acc_val = (win_count / len(targets)) * 100 if targets else 0
                         st.session_state.accuracy = acc_val 
                         st.session_state.recap_results = results 
-                        st.session_state.last_insight = f"對帳基準日 {target_str}：複盤完成。"
+                        st.session_state.last_insight = f"複盤基準日 {target_str}：完成 {len(targets)} 檔對帳。"
                         
+                        # 紀錄複盤戰報
                         ws.append_row([
                             datetime.now().strftime("%Y-%m-%d %H:%M"), "SYSTEM", "大腦自我校準", 
                             acc_val, st.session_state.last_insight, "-", "-", "複盤戰報"
                         ])
-                        st.success("✅ 數據校準複盤完成！")
+                        
+                        st.success(f"✅ 複盤完成！已對齊 {target_str} 名單。")
                         st.rerun() 
                     else:
-                        st.warning(f"📅 找不到 {target_str} 的名單。")
+                        st.info(f"📅 雲端尚無 {target_str} 的預計複盤名單。")
                 except Exception as e: 
                     st.error(f"複盤失敗: {str(e)}")
 
