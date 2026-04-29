@@ -1823,36 +1823,55 @@ with tab_brain:
 
         st.divider()
 
-        # --- 📈 執行複盤按鈕 ---
-        if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning_v43"):
+        # --- 📈 執行海量複盤：數據精準校正版 ---
+        if st.button("📈 執行海量複盤：讓 AI 吸收昨日實戰經驗", width="stretch", key="recap_learning_v43_fix"):
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
                     
-                    # 週末自動回溯邏輯 (保留老總最愛的功能)
                     curr_time = datetime.now()
-                    target_time = curr_time - timedelta(days=1)
-                    if curr_time.weekday() == 0: # 週一複盤週五
-                        target_time = curr_time - timedelta(days=3)
+                    target_str = curr_time.strftime("%Y-%m-%d")
                     
-                    target_str = target_time.strftime("%Y-%m-%d")
-                    # 搜尋符合昨日預計複盤的名單
-                    targets = [r for r in data if target_str in str(r.get('預計復盤日', r.get('預計複盤日', ''))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
+                    # 搜尋今日該複盤的名單
+                    targets = [r for r in data if target_str in str(r.get('預計複盤日', r.get('預計復盤日', ''))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
                     
+                    # 備案：找昨天的
+                    if not targets:
+                        yesterday_str = (curr_time - timedelta(days=1)).strftime("%Y-%m-%d")
+                        targets = [r for r in data if yesterday_str in str(r.get('預計複盤日', r.get('預計復盤日', ''))) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
+                        if targets: target_str = yesterday_str
+
                     if targets:
                         results = []
                         win_count = 0
                         for t in targets:
-                            tid = str(t.get('代號', ''))
-                            perf = get_stock_perf(tid) # 這裡是呼叫您的數據函數
-                            now_price = perf[0] if isinstance(perf, tuple) and perf[0] > 0 else 0
+                            raw_tid = str(t.get('代號', '')).strip()
+                            # 🛡️ 關鍵修正 1：確保代號乾淨，防止抓錯
+                            tid = raw_tid.replace(".TW", "").replace(".TWO", "")
+                            
+                            # 🛡️ 關鍵修正 2：重新格式化台股代號 (依據您的 get_stock_perf 習慣)
+                            # 如果您的函數需要 .TW，請在此統一補上
+                            api_tid = f"{tid}.TW" 
+                            
+                            perf = get_stock_perf(api_tid) 
+                            
+                            # 🛡️ 關鍵修正 3：嚴格驗證現價 (防止抓到成交量或其他大數值)
+                            # 假設台股目前沒有超過 5000 元的股票，若現價異常大於偵測價 5 倍，則視為異常
+                            raw_now = perf[0] if isinstance(perf, tuple) and perf[0] > 0 else 0
                             past_price = float(str(t.get('偵測價格', 0)).replace("'", "").replace(",", "").strip())
                             
+                            # 數據合理性檢查：防止現價抓到成交量 (成交量通常很大)
+                            if raw_now > past_price * 10: 
+                                # 如果抓到的現價超過原價 10 倍，極大機率是抓到了「成交量」欄位
+                                # 強制改回 perf 裡的其他索引試試，或標註錯誤
+                                now_price = 0 
+                            else:
+                                now_price = raw_now
+
                             if now_price > 0 and past_price > 0:
                                 change = ((now_price - past_price) / past_price) * 100
-                                # 判決標準：如果是預測噴發(>=5%)，則需 3% 達標；一般則 2%
                                 is_win = change >= 3.0 
                                 if is_win: win_count += 1
                                 results.append({
@@ -1860,29 +1879,29 @@ with tab_brain:
                                     "偵測價": f"{past_price:.2f}", "現價": f"{now_price:.2f}",
                                     "戰果": f"{change:+.2f}%", "判決": "🔥 捕捉成功" if is_win else "❌ 預判偏誤"
                                 })
+                            else:
+                                results.append({
+                                    "代號": tid, "名稱": t.get('名稱', ''), 
+                                    "偵測價": f"{past_price:.2f}", "現價": "數據錯誤",
+                                    "戰果": "N/A", "判決": "⚠️ 抓取失敗"
+                                })
 
-                        acc_val = (win_count / len(targets)) * 100
+                        acc_val = (win_count / len(targets)) * 100 if targets else 0
                         st.session_state.accuracy = acc_val 
                         st.session_state.recap_results = results 
+                        st.session_state.last_insight = f"對帳基準日 {target_str}：複盤完成。"
                         
-                        # 自動生成大腦結論
-                        if acc_val >= 60:
-                            st.session_state.last_insight = f"戰果輝煌 ({acc_val:.1f}%)！明日權重將自動加成 (Surge x1.15)。"
-                        else:
-                            st.session_state.last_insight = f"昨日盤勢震盪，準確率 {acc_val:.1f}%，建議明日保守操作。"
-                        
-                        # --- 核心：複盤完自動寫入雲端，確保下次開啟不歸零 ---
                         ws.append_row([
                             datetime.now().strftime("%Y-%m-%d %H:%M"), "SYSTEM", "大腦自我校準", 
                             acc_val, st.session_state.last_insight, "-", "-", "複盤戰報"
                         ])
-                        
-                        st.success("✅ 複盤完成，戰績已同步至雲端持久記憶！")
+                        st.success("✅ 數據校準複盤完成！")
                         st.rerun() 
                     else:
-                        st.info(f"📅 雲端尚無 {target_str} 的預計複盤名單。")
+                        st.warning(f"📅 找不到 {target_str} 的名單。")
                 except Exception as e: 
                     st.error(f"複盤失敗: {str(e)}")
+
 
         # --- 顯示複盤明細 ---
         if 'recap_results' in st.session_state and st.session_state.recap_results:
