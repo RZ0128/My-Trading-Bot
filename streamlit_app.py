@@ -1771,8 +1771,10 @@ with tab_brain:
     # ==============================================================================
     # 【核心儀表板：AI 實戰戰果與進化度】
     # ==============================================================================
+    # 確保 session state 存在
     if 'accuracy' not in st.session_state: st.session_state.accuracy = 0.0
-    
+    if 'evolution' not in st.session_state: st.session_state.evolution = 5.2
+
     col_stat1, col_stat2 = st.columns(2)
     with col_stat1:
         st.markdown("#### 🎯 實戰狙擊準確率")
@@ -1781,87 +1783,76 @@ with tab_brain:
         
     with col_stat2:
         st.markdown("#### 🧪 大腦百科進化度")
-        evolution_val = min(5.2 + (st.session_state.accuracy * 0.5), 100.0)
-        st.progress(evolution_val / 100)
-        st.caption(f"已完成 {evolution_val:.1f}% 歷史數據特徵吸收")
+        st.progress(min(st.session_state.evolution / 100, 1.0))
+        st.metric(label="進化等級", value=f"{st.session_state.evolution:.1f}%")
 
     st.divider()
+
+    # ==============================================================================
+    # 【第一區：📊 雙向握手複盤機制 (老總專屬流程)】
+    # ==============================================================================
+    st.markdown("### 📊 第一步：大腦戰略複盤")
     
-    # ==============================================================================
-    # 【第一區：📊 戰略複盤 (V43.6 附對話指令區)】
-    # ==============================================================================
-    with st.expander("📊 步驟一：啟動昨日戰略複盤 (持久記憶大腦)", expanded=True):
-        st.info("💡 複盤完成後，下方將生成「AI 對話指令」，方便您貼回與我溝通。")
-        
-        # --- 記憶恢復 ---
-        if 'accuracy' not in st.session_state or st.session_state.accuracy == 0:
-            sh = init_cloud_connection()
-            if sh:
-                try:
-                    ws = sh.worksheet("thought_log")
-                    recap_logs = [r for r in ws.get_all_records() if "複盤戰報" in str(r.get('結果狀態', ''))]
-                    if recap_logs:
-                        last_recap = recap_logs[-1]
-                        st.session_state.accuracy = float(last_recap.get('AI 分數', 0))
-                        st.session_state.last_insight = last_recap.get('戰略結論', '已恢復歷史戰績。')
-                except: pass
-
-        st.metric("🎯 昨日狙擊率", f"{st.session_state.get('accuracy', 0):.1f}%")
-
-        if st.button("📈 執行同步複盤：生成對話指令", width="stretch", key="recap_v43_6"):
+    # --- 對話框一：從雲端抓取原始資料給 AI ---
+    with st.expander("一、提取雲端數據 (交給 AI 複盤)", expanded=True):
+        if st.button("🔍 1. 生成昨日數據包", use_container_width=True):
             sh = init_cloud_connection()
             if sh:
                 try:
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
+                    # 抓取昨日待驗證名單
                     curr_time = datetime.now()
                     days_to_back = 3 if curr_time.weekday() == 0 else 1
-                    target_str = (curr_time - timedelta(days=days_to_back)).strftime("%Y-%m-%d")
-                    targets = [r for r in data if target_str in str(r.get('預計複盤日', '')) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
+                    target_date = (curr_time - timedelta(days=days_to_back)).strftime("%Y-%m-%d")
                     
-                    if targets:
-                        results = []; win_count = 0
-                        for t in targets:
-                            tid = str(t.get('代號', '')).strip()
-                            sid = get_full_ticker(tid)
-                            p_now, _, _ = get_stock_perf(sid, 0)
-                            p_past = float("".join(c for c in str(t.get('偵測價格', '0')) if c.isdigit() or c == '.'))
-                            if p_now > 0 and p_past > 0:
-                                chg = ((p_now - p_past) / p_past) * 100
-                                is_w = chg >= 3.0
-                                if is_w: win_count += 1
-                                results.append({"代號": tid, "戰果": f"{chg:+.2f}%", "判決": "✅" if is_w else "❌"})
+                    raw_targets = [r for r in data if target_date in str(r.get('預計複盤日', '')) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
+                    
+                    if raw_targets:
+                        # 封裝成 AI 讀得懂的格式
+                        sync_package = f"SYNC_DATA_START | DATE:{target_date} | DATA:{raw_targets} | SYNC_DATA_END"
+                        st.session_state.sync_package = sync_package
+                        st.success("✅ 數據打包完成！")
+                    else:
+                        st.warning(f"📅 找不到 {target_date} 的待複盤數據。")
+                except Exception as e: st.error(f"提取失敗: {e}")
+        
+        if 'sync_package' in st.session_state:
+            st.text_area("請複製以下內容貼給 AI 進行分析：", value=st.session_state.sync_package, height=150)
 
-                        acc_val = (win_count / len(targets)) * 100
-                        st.session_state.accuracy = acc_val
-                        st.session_state.recap_results = results
-                        
-                        # --- 關鍵：生成給 AI 讀的對話框指令 ---
-                        st.session_state.ai_command = f"PROMPT_START | DATE:{target_str} | ACC:{acc_val:.1f}% | EVO:{evolution_val:.1f}% | LIST:{results} | PROMPT_END"
-                        
-                        ws.append_row([datetime.now().strftime("%m-%d %H:%M"), "SYSTEM", "複盤對齊", acc_val, st.session_state.ai_command, "-", "-", "複盤戰報"])
-                        st.success("✅ 複盤成功！下方已生成對話指令。")
+    # --- 對話框二：接收 AI 複盤結果回填 App ---
+    with st.expander("二、輸入 AI 複盤指令 (回填 App 並寫入雲端)", expanded=True):
+        ai_input = st.text_area("請貼回 AI 給您的複盤代碼 (RESULT_START...):", height=150)
+        
+        if st.button("🚀 2. 執行指令並更新雲端", use_container_width=True):
+            if ai_input and "RESULT_START" in ai_input:
+                try:
+                    # 解析 AI 回傳的代碼 (簡單示範解析邏輯)
+                    # 格式預計為: RESULT_START | ACC:80 | EVO:10 | LIST:[...] | RESULT_END
+                    acc_part = ai_input.split("ACC:")[1].split("|")[0].replace("%","").strip()
+                    evo_part = ai_input.split("EVO:")[1].split("|")[0].replace("%","").strip()
+                    
+                    # 更新 App 狀態
+                    st.session_state.accuracy = float(acc_part)
+                    st.session_state.evolution = float(evo_part)
+                    
+                    # 寫入雲端 thought_log 紀錄
+                    sh = init_cloud_connection()
+                    if sh:
+                        ws = sh.worksheet("thought_log")
+                        ws.append_row([
+                            datetime.now().strftime("%Y-%m-%d %H:%M"), "SYSTEM", "AI複盤回填", 
+                            acc_part, f"AI 進化至 {evo_part}%", "-", "-", "複盤戰報"
+                        ])
+                        st.success(f"🎊 複盤成功！準確率已更新為 {acc_part}%，進化度升至 {evo_part}%。")
+                        st.balloons()
                         st.rerun()
-                except Exception as e: st.error(f"失敗: {e}")
-
-        # --- 🚀 這是您要的「對話框」：AI 指令交換區 ---
-        if 'ai_command' in st.session_state:
-            st.write("---")
-            st.markdown("### 💬 AI 指令交換區 (請複製以下內容貼回對話框)")
-            st.text_area("複製這段給 AI，它就懂目前的進化狀態：", value=st.session_state.ai_command, height=100)
-            st.caption("⚠️ 複製後直接貼給 Gemini，我將為您啟動第二步「獵殺清單」優化。")
-
-        # 顯示結果明細表格
-        if 'recap_results' in st.session_state and st.session_state.recap_results:
-            st.divider()
-            st.table(pd.DataFrame(st.session_state.recap_results))
-            if st.button("📤 同步戰報回雲端"):
-                # (雲端儲存邏輯同上)
-                st.success("戰報已同步")
+                except Exception as e:
+                    st.error(f"代碼解析失敗，請確認貼回的格式是否正確。錯誤: {e}")
+            else:
+                st.warning("請先貼入 AI 生成的結果代碼。")
 
     st.divider()
-
-
 
     
     # ==============================================================================
