@@ -1789,18 +1789,20 @@ with tab_brain:
     st.divider()
 
     # ==============================================================================
-    # 【第一區：📊 雙向握手複盤機制 (老總專屬流程)】
+    # 【第一區：📊 雙向握手複盤機制 (JSON 專業對接版)】
     # ==============================================================================
     st.markdown("### 📊 第一步：大腦戰略複盤")
     
     # --- 對話框一：從雲端抓取原始資料給 AI ---
     with st.expander("一、提取雲端數據 (交給 AI 複盤)", expanded=True):
-        if st.button("🔍 1. 生成昨日數據包", use_container_width=True):
+        if st.button("🔍 1. 生成昨日數據包 (JSON)", use_container_width=True):
             sh = init_cloud_connection()
             if sh:
                 try:
+                    import json
                     ws = sh.worksheet("thought_log")
                     data = ws.get_all_records()
+                    
                     # 抓取昨日待驗證名單
                     curr_time = datetime.now()
                     days_to_back = 3 if curr_time.weekday() == 0 else 1
@@ -1809,50 +1811,59 @@ with tab_brain:
                     raw_targets = [r for r in data if target_date in str(r.get('預計複盤日', '')) and "明日推薦驗證" in str(r.get('結果狀態', ''))]
                     
                     if raw_targets:
-                        # 封裝成 AI 讀得懂的格式
-                        sync_package = f"SYNC_DATA_START | DATE:{target_date} | DATA:{raw_targets} | SYNC_DATA_END"
-                        st.session_state.sync_package = sync_package
+                        # 封裝成專業 JSON 格式
+                        sync_package = {
+                            "type": "SYNC_DATA",
+                            "date": target_date,
+                            "data": raw_targets
+                        }
+                        st.session_state.sync_package = json.dumps(sync_package, ensure_ascii=False, indent=2)
                         st.success("✅ 數據打包完成！")
                     else:
                         st.warning(f"📅 找不到 {target_date} 的待複盤數據。")
                 except Exception as e: st.error(f"提取失敗: {e}")
         
         if 'sync_package' in st.session_state:
-            st.text_area("請複製以下內容貼給 AI 進行分析：", value=st.session_state.sync_package, height=150)
+            st.text_area("請複製以下內容貼給 AI 進行分析：", value=st.session_state.sync_package, height=200)
 
     # --- 對話框二：接收 AI 複盤結果回填 App ---
     with st.expander("二、輸入 AI 複盤指令 (回填 App 並寫入雲端)", expanded=True):
-        ai_input = st.text_area("請貼回 AI 給您的複盤代碼 (RESULT_START...):", height=150)
+        ai_input = st.text_area("📡 貼入 AI 複盤結果 JSON：", height=150, placeholder='貼入 AI 生成的結果 JSON 代碼...')
         
         if st.button("🚀 2. 執行指令並更新雲端", use_container_width=True):
-            if ai_input and "RESULT_START" in ai_input:
+            if ai_input:
                 try:
-                    # 解析 AI 回傳的代碼 (簡單示範解析邏輯)
-                    # 格式預計為: RESULT_START | ACC:80 | EVO:10 | LIST:[...] | RESULT_END
-                    acc_part = ai_input.split("ACC:")[1].split("|")[0].replace("%","").strip()
-                    evo_part = ai_input.split("EVO:")[1].split("|")[0].replace("%","").strip()
+                    import json
+                    res = json.loads(ai_input)
+                    
+                    # 從 JSON 中提取數據
+                    acc_val = res.get('accuracy', 0.0)
+                    evo_val = res.get('evolution', 0.0)
+                    insight = res.get('insight', '複盤完成')
                     
                     # 更新 App 狀態
-                    st.session_state.accuracy = float(acc_part)
-                    st.session_state.evolution = float(evo_part)
+                    st.session_state.accuracy = float(acc_val)
+                    st.session_state.evolution = float(evo_val)
                     
                     # 寫入雲端 thought_log 紀錄
                     sh = init_cloud_connection()
                     if sh:
                         ws = sh.worksheet("thought_log")
                         ws.append_row([
-                            datetime.now().strftime("%Y-%m-%d %H:%M"), "SYSTEM", "AI複盤回填", 
-                            acc_part, f"AI 進化至 {evo_part}%", "-", "-", "複盤戰報"
+                            datetime.now().strftime("%Y-%m-%d %H:%M"), 
+                            "SYSTEM", 
+                            "AI複盤回填", 
+                            acc_val, 
+                            insight, 
+                            "-", "-", 
+                            "複盤戰績同步"
                         ])
-                        st.success(f"🎊 複盤成功！準確率已更新為 {acc_part}%，進化度升至 {evo_part}%。")
+                        st.success(f"🎊 複盤成功！準確率：{acc_val}%，進化度：{evo_val}%。")
                         st.balloons()
                         st.rerun()
                 except Exception as e:
-                    st.error(f"代碼解析失敗，請確認貼回的格式是否正確。錯誤: {e}")
-            else:
-                st.warning("請先貼入 AI 生成的結果代碼。")
+                    st.error(f"❌ JSON 解析失敗：{e}")
 
-    st.divider()
 
     
     # ==============================================================================
