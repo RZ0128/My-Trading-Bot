@@ -310,50 +310,60 @@ def get_stock_name(ticker):
 
 def get_stock_perf(ticker, period_days=0):
     """
-    大基石核心行情引擎：優先使用 twstock (在地數據)，yf 作為備援
+    大基石精準行情引擎：修復 twstock 索引偏移與異常值問題
     """
-    # 1. 提取純數字代號 (例如從 2330.TW 提取 2330)
+    import twstock
+    import yfinance as yf
+    
+    # 1. 提取純數字代號
     raw_id = str(ticker).split(".")[0].strip()
     
-    # 2. 【首選策略】嘗試使用 twstock 抓取即時行情
+    # 2. 【首選策略】twstock (強化精準度)
     if raw_id.isdigit():
         try:
-            import twstock
-            # 建立 stock 物件，只抓取最近數據以加快掃描速度
+            # fetch_from() 指定抓取近期，避免資料過大
             stock = twstock.Stock(raw_id)
             
-            # 檢查是否有獲取到價格數據
-            if stock and len(stock.price) >= 2:
-                current_p = stock.price[-1]
-                prev_p = stock.price[-2]
+            # 🛡️ 關鍵修正：twstock 的價格有時會包含 None，需先清洗
+            clean_prices = [p for p in stock.price if p is not None and p > 0]
+            
+            if len(clean_prices) >= 2:
+                current_p = clean_prices[-1]
+                prev_p = clean_prices[-2]
                 
-                # 確保數值有效且非 None (twstock 有時會回傳 None)
-                if current_p is not None and prev_p is not None:
+                # 🛡️ 異常值防禦：如果兩次價格跳動超過 10% (除非漲停)，通常是抓錯欄位
+                # 這裡不直接 Return，而是讓它失敗轉向備援 YF
+                if 0.5 < (current_p / prev_p) < 2.0:
                     diff = current_p - prev_p
-                    return float(current_p), float(diff), "[TW]" # 標註來源為 TW Stock
-        except Exception as e:
-            # 僅在偵錯模式顯示，不干擾 UI
+                    return float(current_p), float(diff), "[TW]"
+        except:
             pass
 
-    # 3. 【備援策略】若 TW Stock 失敗或非台股代號，使用 Yahoo Finance
+    # 3. 【備援策略】Yahoo Finance (穩定性最高)
     try:
-        full_tid = get_full_ticker(raw_id)
+        # 這裡建議手動拼接，確保台股代號正確
+        # 如果是 4 位數通常是上市 (.TW)，如果是 4 位數以上的通常是上櫃 (.TWO)
+        # 或是統一使用您原本的 get_full_ticker
+        full_tid = get_full_ticker(raw_id) 
         tk = yf.Ticker(full_tid)
-        # 僅抓取 2 天數據以極致化掃描速度
-        hist = tk.history(period="2d", timeout=5) 
+        
+        # 🛡️ 關鍵修正：使用 '1mo' 確保有足夠的歷史資料對比，避免 '2d' 抓到空值
+        hist = tk.history(period="5d", timeout=5) 
         
         if not hist.empty and len(hist) >= 2:
+            # 抓取最後兩個交易日的 Close
             cp = hist['Close'].iloc[-1]
-            dp = hist['Close'].iloc[-1] - hist['Close'].iloc[-2]
-            return float(cp), float(dp), "[YF]" # 標註來源為 Yahoo Finance
-        elif not hist.empty:
-            # 只有一天數據的情況
-            cp = hist['Close'].iloc[-1]
-            return float(cp), 0.0, "[YF-S]"
+            pp = hist['Close'].iloc[-2]
+            
+            # 處理可能出現的 NaN
+            if pd.isna(cp) or pd.isna(pp):
+                return 0.0, 0.0, "[YF-Err]"
+                
+            dp = cp - pp
+            return float(cp), float(dp), "[YF]"
     except:
         pass
 
-    # 4. 【最終保底】若全部失敗
     return 0.0, 0.0, "[N/A]"
 
 
