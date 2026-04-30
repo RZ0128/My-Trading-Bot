@@ -1598,6 +1598,21 @@ def build_pool_500() -> dict:
 # === 生成結果 ===
 pool_500 = build_pool_500()
 
+def get_pool_500_safe():
+    if "pool_500" in st.session_state:
+        return st.session_state.pool_500
+
+    try:
+        p = build_pool_500()
+    except Exception as e:
+        st.sidebar.error(f"⚠️ 自動生成股池失敗，使用手寫股池：{e}")
+        p = POOL_500_SEED
+
+    st.session_state.pool_500 = p
+    return p
+
+pool_500 = get_pool_500_safe()
+
 # === STOCK_MAP 同步 ===
 STOCK_MAP = {}
 for cat_list in pool_500.values():
