@@ -11,27 +11,23 @@ import collections
 import re
 import time
 import random
-import numpy as np
-import pandas as pd
 
+# ✅ 重要：set_page_config 必須在任何 st.* 之前
+st.set_page_config(page_title="大基石-V15.3 自主進化雲端版", layout="wide")
 
 # --- [V15.2 雲端安全通訊官：Google Sheets 同步模組] ---
+# ✅ 不要在 set_page_config 之前呼叫 st.error，所以這裡改成用旗標，等 sidebar 再顯示
+HAS_GSPREAD = True
 try:
     import gspread
     import json
     from google.oauth2.service_account import Credentials
 except ImportError:
-    st.error("❌ 缺少雲端同步套件 (gspread)，請確保 requirements.txt 已更新。")
-
-# --- [第 1 區：核心配置與 CSS 樣式] ---
-st.set_page_config(page_title="大基石-V15.3 自主進化雲端版", layout="wide")
+    HAS_GSPREAD = False
 
 st.markdown("""
     <style>
-    /* 全域字體與顏色設定 */
     html, body, [class*="css"] { font-size: 13px !important; color: #1e1e1e; }
-    
-    /* 按鈕樣式佈局 (完全保留) */
     .stButton>button { 
         height: 32px !important; 
         padding: 0px 15px !important; 
@@ -39,8 +35,6 @@ st.markdown("""
         border-radius: 6px !important;
         font-weight: bold !important;
     }
-    
-    /* 籌碼洗盤標籤 (完全保留) */
     .sentiment-tag { 
         color: #00D1FF; 
         font-weight: bold; 
@@ -49,8 +43,6 @@ st.markdown("""
         border-radius: 4px; 
         background: rgba(0, 209, 255, 0.1); 
     }
-    
-    /* 狀態列樣式 (完全保留) */
     .status-bar { 
         padding: 8px 15px; 
         border-radius: 10px; 
@@ -65,11 +57,22 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# ✅ Yahoo Finance 真檢查（加 cache 避免每次 rerun 都打）
+@st.cache_data(ttl=300, show_spinner=False)
+def ping_yfinance() -> bool:
+    try:
+        h = yf.Ticker("^IXIC").history(period="1d", timeout=5)
+        return not h.empty
+    except:
+        return False
 
 # --- [V15.3 備援指揮部：多源數據狀態監控] ---
 with st.sidebar:
     st.markdown("### 🛠️ 數據戰備狀態")
-    
+
+    if not HAS_GSPREAD:
+        st.error("❌ 缺少雲端同步套件 (gspread)，請確保 requirements.txt 已更新。")
+
     # 1. 檢查備援 A (twstock)
     try:
         import twstock
@@ -77,65 +80,67 @@ with st.sidebar:
     except ImportError:
         st.error("❌ 備援 A (twstock) 缺失")
 
-    # 2. 檢查備援 B (Yahoo Finance)
-    try:
-        st.success("✅ 備援 B (全球數據流) 已就緒")
-    except:
-        st.error("❌ 備援 B 連線異常")
+    # 2. 檢查備援 B (Yahoo Finance) —— ✅ 改成真檢查
+    if ping_yfinance():
+        st.success("✅ 備援 B (Yahoo Finance) 已就緒")
+    else:
+        st.error("❌ 備援 B (Yahoo Finance) 連線異常")
 
-    # 3. 檢查備援 C (Requests/urllib)
-    import requests
-    st.success("✅ 備援 C (全球快取) 已就緒")
-    
+    # 3. 檢查備援 C (Requests)
+    try:
+        import requests
+        st.success("✅ 備援 C (Requests) 已就緒")
+    except ImportError:
+        st.error("❌ 備援 C (Requests) 缺失")
+
     st.markdown("---")
 
 
 # --- [第 2 區：定義監控函數與連線邏輯] ---
 
+# ✅ 關鍵：把「真正建立連線」做 cache_resource，避免每次 rerun 重連
+@st.cache_resource
+def _cloud_connection_core():
+    if not HAS_GSPREAD:
+        return None
+    if "GCP_JSON_KEY" not in st.secrets:
+        return None
+
+    raw_key = st.secrets["GCP_JSON_KEY"]
+    gcp_json = raw_key.to_dict() if hasattr(raw_key, "to_dict") else dict(raw_key)
+
+    pk = str(gcp_json.get("private_key", ""))
+    pk = pk.replace("\\n", "\n")
+    pk = pk.strip().strip("'").strip('"')
+
+    if "-----BEGIN PRIVATE KEY-----" not in pk:
+        pk = "-----BEGIN PRIVATE KEY-----\n" + pk
+    if "-----END PRIVATE KEY-----" not in pk:
+        pk = pk + "\n-----END PRIVATE KEY-----"
+    gcp_json["private_key"] = pk
+
+    for field in ["project_id", "client_email", "private_key"]:
+        if not gcp_json.get(field):
+            return None
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
+    gc = gspread.authorize(creds)
+    return gc.open("StoneManager_DB")
+
+# ✅ 保留你原本的錯誤提示風格：用 wrapper 顯示錯誤
 def init_cloud_connection():
     try:
-        if "GCP_JSON_KEY" not in st.secrets:
-            st.sidebar.error("❌ Secrets 中找不到 GCP_JSON_KEY 配置")
-            return None
-        
-        # 1. 取得原始數據並轉為字典
-        raw_key = st.secrets["GCP_JSON_KEY"]
-        if hasattr(raw_key, "to_dict"):
-            gcp_json = raw_key.to_dict()
-        else:
-            gcp_json = dict(raw_key)
-            
-        # 2. 【大基石專用：金鑰深度洗滌】
-        pk = str(gcp_json.get("private_key", ""))
-        
-        # 移除所有可能的干擾字元
-        pk = pk.replace("\\n", "\n") # 修復雙重轉義
-        pk = pk.strip().strip("'").strip('"') # 移除前後引號
-        
-        # 確保頭尾格式正確，且中間沒有多餘空格
-        if "-----BEGIN PRIVATE KEY-----" not in pk:
-            pk = "-----BEGIN PRIVATE KEY-----\n" + pk
-        if "-----END PRIVATE KEY-----" not in pk:
-            pk = pk + "\n-----END PRIVATE KEY-----"
-            
-        gcp_json["private_key"] = pk
-        
-        # 3. 驗證必要欄位是否完整
-        required_fields = ["project_id", "client_email", "private_key"]
-        for field in required_fields:
-            if not gcp_json.get(field):
-                st.sidebar.error(f"❌ 金鑰遺失欄位: {field}")
-                return None
-
-        # 4. 執行連線
-        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(gcp_json, scopes=scopes)
-        gc = gspread.authorize(creds)
-        
-        return gc.open("StoneManager_DB")
-        
+        sh = _cloud_connection_core()
+        if sh is None:
+            if not HAS_GSPREAD:
+                st.sidebar.error("❌ 缺少 gspread / google auth 套件")
+            elif "GCP_JSON_KEY" not in st.secrets:
+                st.sidebar.error("❌ Secrets 中找不到 GCP_JSON_KEY 配置")
+            else:
+                st.sidebar.error("❌ 連線失敗：金鑰/權限/欄位可能不完整")
+        return sh
     except Exception as e:
-        # 顯示更詳細的錯誤，幫助判斷是格式還是權限問題
         err_msg = str(e)
         if "BadStatusLine" in err_msg:
             st.sidebar.error("🌐 網路連線不穩，請稍後再試")
@@ -155,14 +160,12 @@ def get_cloud_df(sh, sheet_name):
         return pd.DataFrame()
 
 
-# --- 在現有的 get_cloud_df 之後插入 ---
 def safe_get_df(sh, name):
     try:
         df = get_cloud_df(sh, name)
         if not df.empty:
-            # 💡 大基石修復：強制將所有欄位轉為字串，並過濾掉可能導致 Arrow 崩潰的類型
+            # 先維持你原本的 Arrow 防崩策略（之後我們再慢慢優化型別）
             for col in df.columns:
-                # 先轉為物件類型，處理 nan 後再轉字串
                 df[col] = df[col].astype(object).replace([np.nan, None, 'nan', 'None', '<NA>'], '')
                 df[col] = df[col].astype(str)
             return df
@@ -180,13 +183,16 @@ def get_us_market_impact():
         for tid, tname in tickers.items():
             tk = yf.Ticker(tid)
             h = tk.history(period="2d")
-            if len(h) < 2: continue
+            if len(h) < 2:
+                continue
             change = ((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100
             impact_report[tname] = round(change, 2)
-            if change < -2.5: total_stress += 1
+            if change < -2.5:
+                total_stress += 1
         return impact_report, total_stress
     except:
         return {}, 0
+
 
 def run_auto_cruise():
     if 'last_cruise' not in st.session_state:
@@ -196,37 +202,35 @@ def run_auto_cruise():
         if (now - st.session_state.last_cruise).seconds > 600:
             st.session_state.last_cruise = now
 
+
 def check_connection():
     try:
         sh = init_cloud_connection()
-        if sh: return True, "✅ 雲端同步中：gspread 已成功對齊 StoneManager_DB"
+        if sh:
+            return True, "✅ 雲端同步中：gspread 已成功對齊 StoneManager_DB"
         return False, "❌ 連線失敗：無法辨認金鑰或權限不足"
     except:
         return False, "❌ 連線失敗：請檢查 Secrets 設定"
 
+
 def load_data():
-    """大腦初始化程序 - 穩定強化版：先建立保底，再對接雲端"""
     if 'initialized' in st.session_state and st.session_state.initialized:
         return
-    
-    # --- [第一步：強制建立所有保底變數，防止 UI 崩潰] ---
+
     if 'client_list' not in st.session_state:
         st.session_state.client_list = ["Robert"]
     if 'local_db' not in st.session_state:
         st.session_state.local_db = pd.DataFrame(columns=['client', 'id', 'name', 'shares', 'buy_price', 'unit', 'entry_reason', 'sentiment'])
     if 'trade_history' not in st.session_state:
         st.session_state.trade_history = pd.DataFrame(columns=['date', 'client', 'id', 'action', 'shares', 'price', 'note'])
-    
-    # 初始化進度條
+
     progress_bar = st.progress(0, text="🤖 AI 大腦啟動：正在初始化雲端對齊程序...")
-    
+
     try:
-        # --- [第二步：嘗試對接 GCP] ---
         sh = init_cloud_connection()
-        if not sh: 
+        if not sh:
             raise Exception("無法辨認 Secrets 金鑰或 Google Sheets 權限未開啟")
 
-        # --- [1/4] 正在掃描 Inventory (庫存) ---
         progress_bar.progress(25, text="📊 [1/4] 正在對齊 Inventory 雲端數據...")
         inv_df = safe_get_df(sh, "inventory")
         if not inv_df.empty:
@@ -235,8 +239,7 @@ def load_data():
                     inv_df[col] = inv_df[col].astype(str)
             st.session_state.local_db = inv_df
             st.session_state.inventory = inv_df
-        
-        # --- [2/4] 正在同步 History (交易紀錄) ---
+
         progress_bar.progress(50, text="📜 [2/4] 正在對齊 History 交易紀錄...")
         his_df = safe_get_df(sh, "history")
         if not his_df.empty:
@@ -244,42 +247,38 @@ def load_data():
                 if col in his_df.columns:
                     his_df[col] = his_df[col].astype(str)
             st.session_state.trade_history = his_df
-            
-        # --- [3/4] 正在對齊 Clients (客戶清單) ---
+
         progress_bar.progress(75, text="👥 [3/4] 正在同步客戶名單系統...")
         client_df = safe_get_df(sh, "clients")
         if not client_df.empty and 'name' in client_df.columns:
             cloud_clients = client_df['name'].dropna().astype(str).tolist()
             combined = list(set(["Robert"] + cloud_clients))
             st.session_state.client_list = sorted([c for c in combined if c not in ["nan", "None", ""]])
-        
-        # --- [4/4] 雲端對齊完成 ---
+
         progress_bar.progress(100, text="✅ [4/4] 雲端對齊成功！")
         time.sleep(0.5)
 
     except Exception as e:
-        st.sidebar.warning(f"📡 雲端目前離線：使用本地模式")
+        st.sidebar.warning("📡 雲端目前離線：使用本地模式")
         st.sidebar.error(f"金鑰診斷: {str(e)[:40]}")
 
-    
-    # 無論成功失敗，都標記為已初始化，防止無限循環
     st.session_state.initialized = True
-    if 'progress_bar' in locals():
-        progress_bar.empty()
-
-
+    progress_bar.empty()
 
 
 def get_full_ticker(tid):
     tid = str(tid).strip().upper().split(".")[0]
-    if not tid.isdigit(): return tid
+    if not tid.isdigit():
+        return tid
     try:
         import twstock
         if tid in twstock.codes:
             market = twstock.codes[tid].market
             return f"{tid}.TWO" if "上櫃" in market else f"{tid}.TW"
-    except: pass
+    except:
+        pass
     return f"{tid}.TW"
+
 
 def get_stock_name(ticker):
     raw_id = str(ticker).split(".")[0].strip()
@@ -297,7 +296,8 @@ def get_stock_name(ticker):
             import twstock
             if raw_id in twstock.codes:
                 return twstock.codes[raw_id].name
-        except: pass
+        except:
+            pass
     try:
         full_tid = get_full_ticker(raw_id)
         tk = yf.Ticker(full_tid)
@@ -306,47 +306,31 @@ def get_stock_name(ticker):
     except:
         return f"個股 {raw_id}"
 
-# --- [修改後的 get_stock_perf：首選 TW Stock 策略] ---
 
+# ✅ get_stock_perf 先不動（依你說的後續再慢慢改）
 def get_stock_perf(ticker, period_days=0):
-    """
-    大基石精準行情引擎：改為 yf 優先，確保複盤數據不偏移
-    """
     import yfinance as yf
     import pandas as pd
-    
-    # 提取純數字代號
+
     raw_id = str(ticker).split(".")[0].strip()
-    
-    # 【改為首選策略】Yahoo Finance：穩定性最高，不會抓到成交量
     try:
-        # 自動補齊台股後綴
         full_tid = f"{raw_id}.TW" if len(raw_id) == 4 else f"{raw_id}.TWO"
         tk = yf.Ticker(full_tid)
-        
-        # 抓取最近 5 天，確保跨週末也能抓到最後兩個交易日
-        hist = tk.history(period="5d", timeout=5) 
-        
+        hist = tk.history(period="5d", timeout=5)
         if not hist.empty and len(hist) >= 2:
-            cp = hist['Close'].iloc[-1]  # 最新收盤價
-            pp = hist['Close'].iloc[-2]  # 前一收盤價
-            
-            # 🛡️ 二重驗證：確保數值不是 NaN
+            cp = hist['Close'].iloc[-1]
+            pp = hist['Close'].iloc[-2]
             if not pd.isna(cp) and cp > 0:
                 diff = cp - pp
                 return float(cp), float(diff), "[YF]"
     except:
         pass
 
-    # 【備援策略】twstock (僅作最後掙扎)
     try:
         import twstock
         stock = twstock.Stock(raw_id)
-        # 只抓確實是價格的數值，避開可能出現的 None
         prices = [p for p in stock.price if p is not None and p > 0]
         if len(prices) >= 2:
-            # 為了防止抓到成交量，我們取最後三個價格中，最接近平均值的那個（簡單過濾極端值）
-            # 但最安全還是直接取最後一個，並依賴外層的 50% 漲幅防呆
             return float(prices[-1]), float(prices[-1] - prices[-2]), "[TW]"
     except:
         pass
@@ -355,87 +339,57 @@ def get_stock_perf(ticker, period_days=0):
 
 
 def record_transaction(client, tid, action, shares, price, note):
-    """紀錄交易：強化數據原子性與雲端反饋"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    log_entry = {
-        'date': now_str, 
-        'client': client, 
-        'id': tid, 
-        'action': action, 
-        'shares': shares, 
-        'price': price, 
-        'note': note
-    }
+    log_entry = {'date': now_str, 'client': client, 'id': tid, 'action': action, 'shares': shares, 'price': price, 'note': note}
     new_log_df = pd.DataFrame([log_entry])
-    
-    # --- 本地數據強化寫入 ---
+
     if 'trade_history' not in st.session_state:
         st.session_state.trade_history = new_log_df
     else:
-        # 使用 loc 確保數據類型一致性，防止索引偏移
         st.session_state.trade_history = pd.concat([st.session_state.trade_history, new_log_df], ignore_index=True)
-    
-    # --- 雲端同步邏輯強化 ---
+
     try:
         sh = init_cloud_connection()
         if sh:
             ws = sh.worksheet("history")
-            # 增加逾時重試預防與數據清洗
-            ws.append_row([now_str, client, tid, action, int(shares), float(price), str(note)])
+            # ✅ shares 不要 int()，避免 0.5 張被截成 0
+            ws.append_row([now_str, client, tid, action, float(shares), float(price), str(note)])
             st.toast(f"✅ {tid} 交易已紀錄，雲端同步完成！", icon='🚀')
         else:
             st.error("❌ 雲端連線失敗，數據暫存於本地快取")
     except Exception as e:
-        # 捕捉細節但不中斷程式運行
         st.error(f"⚠️ 雲端寫入異常: {e}")
 
 
 def update_ai_thought_log(ticker, score, msg):
-    """
-    大基石核心思維同步：同時寫入雲端試算表與本地前端日誌
-    """
     try:
-        # 1. 取得基本資訊
         tname = get_stock_name(ticker)
         now_time = datetime.now()
-        
-        # 2. 同步至本地前端 Session State (確保 tab_brain 有反應)
+
         if 'ai_logs' not in st.session_state:
             st.session_state.ai_logs = []
-        
-        # 建立一筆新的日誌紀錄
-        new_log = {
-            "time": now_time.strftime("%H:%M:%S"),
-            "target": f"{tname} ({ticker})",
-            "content": msg
-        }
-        
-        # 避免重複寫入（如果是同秒發生的重複更新）
+
+        new_log = {"time": now_time.strftime("%H:%M:%S"), "target": f"{tname} ({ticker})", "content": msg}
+
+        # ✅ 簡單去重：避免同一秒同內容重複寫
+        if st.session_state.ai_logs:
+            last = st.session_state.ai_logs[-1]
+            if last.get("time") == new_log["time"] and last.get("target") == new_log["target"] and last.get("content") == new_log["content"]:
+                return True
+
         st.session_state.ai_logs.append(new_log)
-        
-        # 限制本地日誌數量（例如只保留最近 50 條，防止網頁過重）
         if len(st.session_state.ai_logs) > 50:
             st.session_state.ai_logs.pop(0)
 
-        # 3. 同步至雲端 Google Sheets (原始功能)
         sh = init_cloud_connection()
         if sh:
             ws = sh.worksheet("thought_log")
-            # 依照您的雲端格式：時間, 代號, 名稱, 分數, 訊息
-            ws.append_row([
-                now_time.strftime("%Y-%m-%d %H:%M"), 
-                str(ticker), 
-                tname, 
-                score, 
-                msg
-            ])
+            ws.append_row([now_time.strftime("%Y-%m-%d %H:%M"), str(ticker), tname, float(score), str(msg)])
             return True
-        
+
     except Exception as e:
-        # 這裡不報錯，避免雲端斷線導致整個 AI 大腦卡死
         print(f"Thought Log Error: {e}")
         return False
-
 
 # ==============================================================================
 # 第 3 區：大基石史詩級強大腦 V16.3 - 核心診斷與 MACD 斜率引擎 (老總增強完全體)
