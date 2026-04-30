@@ -2609,43 +2609,6 @@ with tab_history:
             st.rerun()
 
 
-
-# --- 第七區：全球情報室 (完整還原分級卡片 - V15.0 戰略強化) ---
-with tab_intel:
-    st.header("🌎 全球戰略情報大腦 (24H 更新)")
-    if 'news_mode' not in st.session_state: st.session_state.news_mode = "🇹🇼 台美日中 (地緣)"
-    
-    n1, n2 = st.columns(2)
-    if n1.button("🇹🇼 台美日中情勢", use_container_width=True, key="n_tw"): st.session_state.news_mode = "🇹🇼 台美日中 (地緣)"
-    if n2.button("🌐 國際戰略動態", use_container_width=True, key="n_gl"): st.session_state.news_mode = "🌐 國際戰略 (全球)"
-
-    try:
-        # 調用核心大腦情報引擎
-        all_news, trends = fetch_and_score_intel()
-        st.write(f"🔥 **戰略熱點：** " + " ".join([f"`{w}`" for w in trends]))
-        
-        filtered = [item for item in all_news if item['cat'] == st.session_state.news_mode]
-        nl, nr = st.columns(2)
-        for i, item in enumerate(filtered):
-            n, score = item['data'], item['score']
-            # 保持 12.5 史詩級顏色分級
-            color = "#FF4B4B" if score >= 80 else ("#FFD700" if score >= 70 else "#00D1FF")
-            label = "⚡ SS 級" if score >= 80 else ("🚨 A 級" if score >= 70 else "🔍 B 級")
-            
-            card = f"""
-                <div style='border-left:5px solid {color}; padding:12px; margin-bottom:12px; background:white; border-radius:8px; border:1px solid #ddd;'>
-                    <span style='background:{color}; color:black; padding:2px 5px; border-radius:3px; font-size:10px;'>{label}</span>
-                    <small style='float:right; color:grey;'>{item['time']}</small><br>
-                    <a href='{n.link}' target='_blank' style='text-decoration:none; color:#1e1e1e; font-weight:bold;'>{n.title}</a>
-                </div>
-            """
-            if i % 2 == 0: nl.markdown(card, unsafe_allow_html=True)
-            else: nr.markdown(card, unsafe_allow_html=True)
-    except Exception as e:
-        st.error(f"📡 情報連線中... AI 正在重新對齊全球戰略數據流")
-
-
-
 # --- [第 8 區：交易紀錄修正] ---
 with tab_history:
     st.subheader("📜 歷史交易紀錄")
