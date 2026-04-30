@@ -1460,29 +1460,20 @@ def get_global_bias():
 # ==============================================================================
 
 import pandas as pd
-import re
 
-# 官方公司基本資料（上市/上櫃）
-TWSE_LISTED_CSV = "https://mopsfin.twse.com.tw/opendata/t187ap03_L.csv"  # 上市公司基本資料
-TPEX_OTC_CSV    = "https://mopsfin.twse.com.tw/opendata/t187ap03_O.csv"  # 上櫃公司基本資料
+# ✅ 先保留你原本手寫那份，改名當保底（這段內容你自己貼回你原本的 500 檔）
+# POOL_500_SEED = { ...你的手寫股池... }
 
-def _to_int(x):
-    try:
-        s = str(x).replace(",", "").strip()
-        return int(float(s)) if s else 0
-    except:
-        return 0
 
 def load_company_master() -> pd.DataFrame:
     """
     ✅ 不走外部 HTTPS / CSV（避免 Streamlit Cloud SSL 爆炸）
     用 twstock.codes 建公司主檔：code / name / market / industry(group)
     """
-    import pandas as pd
     try:
         import twstock
     except Exception:
-        return pd.DataFrame(columns=["code","name","market","industry"])
+        return pd.DataFrame(columns=["code", "name", "market", "industry"])
 
     rows = []
     for code, info in twstock.codes.items():
@@ -1492,36 +1483,35 @@ def load_company_master() -> pd.DataFrame:
         rows.append({
             "code": code,
             "name": getattr(info, "name", "") or "",
-            "market": getattr(info, "market", "") or "",
-            "industry": getattr(info, "group", "") or "",
+            "market": getattr(info, "market", "") or "",     # 例如：上市 / 上櫃
+            "industry": getattr(info, "group", "") or "",    # 例如：半導體業、電腦及週邊設備業...
         })
     return pd.DataFrame(rows).drop_duplicates(subset=["code"]).reset_index(drop=True)
 
+
 def is_financial_row(industry: str, name: str) -> bool:
-    """排除金融股：用官方產業別 + 名稱關鍵字雙保險"""
     s = (industry or "") + " " + (name or "")
-    return any(k in s for k in [
-        "金融", "金控", "銀行", "證券", "保險", "壽", "票券", "期貨"
-    ])
+    return any(k in s for k in ["金融", "金控", "銀行", "證券", "保險", "壽", "票券", "期貨"])
+
 
 def to_yf_ticker(code: str, market: str) -> str:
-    return f"{code}.TW" if market == "TWSE" else f"{code}.TWO"
+    # ✅ twstock market 是「上市/上櫃」，不是 TWSE/TPEX
+    return f"{code}.TWO" if "上櫃" in (market or "") else f"{code}.TW"
 
-# 產業分桶（你可自行調整）
+
 BUCKETS = {
     "🔬 半導體/IC/設備": ["半導體"],
     "🌬️ AI伺服器/電腦週邊": ["電腦及週邊設備"],
     "📡 通訊/網通/資安": ["通信網路", "資訊服務"],
     "🧩 電子零組件/PCB/被動": ["電子零組件", "電子通路", "其他電子"],
     "🔋 電力/綠能/儲能": ["電機機械", "電器電纜", "綠能", "環保", "油電燃氣"],
-    "🚗 車用/工控/自動化": ["汽車", "工業", "其他"],
+    "🚗 車用/工控/自動化": ["汽車", "工業"],
     "⚓ 航運/鋼鐵/原物料": ["航運", "鋼鐵", "塑膠", "化學", "玻璃陶瓷", "橡膠", "造紙"],
     "🧬 生技/醫療": ["生技醫療"],
     "🏠 建材/營建": ["建材營造"],
-    "🛒 內需消費/通路/觀光": ["食品", "貿易百貨", "觀光餐旅", "居家生活", "運動休閒", "紡織", "電器", "其他"]
+    "🛒 內需消費/通路/觀光": ["食品", "貿易百貨", "觀光餐旅", "居家生活", "運動休閒", "紡織", "電器", "其他"],
 }
 
-# 你要的「各產業配額」：總和 = 500（可依你策略調整）
 QUOTAS = {
     "🔬 半導體/IC/設備": 70,
     "🌬️ AI伺服器/電腦週邊": 60,
@@ -1532,15 +1522,15 @@ QUOTAS = {
     "⚓ 航運/鋼鐵/原物料": 40,
     "🧬 生技/醫療": 40,
     "🏠 建材/營建": 40,
-    "🛒 內需消費/通路/觀光": 50
+    "🛒 內需消費/通路/觀光": 50,
 }
-assert sum(QUOTAS.values()) == 500
 
 def assign_bucket(industry: str) -> str:
     for bucket, keys in BUCKETS.items():
         if any(k in (industry or "") for k in keys):
             return bucket
     return "🛒 內需消費/通路/觀光"
+
 
 def build_pool_500() -> dict:
     df = load_company_master()
@@ -1551,54 +1541,43 @@ def build_pool_500() -> dict:
     # 2) 分桶
     df["bucket"] = df["industry"].apply(assign_bucket)
 
-    # 3) 每桶按「資本額」挑前 N（優質 proxy：規模 + 通常流動性也較佳）
+    # ✅ 3) 排序 Proxy：上市優先 + 代號小到大（更穩、可重現，不靠外部 CSV）
+    df["code_int"] = df["code"].astype(int)
+    df["market_rank"] = df["market"].apply(lambda m: 0 if "上市" in (m or "") else 1)
+    df = df.sort_values(["market_rank", "code_int"], ascending=[True, True])
+
     picked = []
     for bucket, n in QUOTAS.items():
-        sub = df[df["bucket"] == bucket].sort_values("capital_n", ascending=False)
+        sub = df[df["bucket"] == bucket]
         picked.append(sub.head(n))
     picked = pd.concat(picked, ignore_index=True)
 
-    # 4) 若某桶不足（很少見），用全市場剩餘補滿到 500
+    # 4) 若不足，從全市場補到 500
     picked_codes = set(picked["code"].tolist())
     if len(picked) < 500:
         need = 500 - len(picked)
-        rest = df[~df["code"].isin(picked_codes)].sort_values("capital_n", ascending=False).head(need)
+        rest = df[~df["code"].isin(picked_codes)].head(need)
         picked = pd.concat([picked, rest], ignore_index=True)
 
-    # 5) 最終保證 500
+    # 5) 保證 500
     picked = picked.drop_duplicates("code", keep="first").head(500).copy()
 
-    # 6) 組成 pool_500（ticker + name）
-    pool_500 = {}
-    for bucket, n in QUOTAS.items():
+    # 6) 組 pool
+    pool = {}
+    for bucket, _ in QUOTAS.items():
         sub = picked[picked["bucket"] == bucket]
-        pool_500[f"{bucket} ({len(sub)})"] = [
-            (to_yf_ticker(r["code"], r["market"]), r["name"]) for _, r in sub.iterrows()
-        ]
+        pool[f"{bucket} ({len(sub)})"] = [(to_yf_ticker(r["code"], r["market"]), r["name"]) for _, r in sub.iterrows()]
 
-    # 7) 若補滿造成 bucket 以外多出股票（bucket 分配不足時），把它們丟到內需桶（或你想要的桶）
-    total = sum(len(v) for v in pool_500.values())
-    if total < 500:
-        extra = picked[~picked["code"].isin(
-            [t.split(".")[0] for lst in pool_500.values() for (t, _) in lst]
-        )]
-        key = [k for k in pool_500.keys() if k.startswith("🛒")][0]
-        pool_500[key].extend([(to_yf_ticker(r["code"], r["market"]), r["name"]) for _, r in extra.iterrows()])
-
-    # 最後再切到 500（保險）
-    flat = [(k, item) for k, lst in pool_500.items() for item in lst]
-    flat = flat[:500]
-
+    # 7) 最後保險切到 500
+    flat = [(k, item) for k, lst in pool.items() for item in lst][:500]
     new_pool = {}
     for k, (tid, name) in flat:
         new_pool.setdefault(k, []).append((tid, name))
-
     return new_pool
 
-# === 生成結果 ===
-pool_500 = build_pool_500()
 
 def get_pool_500_safe():
+    # ✅ 放在 build_pool_500 後面
     if "pool_500" in st.session_state:
         return st.session_state.pool_500
 
@@ -1611,15 +1590,17 @@ def get_pool_500_safe():
     st.session_state.pool_500 = p
     return p
 
+
+# ✅ 這行取代 pool_500 = build_pool_500()
 pool_500 = get_pool_500_safe()
 
-# === STOCK_MAP 同步 ===
+
+# === STOCK_MAP 同步（保持你原本習慣）===
 STOCK_MAP = {}
 for cat_list in pool_500.values():
     for tid, sname in cat_list:
         STOCK_MAP[tid.split(".")[0]] = sname
         STOCK_MAP[tid] = sname
-
 
 # ==============================================================================
 # 第 6 區 ：大基石史詩全功能還原版 (V15.3 終極進化形態) - 第六區「細部錯誤修正版」
