@@ -1474,38 +1474,28 @@ def _to_int(x):
         return 0
 
 def load_company_master() -> pd.DataFrame:
-    """抓上市 + 上櫃公司清單，回傳：code/name/industry/capital/market"""
-    df_l = pd.read_csv(TWSE_LISTED_CSV, dtype=str, encoding="utf-8-sig")
-    df_o = pd.read_csv(TPEX_OTC_CSV, dtype=str, encoding="utf-8-sig")
+    """
+    ✅ 不走外部 HTTPS / CSV（避免 Streamlit Cloud SSL 爆炸）
+    用 twstock.codes 建公司主檔：code / name / market / industry(group)
+    """
+    import pandas as pd
+    try:
+        import twstock
+    except Exception:
+        return pd.DataFrame(columns=["code","name","market","industry"])
 
-    # 統一欄位（官方欄位名通常是：公司代號 / 公司簡稱 / 產業別 / 實收資本額）
-    keep_cols = ["公司代號", "公司簡稱", "產業別", "實收資本額"]
-    df_l = df_l[[c for c in keep_cols if c in df_l.columns]].copy()
-    df_o = df_o[[c for c in keep_cols if c in df_o.columns]].copy()
-
-    df_l["market"] = "TWSE"
-    df_o["market"] = "TPEX"
-
-    df = pd.concat([df_l, df_o], ignore_index=True)
-    df = df.rename(columns={
-        "公司代號": "code",
-        "公司簡稱": "name",
-        "產業別": "industry",
-        "實收資本額": "capital",
-    })
-
-    # 只保留 4 位數股票代碼（去掉可轉債/特別股等雜項）
-    df["code"] = df["code"].astype(str).str.strip()
-    df = df[df["code"].str.fullmatch(r"\d{4}", na=False)]
-
-    df["name"] = df["name"].astype(str).str.strip()
-    df["industry"] = df["industry"].astype(str).str.strip()
-    df["capital_n"] = df["capital"].apply(_to_int)
-
-    # 去重：同代號保留資本額較大者（極少數情況）
-    df = df.sort_values(["code", "capital_n"], ascending=[True, False]).drop_duplicates("code", keep="first")
-
-    return df.reset_index(drop=True)
+    rows = []
+    for code, info in twstock.codes.items():
+        code = str(code)
+        if (not code.isdigit()) or len(code) != 4:
+            continue
+        rows.append({
+            "code": code,
+            "name": getattr(info, "name", "") or "",
+            "market": getattr(info, "market", "") or "",
+            "industry": getattr(info, "group", "") or "",
+        })
+    return pd.DataFrame(rows).drop_duplicates(subset=["code"]).reset_index(drop=True)
 
 def is_financial_row(industry: str, name: str) -> bool:
     """排除金融股：用官方產業別 + 名稱關鍵字雙保險"""
